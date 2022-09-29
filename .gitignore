@@ -1,0 +1,25 @@
+# GIS and other data files
+**/*.csv
+**/*.xlsx
+**/*.fgb
+**/*.qmd
+**/*.gpkg
+**/*.mdb
+**/*.cpg
+**/*.dbf
+**/*.prj
+**/*.shp
+**/*.shx
+**/*.tif
+
+# offline directories
+doc/
+presentation/
+
+# QGIS and RStudio user data
+Elliott.qgz
+Elliott.Rproj
+**/*.png
+**/*.rdata
+.Rhistory
+.Rproj.user/
