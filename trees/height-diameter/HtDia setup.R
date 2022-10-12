@@ -21,39 +21,40 @@ theme_set(theme_bw() + theme(axis.line = element_line(size = 0.3),
                              legend.spacing.y = unit(0, "line"),
                              panel.border = element_blank()))
 
-as_row = function(regression)
+as_row = function(form, regression, significant = TRUE)
 {
   if (is.null(regression))
   {
-    return(rep(NA_real_, 21))
+    return(tibble(form = form, 
+                  pae = NA_real_, paeNaturalRegen = NA_real_, paePlantation = NA_real_,
+                  bias = NA_real_, biasNaturalRegen = NA_real_, biasPlantation = NA_real_,
+                  mae = NA_real_, maeNaturalRegen = NA_real_, maePlantation = NA_real_,
+                  rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
+                  nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
+                  pearson = NA_real_, pearsonNaturalRegen = NA_real_, pearsonPlantation = NA_real_,
+                  aic = NA_real_, bic = regression$bic, power = NA_real_, fitting = NA_character_,
+                  significant = NA_real_))
+  }
+  if (("pae" %in% names(regression)) == FALSE)
+  {
+    stop(paste("Regression for", form, " is missing summary statistics."))
   }
   
-  #return(c(pae = regression$pae, paeNR = regression$paeNaturalRegen, paePl = regression$paePlantation,
-  #         bias = regression$bias, biasNR = regression$biasNaturalRegen, biasPl = regression$biasPlantation,
-  #         mae = regression$mae, maeNR = regression$maeNaturalRegen, maePl = regression$maePlantation,
-  #         rmse = regression$rmse, rmseNR = regression$rmseNaturalRegen, rmsePl = regression$rmsePlantation,
-  #         nse = regression$nse, nseNR = regression$nseNaturalRegen, nsePl = regression$nsePlantation,
-  #         pearson = regression$pearson, pearsonNR = regression$pearsonNaturalRegen, pearsonPL = regression$pearsonPlantation,
-  #         aic = regression$aic, bic = regression$bic))
-  # omit names for compatibility with !!! operator
   power = NA_real_
   if (is.null(regression$modelStruct$varStruct) == FALSE)
   {
-    power = regression$modelStruct$varStruct
+    power = regression$modelStruct$varStruct[1]
   }
   
-  row = c(regression$pae, regression$paeNaturalRegen, regression$paePlantation,
-          regression$bias, regression$biasNaturalRegen, regression$biasPlantation,
-          regression$mae, regression$maeNaturalRegen, regression$maePlantation,
-          regression$rmse, regression$rmseNaturalRegen, regression$rmsePlantation,
-          regression$nse, regression$nseNaturalRegen, regression$nsePlantation,
-          regression$pearson, regression$pearsonNaturalRegen, regression$pearsonPlantation,
-          regression$aic, regression$bic, power)
-  if (length(row) != 21)
-  {
-    stop("Did not find all 21 expected summary fields attached to regression.")
-  }
-  return(row)
+  return(tibble(form = form, 
+                pae = regression$pae, paeNaturalRegen = regression$paeNaturalRegen, paePlantation = regression$paePlantation,
+                bias = regression$bias, biasNaturalRegen = regression$biasNaturalRegen, biasPlantation = regression$biasPlantation,
+                mae = regression$mae, maeNaturalRegen = regression$maeNaturalRegen, maePlantation = regression$maePlantation,
+                rmse = regression$rmse, rmseNaturalRegen = regression$rmseNaturalRegen, rmsePlantation = regression$rmsePlantation,
+                nse = regression$nse, nseNaturalRegen = regression$nseNaturalRegen, nsePlantation = regression$nsePlantation,
+                pearson = regression$pearson, pearsonNaturalRegen = regression$pearsonNaturalRegen, pearsonPlantation = regression$pearsonPlantation,
+                aic = regression$aic, bic = regression$bic, power = power, fitting = class(regression)[1],
+                significant = significant))
 }
 
 get_dbh_error = function(regression, data, dataNaturalRegen, dataPlantation)
@@ -198,6 +199,8 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          tallerTph = cumsum(isLiveUnbroken * SampleFactor) / plotsInStand) %>% 
   ungroup()
 
+liveTrees2016 = trees2016 %>% filter(isLiveUnbroken) %>% mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")))
+
 #print(trees2016 %>% filter(is.na(elevation)) %>% group_by(PlotID) %>% summarize(trees = n(), .groups = "drop"), n = 51)
 #ggplot(trees2016) + geom_histogram(aes(x = standQuasiBasalArea))
 
@@ -328,11 +331,10 @@ ggplot(psmeStands2022) + geom_point(aes(x = QMD_WH, y = Cruised_Si), alpha = 0.3
   
 
 ## aggregate tree distribution plots
-liveTrees2016 = trees2016 %>% filter(live) %>% mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")))
 ggplot(liveTrees2016) +
   geom_histogram(aes(x = DBH, y = 100 * ..count../sum(..count..), fill = speciesGroup, alpha = isPlantation), binwidth = 2.5, na.rm = TRUE) +
   coord_cartesian(ylim = c(0, 4.4)) +
-  labs(x = "DBH, cm", y = "percentage of live stems measured", alpha = NULL, fill = NULL) +
+  labs(x = "DBH, cm", y = "percentage of live, unbroken stems measured", alpha = NULL, fill = NULL) +
   scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
   scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
   theme(legend.position = "none") +
@@ -343,8 +345,8 @@ ggplot(liveTrees2016) +
   scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
   scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 1), legend.spacing.y = unit(0.3, "line"))
-  
 
+  
 ## site index plots
 ggplot(stands2022 %>% filter(Cruised_Si > 0)) +
   geom_point(aes(x = Age_2020, y = Cruised_Si, color = siteSpecies), alpha = 0.6, shape = 16) +
@@ -378,3 +380,7 @@ ggplot() +
 ggplot(stands2022 %>% filter(siteSpecies == "Douglas-fir")) +
   geom_histogram(aes(x = Age_2020, y = ..density..), binwidth = 5, fill = "green4") +
   labs(x = "stand age in 2020, years", y = "probability", color = NULL)
+
+## persist workspace to disk
+#save.image("trees/height-diameter/height-diameter.Rdata")
+#load("trees/height-diameter/height-diameter.Rdata")

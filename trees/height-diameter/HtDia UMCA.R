@@ -5,31 +5,31 @@
 #umcaHeightFromDiameterRichards = nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), umca2016, start = list(Ha = 14.4, Hap = -3.6, d = 2.78, dp = -0.99, kU = 0.054, kUp = 0.026), weights = pmin(DBH^-2, 1))
 umca2016physio = umca2016 %>% filter(is.na(elevation) == FALSE)
 umca2016plantationPhysio = umca2016physio %>% filter(isPlantation)
-umcaHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 17.7, a1p = -1.52, b1 = -0.0572, b2 = 1.23, b2p = -0.25), weights = pmin(DBH^-2, 1)) # b1p not significant
-umcaHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 17.6, a1p = -6.97, a2 = 0.042, a2p = -0.198, a3 = -0.0039, a3p = 0.178, b1 = -0.049, b1p = -0.0743, b2 = 1.16, b2p = 0.156), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * elevation + a4 * slope + a5 * sin(3.14159/180 * aspect) + a6 * cos(3.14159/180 * aspect)) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 69.4, a2 = 0.077, a2p = 0.72, a3 = -0.008, a4 = -0.031, a5 = 0.548, a6 = 0.980, b1 = -0.021, b1p = 0.0075, b2 = 1.49, b2p = -0.370), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 17.6, a1p = -6.97, a2 = 0.042, a2p = -0.198, a3 = -0.0039, a3p = 0.178, a4 = 41.38, a4p = -16.4, b1 = -0.049, b2 = 1.16, b2p = 0.156), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 68.5, a1p = -13.4, a2 = -0.0045, a3 = -8.09, a4 = 0.783, a5 = 0.766, a6 = 0.213, b1 = -0.022, b2 = 1.50, b2p = -0.31), weights = pmin(DBH^-2, 1)) # a4p not significant, a5p induces overfitting
-umcaHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + a1 * DBH / (1 + DBH)^b1, umca2016, start = list(a1 = 1.6, b1 = 0.24), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) *DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 75.4, a1p = -11.4, b1 = 462, b1p = -322, b2 = -1.54, b2p = 0.28), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 102, a1p = 92, b1 = -17.7, b1p = 10.3, b2 = -0.725, b2p = 0.365), weights = pmin(DBH^-2, 1))
+umcaHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + a1 * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 16.5, b1 = -0.064, b2 = 1.270, b2p = -0.177), weights = pmin(DBH^-2, 1)) # a1p, b1p not significant
+umcaHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, umca2016, start = list(a1 = 19.0, a2 = 0.201, a3 = -0.152, b1 = -0.049, b1p = -0.0105, b2 = 1.156), weights = pmin(DBH^-2, 1)) # a2, a2p, a3, a3p, b2p not significant
+umcaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * elevation + a4 * slope + a5 * sin(3.14159/180 * aspect) + a6 * cos(3.14159/180 * aspect)) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 8.62, a2 = 0.050, a3 = -0.014, a4 = 0.230, a5 = 0.413, a6 = -1.113, b1 = -0.062, b2 = 1.265, b2p = -0.219), weights = pmin(DBH^-2, 1)) # a1p, a2, a2p, a5, a6, b1p not significant
+umcaHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = -1.48, a2 = 0.030, a2p = -0.131, a3 = -0.009, a3p = 0.192, a4 = 56.1, a4p = -32.7, b1 = -0.278, b2 = 0.389, b2p = 0.684), weights = pmin(DBH^-2, 1)) # a1p not significant
+umcaHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 8.58, a2 = -0.018, a3 = 16.5, a4 = -1.117, a5 = 0.476, a6 = -0.014, b1 = -0.064, b2 = 1.261, b2p = -0.193), weights = pmin(DBH^-2, 1)) # a4, a5, a6, b1p not significant
+umcaHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * DBH / (1 + DBH)^b1, umca2016, start = list(a1 = 0.909, a1p = 0.221, b1 = 0.219), weights = pmin(DBH^-2, 1)) # b1p not significant
+umcaHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) *DBH^b2), umca2016, start = list(a1 = 21.4, a1p = -4.37, b1 = 43.8, b1p = -19.9, b2 = -1.27), weights = pmin(DBH^-2, 1)) # b2p not significant
+umcaHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + a1*exp((b1 + b1p * isPlantation)*DBH^b2), umca2016, start = list(a1 = 49.8, b1 = -5.02, b1p = 0.404, b2 = -0.386), weights = pmin(DBH^-2, 1)) # a1p, b2p not significant
 umcaHeightFromDiameterLinear = lm(TotalHt ~ 0 + DBH + I(isPlantation*DBH), umca2016, offset = breastHeight, weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterMichaelisMenten = nlrob(TotalHt ~ 1.37 + (a1 + a1p*isPlantation)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), umca2016, start = list(a1 = 21.0, a1p = -4.56, a2 = 44.6, a2p = -21.2, b1 = 1.30), weights = pmin(DBH^-2, 1)) # b1p not significant
-umcaHeightFromDiameterParabolic = lm(TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I((isPlantation*DBH)^2), umca2016, offset = breastHeight, weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterProdan = nlrob(TotalHt ~ 1.37 + DBH^2 / (a1*DBH^2 + (a2 + a2p * isPlantation)*DBH + a3 + a3p* isPlantation), umca2016, start = list(a1 = 0.012, a2 = 0.41, a2p = 0.47, a3 = 17.9, a3p = -14.6), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterPower = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 2.9, a1p = -1.6, b1 = 0.63, b1p = 0.18), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterRatkowsky = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)/(DBH + b2 + b2p * isPlantation)), umca2016, start = list(a1 = 22.9, a1p = -5.65, b1 = -17.68, b1p = 7.73, b2 = 3.93, b2p = -1.82), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterRichards = nlrob(TotalHt ~ 1.37 + Ha * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016, start = list(Ha = 13.8, d = 2.46, kU = 0.0514, kUp = 0.0158), weights = pmin(DBH^-2, 1)) # Hap, dp not significant
-umcaHeightFromDiameterSharmaParton = nlrob(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 22.6, a2 = 0.26, a2p = -0.050, b1 = -0.021, b1p = -0.014, b2 = 0.025, b2p = -0.187, b3 = 1.51, b3p = -0.44), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterSharmaPartonBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 18.5, a1p = 11.3, a2 = 0.30, a2p = -0.14, b1 = -0.019, b1p = -0.011, b2 = 0.089, b2p = -0.266, b3 = 1.49, b3p = -0.44), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterSharmaPartonBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016physio, start = list(a1 = 16.5, a1p = 12.4, a2 = 0.33, a2p = -0.162, a3 = -0.00008, a4 = 0.0090, a5 = 0.0045, a6 = 0.00256, b1 = -0.020, b1p = -0.0091, b2 = 0.062, b2p = -0.235, b3 = 1.50, b3p = -0.45), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterSharmaPartonPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016physio, start = list(a1 = 17.6, a1p = 5.06, a2 = 0.31, a2p = -0.106, a3 = -0.00008, a4 = 0.0092, a5 = 0.0046, a6 = 0.00257, b1 = -0.023, b1p = -0.012, b2 = 0.0010, b2p = -0.159, b3 = 1.52, b3p = -0.46), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterSharmaZhang = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 26, a1p = -16, a2 = -0.093, a2p = 0.21, b1 = -0.00469, b1p = -0.108, b2 = 0.387, b2p = -0.435, b3 = 1.228, b3p = -0.101), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterSharmaZhangBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation) * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 37.9, a1p = -32.6, a2 = -0.203, a2p = 0.527, a3 = 0.0025, a3p = -0.0112, b1 = -0.00380, b1p = -0.0644, b2 = 0.408, b2p = -0.329, b3 = 1.200, b3p = 0.0300), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterSibbesen = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.0019, a1p = 0.163, b1 = 4.98, b1p = -2.72, b2 = -0.175, b2p = 0.0427), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterWeibull = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), umca2016, start = list(a1 = 18.0, a1p = -4.02, b1 = -0.0332, b1p = -0.0264, b2 = 1.11, b2p = -0.0031), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterWeibullBal = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), umca2016, start = list(a1 = 15.7, a2 = 0.090, a2p = 0.0356, a3 = -0.0302, a3p = -0.0689, b1 = -0.030, b1p = -0.0196, b2 = 1.184, b2p = -0.061), weights = pmin(DBH^-2, 1))
-umcaHeightFromDiameterWeibullBalRelHt = nlrob(TotalHt ~ 1.37 + (a1  + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * pmin(relativeHeight, 1.25)) * (1 - exp((b1 + b1p * isPlantation) * DBH^(b2 + b2p * isPlantation))), umca2016, start = list(a1 = -1.16, a2 = 0.0277, a2p = -0.141, a3 = -0.0060, a3p = 0.223, a4 = 51.6, a4p = -30.8, b1 = -0.658, b1p = 0.500, b2 = 0.729, b2p = 0.571), weights = pmin(DBH^-2, 1)) # a1p not significant
+umcaHeightFromDiameterMichaelisMenten = nlrob(TotalHt ~ 1.37 + (a1 + a1p*isPlantation)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), umca2016, start = list(a1 = 21.4, a1p = -4.37, a2 = 43.8, a2p = -20.0, b1 = 1.27), weights = pmin(DBH^-2, 1)) # b1p not significant
+umcaHeightFromDiameterParabolic = lm(TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I(isPlantation*DBH^2), umca2016, offset = breastHeight, weights = pmin(DBH^-2, 1))
+umcaHeightFromDiameterProdan = nlrob(TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.037, a1p = 0.020, a2 = 1.109, a2p = -0.472, a3 = 1.242), weights = pmin(DBH^-2, 1)) # a3p not significant
+umcaHeightFromDiameterPower = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^b1, umca2016, start = list(a1 = 0.821, a1p = 0.206, b1 = 0.810), weights = pmin(DBH^-2, 1)) # b1p not significant
+umcaHeightFromDiameterRatkowsky = nlrob(TotalHt ~ 1.37 + a1*exp((b1 + b1p * isPlantation)/(DBH + b2)), umca2016, start = list(a1 = 21.6, b1 = -16.5, b1p = 1.974, b2 = 3.629), weights = pmin(DBH^-2, 1)) # a1p, b2p not significant
+umcaHeightFromDiameterRichards = nlrob(TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016, start = list(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045), weights = pmin(DBH^-2, 1)) # dp not significant
+umcaHeightFromDiameterSharmaParton = nlrob(TotalHt ~ 1.37 + a1*topHeight^a2*(1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^b2*DBH))^b3, umca2016, start = list(a1 = 5.76, a2 = 0.261, b1 = -0.049, b1p = -0.024, b2 = 0.085, b3 = 1.234), weights = pmin(DBH^-2, 1)) # a1p, a2p, b2p, b3p not significant
+umcaHeightFromDiameterSharmaPartonBal = nlrob(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b2*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 9.074, a2 = 0.149, b1 = -0.065, b2 = 0.013, b3 = 1.299, b3p = -0.254), weights = pmin(DBH^-2, 1)) # a1p, a2, a2p, b1p, b2p not significant
+umcaHeightFromDiameterSharmaPartonBalPhysio = nlrob(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b2*DBH))^(b3 + b3p * isPlantation), umca2016physio, start = list(a1 = 9.30, a2 = 0.151, a3 = -0.0007, a4 = 0.0161, a5 = -0.040, a6 = 0.005, b1 = -0.061, b2 = 0.061, b3 = 1.313, b3p = -0.253), weights = pmin(DBH^-2, 1)) # a2, a4, a5, a6, b1p, b2p not significant
+umcaHeightFromDiameterSharmaPartonPhysio = nlrob(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*(tph/(standBasalAreaPerHectare))^b2*DBH))^(b3 + b3p * isPlantation), umca2016physio, start = list(a1 = 8.639, a2 = 0.169, a3 = -0.0007, a4 = 0.018, a5 = -0.044, a6 = 0.005, b1 = -0.052, b2 = 0.109, b3 = 1.315, b3p = -0.247), weights = pmin(DBH^-2, 1)) # a2p, a4, a5, a6, b1p, b2, b2p not significant
+umcaHeightFromDiameterSharmaZhang = nlrob(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2*(1 - exp(b1*tph^b2*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 13.6, a2 = 0.054, b1 = -0.030, b2 = 0.125, b3 = 1.295, b3p = -0.232), weights = pmin(DBH^-2, 1)) # a1p, a2, a2p, b1p, b2p not significant
+umcaHeightFromDiameterSharmaZhangBal = nlrob(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^b3, umca2016, start = list(a1 = 8.742, a2 = 0.174, a3 = -0.0001, a3p = -0.007, b1 = -0.039, b2 = 0.070, b2p = 0.090, b3 = 1.258), weights = pmin(DBH^-2, 1)) # a1p, a2, a2p, a3, b1p, b3p not significant
+umcaHeightFromDiameterSibbesen = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.346, a1p = 0.153, b1 = 1.783, b2 = -0.150, b2p = -0.033), weights = pmin(DBH^-2, 1)) # b1p not significant
+umcaHeightFromDiameterWeibull = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = list(a1 = 16.7, a1p = -3.627, b1 = -0.0315, b1p = -0.0256, b2 = 1.174), weights = pmin(DBH^-2, 1)) # b2p not significant
+umcaHeightFromDiameterWeibullBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = list(a1 = 18.6, a2 = 0.195, a3 = -0.148, b1 = -0.031, b1p = -0.008, b2 = 1.118), weights = pmin(DBH^-2, 1)) # a1p, a2, a2p, a3p, b2p not significant
+umcaHeightFromDiameterWeibullBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * pmin(relativeHeight, 1.25)) * (1 - exp((b1 + b1p * isPlantation) * DBH^b2)), umca2016, start = list(a1 = -1.490, a2 = 0.029, a2p = -0.127, a3 = -0.009, a3p = 0.195, a4 = 55.7, a4p = -31.3, b1 = -0.628, b1p = 0.366, b2 = 0.913), weights = pmin(DBH^-2, 1)) # a1p, a3, b2p not significant
 #confint2(umcaHeightFromDiameterWeibullBalRelHt, level = 0.99)
 
 umcaHeightFromDiameterChapmanRichards = get_height_error(umcaHeightFromDiameterChapmanRichards, umca2016, umca2016natural, umca2016plantation)
@@ -58,32 +58,31 @@ umcaHeightFromDiameterWeibull = get_height_error(umcaHeightFromDiameterWeibull, 
 umcaHeightFromDiameterWeibullBal = get_height_error(umcaHeightFromDiameterWeibullBal, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterWeibullBalRelHt = get_height_error(umcaHeightFromDiameterWeibullBalRelHt, umca2016, umca2016natural, umca2016plantation)
 
-umcaHeightFromDiameterResults = tribble(~method, ~pae, ~paeNR, ~paePl, ~bias, ~biasNR, ~biasPl, ~mae, ~maeNR, ~maePl, ~rmse, ~rmseNR, ~rmsePl, ~nse, ~nseNR, ~nsePl, ~pearson, ~pearsonNR, ~pearsonPl, ~aic, ~bic, ~power,
-                                        "Chapman-Richards", !!!as_row(umcaHeightFromDiameterChapmanRichards),
-                                        "Chapman-Richards BAL", !!!as_row(umcaHeightFromDiameterChapmanRichardsBal),
-                                        "Chapman-Richards BAL physio", !!!as_row(umcaHeightFromDiameterChapmanRichardsBalPhysio),
-                                        "Chapman-Richards BAL RelHt", !!!as_row(umcaHeightFromDiameterChapmanRichardsBalRelHt),
-                                        "Chapman-Richards physio", !!!as_row(umcaHeightFromDiameterChapmanRichardsPhysio),
-                                        "Curtis", !!!as_row(umcaHeightFromDiameterCurtis),                                        "Hossfeld", !!!as_row(umcaHeightFromDiameterHossfeld),
-                                        "Hossfeld", !!!as_row(umcaHeightFromDiameterHossfeld),
-                                        "Korf", !!!as_row(umcaHeightFromDiameterKorf),
-                                        "linear", !!!as_row(umcaHeightFromDiameterLinear),
-                                        "generalized Michaelis-Menten", !!!as_row(umcaHeightFromDiameterMichaelisMenten),
-                                        "parabolic", !!!as_row(umcaHeightFromDiameterParabolic),
-                                        "power", !!!as_row(umcaHeightFromDiameterPower),
-                                        "Prodan", !!!as_row(umcaHeightFromDiameterProdan),
-                                        "Ratkowsky", !!!as_row(umcaHeightFromDiameterRatkowsky),
-                                        "unified Richards", !!!as_row(umcaHeightFromDiameterRichards),
-                                        "Sharma-Parton", !!!as_row(umcaHeightFromDiameterSharmaParton),
-                                        "Sharma-Parton BAL", !!!as_row(umcaHeightFromDiameterSharmaPartonBal),
-                                        "Sharma-Parton BAL physio", !!!as_row(umcaHeightFromDiameterSharmaPartonBalPhysio),
-                                        "Sharma-Parton physio", !!!as_row(umcaHeightFromDiameterSharmaPartonPhysio),
-                                        "Sharma-Zhang", !!!as_row(umcaHeightFromDiameterSharmaZhang),
-                                        "Sharma-Zhang BAL", !!!as_row(umcaHeightFromDiameterSharmaZhangBal),
-                                        "Sibbesen", !!!as_row(umcaHeightFromDiameterSibbesen),
-                                        "Weibull", !!!as_row(umcaHeightFromDiameterWeibull),
-                                        "Weibull BAL", !!!as_row(umcaHeightFromDiameterWeibullBal),
-                                        "Weibull BAL RelHt", !!!as_row(umcaHeightFromDiameterWeibullBalRelHt)) %>%
+umcaHeightFromDiameterResults = bind_rows(as_row("Chapman-Richards", umcaHeightFromDiameterChapmanRichards),
+                                          as_row("Chapman-Richards BAL", umcaHeightFromDiameterChapmanRichardsBal),
+                                          as_row("Chapman-Richards BAL physio", umcaHeightFromDiameterChapmanRichardsBalPhysio),
+                                          as_row("Chapman-Richards BAL RelHt", umcaHeightFromDiameterChapmanRichardsBalRelHt),
+                                          as_row("Chapman-Richards physio", umcaHeightFromDiameterChapmanRichardsPhysio),
+                                          as_row("Curtis", umcaHeightFromDiameterCurtis),
+                                          as_row("Hossfeld", umcaHeightFromDiameterHossfeld),
+                                          as_row("Korf", umcaHeightFromDiameterKorf),
+                                          as_row("linear", umcaHeightFromDiameterLinear),
+                                          as_row("generalized Michaelis-Menten", umcaHeightFromDiameterMichaelisMenten),
+                                          as_row("parabolic", umcaHeightFromDiameterParabolic),
+                                          as_row("power", umcaHeightFromDiameterPower),
+                                          as_row("Prodan", umcaHeightFromDiameterProdan),
+                                          as_row("Ratkowsky", umcaHeightFromDiameterRatkowsky),
+                                          as_row("unified Richards", umcaHeightFromDiameterRichards),
+                                          as_row("Sharma-Parton", umcaHeightFromDiameterSharmaParton),
+                                          as_row("Sharma-Parton BAL", umcaHeightFromDiameterSharmaPartonBal),
+                                          as_row("Sharma-Parton BAL physio", umcaHeightFromDiameterSharmaPartonBalPhysio),
+                                          as_row("Sharma-Parton physio", umcaHeightFromDiameterSharmaPartonPhysio),
+                                          as_row("Sharma-Zhang", umcaHeightFromDiameterSharmaZhang),
+                                          as_row("Sharma-Zhang BAL", umcaHeightFromDiameterSharmaZhangBal),
+                                          as_row("Sibbesen", umcaHeightFromDiameterSibbesen),
+                                          as_row("Weibull", umcaHeightFromDiameterWeibull),
+                                          as_row("Weibull BAL", umcaHeightFromDiameterWeibullBal),
+                                          as_row("Weibull BAL RelHt", umcaHeightFromDiameterWeibullBalRelHt)) %>%
   mutate(responseVariable = "DBH", species = "UMCA", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
@@ -133,15 +132,14 @@ umcaHeightFromDiameterChapmanRichardsBalGnls = get_height_error(umcaHeightFromDi
 umcaHeightFromDiameterWeibullGnls = get_height_error(umcaHeightFromDiameterWeibullGnls, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterWeibullBalGnls = get_height_error(umcaHeightFromDiameterWeibullBalGnls, umca2016, umca2016natural, umca2016plantation)
 
-umcaHeightFromDiameterResultsGnls = tribble(~method, ~pae, ~paeNR, ~paePl, ~bias, ~biasNR, ~biasPl, ~mae, ~maeNR, ~maePl, ~rmse, ~rmseNR, ~rmsePl, ~nse, ~nseNR, ~nsePl, ~pearson, ~pearsonNR, ~pearsonPl, ~aic, ~bic, ~power,
-                                            "Chapman-Richards GNLS", !!!as_row(NULL),
-                                            "Chapman-Richards BAL GNLS", !!!as_row(umcaHeightFromDiameterChapmanRichardsBalGnls),
-                                            "Sharma-Parton GNLS", !!!as_row(NULL),
-                                            "Sharma-Parton BAL GNLS", !!!as_row(NULL),
-                                            "Sharma-Zhang GNLS", !!!as_row(NULL),
-                                            "Sharma-Zhang BAL GNLS", !!!as_row(NULL),
-                                            "Weibull GNLS", !!!as_row(umcaHeightFromDiameterWeibullGnls),
-                                            "Weibull BAL GNLS", !!!as_row(umcaHeightFromDiameterWeibullBalGnls)) %>%
+umcaHeightFromDiameterResultsGnls = bind_rows(as_row("Chapman-Richards GNLS", NULL),
+                                              as_row("Chapman-Richards BAL GNLS", umcaHeightFromDiameterChapmanRichardsBalGnls),
+                                              as_row("Sharma-Parton GNLS", NULL),
+                                              as_row("Sharma-Parton BAL GNLS", NULL),
+                                              as_row("Sharma-Zhang GNLS", NULL),
+                                              as_row("Sharma-Zhang BAL GNLS", NULL),
+                                              as_row("Weibull GNLS", umcaHeightFromDiameterWeibullGnls),
+                                              as_row("Weibull BAL GNLS", umcaHeightFromDiameterWeibullBalGnls)) %>%
   mutate(responseVariable = "DBH", species = "UMCA", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
@@ -183,84 +181,103 @@ ggplot() +
 #umcaDiameterFromHeightSharmaParton = nls_multstart(DBH ~ a1*(TotalHt - 1.37)^a2*(exp(b1*(tph/topHeight)^b2*(TotalHt - 1.37)) - 1)^b3, umca2016, iter = 100, 
 #                                                   start_lower = list(a1 = 0.01, a2 = -1, b1 = -10, b2 = -0.5, b3 = 0.2),
 #                                                   start_upper = list(a1 = 100, a2 = 2, b1 = 10, b2 = 0.5, b3 = 1.5), modelweights = pmin(TotalHt^-2, 0.5))
-#umcaDiameterFromHeightChapmanForm = nls(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 2271, b1 = 0.001, b2 = 1.002), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf at multiple nls_multstart() points
-#umcaDiameterFromHeightChapmanFormAal = nls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 15, a2 = -0, b1 = 0.01, b2 = 0.5), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf
-#umcaDiameterFromHeightChapmanFormBal = nls(DBH ~ (a1 + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 15, a2 = -0, b1 = 0.01, b2 = 0.5), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf
-#umcaDiameterFromHeightChapmanFormBalRelHt = nls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a4 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 13, a2 = -22.0, a3 = 10.4, a4 = -467, b1 = 0.0017, b2 = 0.971), weights = pmin(TotalHt^-2, 0.5)) # step factor
-#umcaDiameterFromHeightChapmanFormRelHt = nls(DBH ~ (a1 + a2 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 500, a2 = -21, b1 = 0.004, b2 = 1.0), weights = pmin(TotalHt^-2, 0.5)) # step factor
+#umcaDiameterFromHeightSharmaParton = gsl_nls(DBH ~ a1*(TotalHt - 1.37)^(a2 + a2p * isPlantation)*(exp(b1*(tph/topHeight)^(b2 + b2p * isPlantation)*(TotalHt - 1.37)) - 1)^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 89, a2 = 0.61, a2p = 0.05, b1 = 0.0002, b2 = -0.73, b2p = -0.79, b3 = 0.34, b3p = -0.03), weights = pmin(TotalHt^-2, 0.5)) # singnular gradient with nls()
+umcaDiameterFromHeightChapmanForm = gsl_nls(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 50000, b1 = 0.00001, b2 = 1.034), weights = pmin(TotalHt^-2, 0.5), control = gsl_nls_control(maxiter = 50)) # NaN-inf with nls() at multiple nls_multstart() points, NaN-inf with nlrob()
+umcaDiameterFromHeightChapmanFormAal = gsl_nls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 604, a2 = 0.51, b1 = 0.0004, b2 = 1.01), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf with nls() and nlrob()
+umcaDiameterFromHeightChapmanFormBal = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 1000, a2 = -16, b1 = 0.001, b2 = 1.02), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf with nls(), step factor with nlrob()
+umcaDiameterFromHeightChapmanFormBalRelHt = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a4 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 1500, a2 = -400.0, a3 = 520, a4 = -2000, b1 = 0.0006, b2 = 1.02), weights = pmin(TotalHt^-2, 0.5)) # step factor with nls() and nlrob()
+umcaDiameterFromHeightChapmanFormRelHt = nlrob(DBH ~ (a1 + a2 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 665, a2 = -406, b1 = 0.0034, b2 = 1.12), weights = pmin(TotalHt^-2, 0.5)) # step factor with nls()
 umcaDiameterFromHeightChapmanRichards = nlrob(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.999999)), umca2016, start = list(a1 = 33.9, b1 = -0.047, b2 = 1.43, b2p = -0.15), weights = pmin(TotalHt^-2, 0.5))
 umcaDiameterFromHeightChapmanRichardsAal = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.999999)), umca2016, start = list(a1 = 34.4, a2 = 0.004, b1 = -0.047, b2 = 1.41, b2p = -0.13), weights = pmin(TotalHt^-2, 0.5))
 umcaDiameterFromHeightChapmanRichardsPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.999999)), umca2016physio, start = list(a1 = 58.6, a1p = 166.3, a2 = 0.0133, a3 = -52.7, a4 = 5.394, a5 = -0.837, a6 = 0.602, b1 = -0.0637, b1p = 0.0584, b2 = 1.329), weights = pmin(TotalHt^-2, 0.5)) # a2, a3, a4, a5 not significant
 umcaDiameterFromHeightChapmanRichardsRelHt = nlrob(DBH ~ (a1 + a2 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.999999)), umca2016, start = list(a1 = 39.0, a2 = -2.62, b1 = -0.043, b2 = 1.40, b2p = -0.132), weights = pmin(TotalHt^-2, 0.5)) # a1p convergence questionable, b1p not significant
 umcaDiameterFromHeightLinear = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), umca2016, weights = TotalHt^-2)
-umcaDiameterFromHeightParabolic = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), umca2016, weights = TotalHt^-2)
+umcaDiameterFromHeightMichaelisMentenForm = gsl_nls(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), umca2016, start = list(a1 = 100, a2 = 100, b1 = 1), weights = TotalHt^-2) # collapses to linear
+umcaDiameterFromHeightNaslund = nlrob(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), umca2016, start = list(a1 = 4.3, a1p = -1.8, a2 = -0.14, a2p = -0.038), weights = TotalHt^-2)
+umcaDiameterFromHeightParabolic = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), umca2016, weights = TotalHt^-2) # collapses to linear since (TotalHt - 1.37)^2 and isPlantation*(TotalHt - 1.37)^2 not significant
 umcaDiameterFromHeightPower = nlrob(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 3.28, a1p = -2.10, b1 = 0.917, b1p = 0.332), weights = pmin(TotalHt^-2, 0.5))
 umcaDiameterFromHeightPowerAal = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 2.71, a2 = 0.00054, b1 = 0.975, b1p = -0.0696), weights = pmin(TotalHt^-2, 0.5)) # a1p, a2p not significant
 umcaDiameterFromHeightPowerPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*(TotalHt - 1.37)^b1, umca2016physio, start = list(a1 = 5.12, a1p = -0.67, a2 = 0.0013, a3 = -4.15, a4 = 0.46, a5 = -0.11, a6 = 0.044, b1 = 0.93), weights = pmin(TotalHt^-2, 0.5)) # a1p, a2, b1p not significant
 umcaDiameterFromHeightPowerRelHt = nlrob(DBH ~ (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * relativeHeight)*(TotalHt - 1.37)^b1, umca2016, start = list(a1 = 2.37, a1p = -0.887, a2 = -1.508, a2p = 1513, b1 = 1.123), weights = pmin(TotalHt^-2, 0.5)) 
-#umcaDiameterFromHeightSharmaParton = nlrob(DBH ~ a1*(TotalHt - 1.37)^a2*(exp(b1*(tph/topHeight)^b2*(TotalHt - 1.37)) - 1)^b3, umca2016, start = list(a1 = 94.1, a2 = 0.65, b1 = 0.0001, b2 = -0.83, b3 = 0.32), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf at nls_multistart() point
-#umcaDiameterFromHeightSharmaParton = nlrob(DBH ~ a1*(TotalHt - 1.37)^(a2 + a2p * isPlantation)*(exp(b1*(tph/topHeight)^(b2 + b2p * isPlantation)*(TotalHt - 1.37)) - 1)^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 1, a2 = 1, a2p = 0, b1 = 0.02, b2 = 0.26, b2p = 0, b3 = 0.9, b3p = 0), weights = pmin(TotalHt^-2, 0.5)) # signular gradient
+umcaDiameterFromHeightRuark = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), umca2016, start = list(a1 = 2.48, b1 = 1.14, b1p = -0.57, b2 = -0.019, b2p = 0.092), weights = pmin(TotalHt^-2, 0.5)) # a1p not significant
+umcaDiameterFromHeightSchnute = gsl_nls(DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), umca2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 177), weights = pmin(TotalHt^-2, 0.5)) # NaN-inf with nlrob()
+umcaDiameterFromHeightSharmaParton = gsl_nls(DBH ~ a1*(TotalHt - 1.37)^a2*(exp(b1*(tph/topHeight)^b2*(TotalHt - 1.37)) - 1)^b3, umca2016, start = list(a1 = 104, a2 = 0.66, b1 = 0.0001, b2 = -1.17, b3 = 0.31), weights = pmin(TotalHt^-2, 0.5)) # a2p, b2p, b3p not significant, NaN-inf with nls() at nls_multistart() point, NaN-inf with nlrob()
 umcaDiameterFromHeightSibbesenForm = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.43, b1 = 2.45, b2 = -0.15), weights = pmin(TotalHt^-2, 0.5)) # no significant plantation effects
 umcaDiameterFromHeightSibbesenFormAal = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.36, a2 = 0.0002, b1 = 2.59, b2 = -0.156), weights = pmin(TotalHt^-2, 0.5)) # a2 not significant
 umcaDiameterFromHeightSibbesenFormPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), umca2016physio, start = list(a1 = 3.688, a1p = -0.999, a2 = 0.00089, a3 = -2.834, a4 = -0.327, a5 = -0.091, a6 = 0.028, b1 = 1.278, b2 = -0.0715, b2p = 0.0496), weights = pmin(TotalHt^-2, 0.5)) # a2, a4, a5 not significant
 umcaDiameterFromHeightSibbesenFormRelHt = nlrob(DBH ~ (a1 + a2 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.496, a2 = -0.188, b1 = 2.31, b2 = -0.12), weights = pmin(TotalHt^-2, 0.5)) # a2 not significant
-#confint2(umcaDiameterFromHeightPowerPhysio, level = 0.99)
+umcaDiameterFromHeightWeibull = gsl_nls(DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, umca2016, start = list(a1 = -3800, b1 = 0.0006, b2 = 1.03), weights = pmin(TotalHt^-2, 0.5)) # missing value with nlrob()
+#confint2(umcaDiameterFromHeightWeibull, level = 0.99)
 
-#umcaDiameterFromHeightChapmanForm = get_dbh_error(umcaDiameterFromHeightChapmanForm, umca2016, umca2016natural, umca2016plantation)
-#umcaDiameterFromHeightChapmanFormAal = get_dbh_error(umcaDiameterFromHeightChapmanFormAal, umca2016, umca2016natural, umca2016plantation)
-#umcaDiameterFromHeightChapmanFormBal = get_dbh_error(umcaDiameterFromHeightChapmanFormBal, umca2016, umca2016natural, umca2016plantation)
-#umcaDiameterFromHeightChapmanFormBalRelHt = get_dbh_error(umcaDiameterFromHeightChapmanFormBalRelHt, umca2016, umca2016natural, umca2016plantation)
-#umcaDiameterFromHeightChapmanFormRelHt = get_dbh_error(umcaDiameterFromHeightChapmanFormRelHt, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightChapmanForm = get_dbh_error(umcaDiameterFromHeightChapmanForm, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightChapmanFormAal = get_dbh_error(umcaDiameterFromHeightChapmanFormAal, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightChapmanFormBal = get_dbh_error(umcaDiameterFromHeightChapmanFormBal, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightChapmanFormBalRelHt = get_dbh_error(umcaDiameterFromHeightChapmanFormBalRelHt, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightChapmanFormRelHt = get_dbh_error(umcaDiameterFromHeightChapmanFormRelHt, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightChapmanRichards = get_dbh_error(umcaDiameterFromHeightChapmanRichards, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightChapmanRichardsAal = get_dbh_error(umcaDiameterFromHeightChapmanRichardsAal, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightChapmanRichardsPhysio = get_dbh_error(umcaDiameterFromHeightChapmanRichardsPhysio, umca2016physio, umca2016natural, umca2016plantationPhysio)
 umcaDiameterFromHeightChapmanRichardsRelHt = get_dbh_error(umcaDiameterFromHeightChapmanRichardsRelHt, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightLinear = get_dbh_error(umcaDiameterFromHeightLinear, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightMichaelisMentenForm = get_dbh_error(umcaDiameterFromHeightMichaelisMentenForm, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightNaslund = get_dbh_error(umcaDiameterFromHeightNaslund, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightParabolic = get_dbh_error(umcaDiameterFromHeightParabolic, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightPower = get_dbh_error(umcaDiameterFromHeightPower, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightPowerAal = get_dbh_error(umcaDiameterFromHeightPowerAal, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightPowerPhysio = get_dbh_error(umcaDiameterFromHeightPowerPhysio, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightPowerRelHt = get_dbh_error(umcaDiameterFromHeightPowerRelHt, umca2016, umca2016natural, umca2016plantation)
-#umcaDiameterFromHeightSharmaParton = get_dbh_error(umcaDiameterFromHeightSharmaParton, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightRuark = get_dbh_error(umcaDiameterFromHeightRuark, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightSchnute = get_dbh_error(umcaDiameterFromHeightSchnute, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightSharmaParton = get_dbh_error(umcaDiameterFromHeightSharmaParton, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightSibbesenForm = get_dbh_error(umcaDiameterFromHeightSibbesenForm, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightSibbesenFormAal = get_dbh_error(umcaDiameterFromHeightSibbesenFormAal, umca2016, umca2016natural, umca2016plantation)
 umcaDiameterFromHeightSibbesenFormPhysio = get_dbh_error(umcaDiameterFromHeightSibbesenFormPhysio, umca2016physio, umca2016natural, umca2016plantationPhysio)
 umcaDiameterFromHeightSibbesenFormFormRelHt = get_dbh_error(umcaDiameterFromHeightSibbesenFormRelHt, umca2016, umca2016natural, umca2016plantation)
+umcaDiameterFromHeightWeibull = get_dbh_error(umcaDiameterFromHeightWeibull, umca2016, umca2016natural, umca2016plantation)
 
-umcaDiameterFromHeightResults = tribble(~method, ~pae, ~paeNR, ~paePl, ~bias, ~biasNR, ~biasPl, ~mae, ~maeNR, ~maePl, ~rmse, ~rmseNR, ~rmsePl, ~nse, ~nseNR, ~nsePl, ~pearson, ~pearsonNR, ~pearsonPl, ~aic, ~bic, ~power,
-                                        "Chapman-Richards", !!!as_row(umcaDiameterFromHeightChapmanRichards),
-                                        "Chapman-Richards AAL", !!!as_row(umcaDiameterFromHeightChapmanRichardsAal), # not AIC supported
-                                        "Chapman-Richards physio", !!!as_row(umcaDiameterFromHeightChapmanRichardsPhysio),
-                                        "Chapman-Richards RelHt", !!!as_row(umcaDiameterFromHeightChapmanRichardsRelHt), # not AIC supported
-                                        "linear", !!!as_row(umcaDiameterFromHeightLinear),
-                                        "parabolic", !!!as_row(umcaDiameterFromHeightParabolic),
-                                        "power", !!!as_row(umcaDiameterFromHeightPower),
-                                        "power AAL", !!!as_row(umcaDiameterFromHeightPowerAal), # not AIC supported
-                                        "power physio", !!!as_row(umcaDiameterFromHeightPowerPhysio),
-                                        "power RelHt", !!!as_row(umcaDiameterFromHeightPowerRelHt),
-                                        "modified Sharma-Parton", !!!as_row(NULL),
-                                        "Sibbesen form", !!!as_row(umcaDiameterFromHeightSibbesenForm),
-                                        "Sibbesen form AAL", !!!as_row(umcaDiameterFromHeightSibbesenFormAal),
-                                        "Sibbesen form physio", !!!as_row(umcaDiameterFromHeightSibbesenFormPhysio),
-                                        "Sibbesen form RelHt", !!!as_row(umcaDiameterFromHeightSibbesenFormFormRelHt),
-                                        "Chapman-Richards form", !!!as_row(NULL),
-                                        "Chapman-Richards form AAL", !!!as_row(NULL),
-                                        "Chapman-Richards form BAL", !!!as_row(NULL),
-                                        "Chapman-Richards form BAL RelHt", !!!as_row(NULL),
-                                        "Chapman-Richards form RelHt", !!!as_row(NULL)) %>%
+umcaDiameterFromHeightResults = bind_rows(as_row("Chapman-Richards", umcaDiameterFromHeightChapmanRichards),
+                                          as_row("Chapman-Richards AAL", umcaDiameterFromHeightChapmanRichardsAal), # not AIC supported
+                                          as_row("Chapman-Richards physio", umcaDiameterFromHeightChapmanRichardsPhysio),
+                                          as_row("Chapman-Richards RelHt", umcaDiameterFromHeightChapmanRichardsRelHt), # not AIC supported
+                                          as_row("Chapman-Richards form", NULL),
+                                          as_row("Chapman-Richards form AAL", NULL),
+                                          as_row("Chapman-Richards form BAL", NULL),
+                                          as_row("Chapman-Richards form BAL RelHt", NULL),
+                                          as_row("Chapman-Richards form RelHt", NULL),
+                                          as_row("linear", umcaDiameterFromHeightLinear),
+                                          as_row("generalized Michaelis-Menten form", umcaDiameterFromHeightMichaelisMentenForm),
+                                          as_row("Näslund", umcaDiameterFromHeightNaslund),
+                                          as_row("parabolic", umcaDiameterFromHeightParabolic, significant = FALSE),
+                                          as_row("power", umcaDiameterFromHeightPower),
+                                          as_row("power AAL", umcaDiameterFromHeightPowerAal), # not AIC supported
+                                          as_row("power physio", umcaDiameterFromHeightPowerPhysio),
+                                          as_row("power RelHt", umcaDiameterFromHeightPowerRelHt),
+                                          as_row("Ruark", umcaDiameterFromHeightRuark),
+                                          as_row("Schnute", umcaDiameterFromHeightSchnute),
+                                          as_row("modified Sharma-Parton", umcaDiameterFromHeightSharmaParton),
+                                          as_row("Sibbesen form", umcaDiameterFromHeightSibbesenForm),
+                                          as_row("Sibbesen form AAL", umcaDiameterFromHeightSibbesenFormAal),
+                                          as_row("Sibbesen form physio", umcaDiameterFromHeightSibbesenFormPhysio),
+                                          as_row("Sibbesen form RelHt", umcaDiameterFromHeightSibbesenFormFormRelHt),
+                                          as_row("Weibull", umcaDiameterFromHeightWeibull)) %>%
   mutate(responseVariable = "height", species = "UMCA", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
   arrange(desc(deltaAic))
-umcaDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic)
+print(umcaDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
 
 ggplot(umca2016) +
   geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = umcaDiameterFromHeightSharmaParton$fitted.values, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = umcaDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards form BAL", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = umcaDiameterFromHeightChapmanFormAal$fitted.values, y = TotalHt, color = "Chapman-Richards form approximate BAL", group = isPlantation), alpha = 0.5) +
-  geom_line(aes(x = umcaDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
-  geom_line(aes(x = umcaDiameterFromHeightPower$fitted.values, y = TotalHt, color = "power", group = isPlantation)) +
-  geom_line(aes(x = umcaDiameterFromHeightSibbesenForm$fitted.values, y = TotalHt, color = "Sibbesen", group = isPlantation)) +
   #geom_line(aes(x = umcaDiameterFromHeightChapmanForm$fitted.values, y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
+  #geom_line(aes(x = umcaDiameterFromHeightChapmanFormAal$fitted.values, y = TotalHt, color = "Chapman-Richards form approximate BAL", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = umcaDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards form BAL", group = isPlantation), alpha = 0.5) +
+  geom_line(aes(x = umcaDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
+  #geom_line(aes(x = umcaDiameterFromHeightMichaelisMentenForm$fitted.values, y = TotalHt, color = "generalized Michaelis-Menten form", group = isPlantation)) +
+  #geom_line(aes(x = umcaDiameterFromHeightNaslund$fitted.values, y = TotalHt, color = "Näslund", group = isPlantation)) +
+  geom_line(aes(x = umcaDiameterFromHeightPower$fitted.values, y = TotalHt, color = "power", group = isPlantation)) +
+  geom_line(aes(x = umcaDiameterFromHeightRuark$fitted.values, y = TotalHt, color = "Ruark", group = isPlantation)) +
+  #geom_line(aes(x = umcaDiameterFromHeightSchnute$fitted.values, y = TotalHt, color = "Schnute", group = isPlantation)) +
+  #geom_line(aes(x = umcaDiameterFromHeightSharmaParton$fitted.values, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
+  geom_line(aes(x = umcaDiameterFromHeightSibbesenForm$fitted.values, y = TotalHt, color = "Sibbesen form", group = isPlantation)) +
+  #geom_line(aes(x = umcaDiameterFromHeightWeibull$fitted.values, y = TotalHt, color = "Weibull", group = isPlantation)) +
   #geom_line(aes(x = 1*topHeight^1*(1 - exp(-0.01 * (tph/standBasalAreaPerHectare)^1*(TotalHt - 1.37)))^1, y = TotalHt, color = "Sharma-Parton"), alpha = 0.5) +
   #geom_line(aes(x = 5*standBasalAreaPerHectare^0.5 * exp(0.0005*tph^0.5*(TotalHt - 1.37))^1, y = TotalHt, color = "Sharma-Zhang"), alpha = 0.5) +
   #geom_line(aes(x = -70 * log(1 - pmin(0.01*(TotalHt - 1.37)^1.1, 0.999)), y = TotalHt, color = "Chapman-Richards"), na.rm = TRUE) +
@@ -268,7 +285,7 @@ ggplot(umca2016) +
   #geom_line(aes(x = 15 * (exp(0.12*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "Chapman-Richards", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AAL", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 0.03*topHeight*exp(1.6*(TotalHt - 1.37)^0.26), y = TotalHt, color = "Chapman-Richards form top height", group = isPlantation), alpha = 0.5) +
-  annotate("text", x = 0, y = 90, label = "Oregon myrtle, diameter from height", hjust = 0, size = 3.5) +
+  annotate("text", x = 0, y = 37, label = "Oregon myrtle, diameter from height", hjust = 0, size = 3.5) +
   #coord_cartesian(xlim = c(0, 250), ylim = c(0, 90)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
   #scale_color_manual(breaks = c(FALSE, TRUE, "Chapman-Richards"), values = c("grey25", "transparent", "red")) +
@@ -316,22 +333,27 @@ umcaParameters = bind_rows(bind_rows(bind_rows(c(method = "Chapman-Richards", um
                                      bind_rows(c(method = "Chapman-Richards AAL", umcaDiameterFromHeightChapmanRichardsAal$m$getPars())),
                                      bind_rows(c(method = "Chapman-Richards physio", umcaDiameterFromHeightChapmanRichardsPhysio$m$getPars())),
                                      bind_rows(c(method = "Chapman-Richards RelHt", umcaDiameterFromHeightChapmanRichardsRelHt$m$getPars())),
-                                     #bind_rows(c(method = "Chapman-Richards form", umcaDiameterFromHeightChapmanForm$m$getPars())),
-                                     #bind_rows(c(method = "Chapman-Richards form AAL", umcaDiameterFromHeightChapmanFormAal$m$getPars())),
-                                     #bind_rows(c(method = "Chapman-Richards form BAL", umcaDiameterFromHeightChapmanFormBal$m$getPars())),
-                                     #bind_rows(c(method = "Chapman-Richards form BAL RelHt", umcaDiameterFromHeightChapmanFormBalRelHt$m$getPars())),
-                                     #bind_rows(c(method = "Chapman-Richards form RelHt", umcaDiameterFromHeightChapmanFormRelHt$m$getPars())),
+                                     bind_rows(c(method = "Chapman-Richards form", umcaDiameterFromHeightChapmanForm$m$getPars())),
+                                     bind_rows(c(method = "Chapman-Richards form AAL", umcaDiameterFromHeightChapmanFormAal$m$getPars())),
+                                     bind_rows(c(method = "Chapman-Richards form BAL", umcaDiameterFromHeightChapmanFormBal$m$getPars())),
+                                     bind_rows(c(method = "Chapman-Richards form BAL RelHt", umcaDiameterFromHeightChapmanFormBalRelHt$m$getPars())),
+                                     bind_rows(c(method = "Chapman-Richards form RelHt", umcaDiameterFromHeightChapmanFormRelHt$m$getPars())),
                                      bind_rows(c(method = "linear", umcaDiameterFromHeightLinear$coefficients)),
+                                     bind_rows(c(method = "generalized Michaelis-Menten form", umcaDiameterFromHeightMichaelisMentenForm$m$getPars())),
+                                     bind_rows(c(method = "Näslund", umcaDiameterFromHeightNaslund$m$getPars())),
                                      bind_rows(c(method = "parabolic", umcaDiameterFromHeightParabolic$coefficients)),
                                      bind_rows(c(method = "power", umcaDiameterFromHeightPower$m$getPars())),
                                      bind_rows(c(method = "power AAL", umcaDiameterFromHeightPowerAal$m$getPars())),
                                      bind_rows(c(method = "power physio", umcaDiameterFromHeightPowerPhysio$m$getPars())),
                                      bind_rows(c(method = "power RelHt", umcaDiameterFromHeightPowerRelHt$m$getPars())),
-                                     #bind_rows(c(method = "modified Sharma-Parton", umcaDiameterFromHeightSharmaParton$m$getPars())),
+                                     bind_rows(c(method = "Ruark", umcaDiameterFromHeightRuark$m$getPars())),
+                                     bind_rows(c(method = "Schnute", umcaDiameterFromHeightSchnute$m$getPars())),
+                                     bind_rows(c(method = "modified Sharma-Parton", umcaDiameterFromHeightSharmaParton$m$getPars())),
                                      bind_rows(c(method = "Sibbesen form", umcaDiameterFromHeightSibbesenForm$m$getPars())),
                                      bind_rows(c(method = "Sibbesen form AAL", umcaDiameterFromHeightSibbesenFormAal$m$getPars())),
                                      bind_rows(c(method = "Sibbesen form physio", umcaDiameterFromHeightSibbesenFormPhysio$m$getPars())),
-                                     bind_rows(c(method = "Sibbesen form RelHt", umcaDiameterFromHeightSibbesenFormRelHt$m$getPars()))) %>%
+                                     bind_rows(c(method = "Sibbesen form RelHt", umcaDiameterFromHeightSibbesenFormRelHt$m$getPars())),
+                                     bind_rows(c(method = "Weibull", umcaDiameterFromHeightWeibull$m$getPars()))) %>%
                              mutate(responseVariable = "height")) %>%
   mutate(species = "UMCA",
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
