@@ -338,10 +338,75 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)")
   return(exploratoryPlots)
 }
 
-plot_qq = function()
+plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3, diameterRegression4,
+                   heightRegression1, heightRegression2, heightRegression3, heightRegression4,
+                   speciesName, tDegreesOfFreedom = 7, tSkew = 2.25)
 {
-  
+  #heightColors = c("#ff6961", "#ffb480", "#f8f38d", "#42d6a4")
+  #dbhColors = c("#08cad1", "#59adf6", "#9d94ff", "#c780e8")
+  heightColors = viridis::viridis_pal(option = "plasma", end = 0.9)(4)
+  dbhColors = viridis::viridis_pal(end = 0.9)(4)
+  qqPlot = ggplot() +
+      geom_qq_line(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.4) +
+      geom_qq(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.8, geom = "line") +
+      annotate("text", x = -10.5, y = 160, label = paste0("'a) ", speciesName, " height, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
+      coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
+      labs(x = NULL, y = "sample quantile", color = NULL) +
+      scale_color_manual(values = heightColors) +
+      theme(legend.key.height = unit(0.8, "line"), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
+    ggplot() +
+      geom_qq_line(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.4) +
+      geom_qq(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.8, geom = "line") +
+      annotate("text", x = -10.5, y = 160, label = paste0("'b) ", speciesName, " DBH, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
+      coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
+      labs(x = NULL, y = NULL, color = NULL) +
+      scale_color_manual(values = dbhColors) +
+      theme(legend.key.height = unit(0.8, "line"),legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
+    ggplot() +
+      geom_qq_line(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq_line(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq_line(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq_line(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      annotate("text", x = -10.5, y = 160, label = paste0("'c) ", speciesName, " height, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
+      coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
+      labs(x = "theoretical quantile", y = "sample quantile", color = NULL) +
+      scale_color_manual(values = heightColors) +
+      theme(legend.justification = c(1, 0), legend.position = "none") +
+    ggplot() + # qst()'s omega (scale) parameter can be left as 1 as its only effect is rotation, xi (location) can be left as zero as its only effect is a translation in theoretical quantile
+      geom_qq_line(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq_line(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq_line(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq_line(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      annotate("text", x = -10.5, y = 160, label = paste0("'d) ", speciesName, " DBH, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ", '*alpha*' = ", tSkew, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
+      coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
+      labs(x = "theoretical quantile", y = NULL, color = NULL) +
+      scale_color_manual(values = dbhColors) +
+      theme(legend.justification = c(1, 0), legend.position = "none") +
+      plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
+      plot_layout(nrow = 2, ncol = 2, widths = c(10 + 13, 10 + 16.5))
+  return(qqPlot)
 }
+
 
 ## load data
 stands2022 = read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% 
@@ -416,39 +481,6 @@ liveUnbrokenTrees2016 = trees2016 %>% filter(isLiveUnbroken) %>%
 #               remainingFraction = (tphContribution + remainingTph) / tphContribution,
 #               weight = if_else(remainingFraction >= 1, 1, if_else(remainingFraction > 0, remainingFraction, 0))),
 #      n = 40)
-
-
-## species unpacking
-psme2016 = trees2016 %>% filter(Species == "DF", isLiveUnbroken, TotalHt > 0) # live Douglas-firs measured for height
-psme2016natural = psme2016 %>% filter(isPlantation == FALSE)
-psme2016plantation = psme2016 %>% filter(isPlantation)
-
-alru2016 = trees2016 %>% filter(Species == "RA", isLiveUnbroken, TotalHt > 0) # live red alders measured for height
-alru2016natural = alru2016 %>% filter(isPlantation == FALSE)
-alru2016plantation = alru2016 %>% filter(isPlantation)
-
-tshe2016 = trees2016 %>% filter(Species == "WH", isLiveUnbroken, TotalHt > 0) # live western hemlocks measured for height
-tshe2016natural = tshe2016 %>% filter(isPlantation == FALSE)
-tshe2016plantation = tshe2016 %>% filter(isPlantation)
-
-acma2016 = trees2016 %>% filter(Species == "BM", isLiveUnbroken, TotalHt > 0) # live bigleaf maples measured for height
-acma2016natural = acma2016 %>% filter(isPlantation == FALSE)
-acma2016plantation = acma2016 %>% filter(isPlantation)
-
-umca2016 = trees2016 %>% filter(Species == "OM", isLiveUnbroken, TotalHt > 0) # live Oregon myrtles measured for height
-umca2016natural = umca2016 %>% filter(isPlantation == FALSE)
-umca2016plantation = umca2016 %>% filter(isPlantation)
-
-thpl2016 = trees2016 %>% filter(Species == "RC", isLiveUnbroken, TotalHt > 0) # live western redcedars measured for height
-thpl2016natural = thpl2016 %>% filter(isPlantation == FALSE)
-thpl2016plantation = thpl2016 %>% filter(isPlantation)
-
-other2016 = trees2016 %>% filter((Species %in% c("DF", "RA", "WH", "BM", "OM", "RC")) == FALSE, isLiveUnbroken, TotalHt > 0) # live western redcedars measured for height
-other2016natural = other2016 %>% filter(isPlantation == FALSE)
-other2016plantation = other2016 %>% filter(isPlantation)
-
-#otherConifer2016 = other2016 %>% filter(Species %in% c("XX", "CX", "SS", "PC", "PY", "GF", "LP"))
-#otherHardwood2016 = other2016 %>% filter(Species %in% c("CA", "HX", "CH", "PM", "GC", "PD", "TO", "WI", "OA", "WO"))
 
 
 ## data tabulation and basic plotting

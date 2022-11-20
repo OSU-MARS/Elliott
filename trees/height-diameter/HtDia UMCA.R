@@ -3,8 +3,12 @@
 ## Oregon myrtle (California bay) height-diameter regression form sweep
 # preferred forms: Sibbesen, Korf, Prodan, Ratkowsky
 #umcaHeightFromDiameterRichards = nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), umca2016, start = list(Ha = 14.4, Hap = -3.6, d = 2.78, dp = -0.99, kU = 0.054, kUp = 0.026), weights = pmin(DBH^-2, 1))
+umca2016 = trees2016 %>% filter(Species == "OM", isLiveUnbroken, TotalHt > 0) # live Oregon myrtles measured for height
+umca2016natural = umca2016 %>% filter(isPlantation == FALSE)
 umca2016physio = umca2016 %>% filter(is.na(elevation) == FALSE)
+umca2016plantation = umca2016 %>% filter(isPlantation)
 umca2016plantationPhysio = umca2016physio %>% filter(isPlantation)
+
 umcaHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + a1 * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 16.5, b1 = -0.064, b2 = 1.270, b2p = -0.177), weights = pmin(DBH^-2, 1)) # a1p, b1p not significant
 umcaHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, umca2016, start = list(a1 = 19.0, a2 = 0.201, a3 = -0.152, b1 = -0.049, b1p = -0.0105, b2 = 1.156), weights = pmin(DBH^-2, 1)) # a2, a2p, a3, a3p, b2p not significant
 umcaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * elevation + a4 * slope + a5 * sin(3.14159/180 * aspect) + a6 * cos(3.14159/180 * aspect) + a7 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 8.62, a2 = 0.050, a3 = -0.014, a4 = 0.230, a5 = 0.413, a6 = -1.113, a7 = 0, b1 = -0.062, b2 = 1.265, b2p = -0.219), weights = pmin(DBH^-2, 1)) # a1p, a2, a2p, a5, a6, b1p not significant
@@ -56,7 +60,7 @@ umcaHeightFromDiameterSharmaZhangBal = get_height_error("Sharma-Zhang BAL", umca
 umcaHeightFromDiameterSibbesen = get_height_error("Sibbesen", umcaHeightFromDiameterSibbesen, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterWeibull = get_height_error("Weibull", umcaHeightFromDiameterWeibull, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterWeibullBal = get_height_error("Weibull BAL", umcaHeightFromDiameterWeibullBal, umca2016, umca2016natural, umca2016plantation)
-umcaHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull RelHt", umcaHeightFromDiameterWeibullBalRelHt, umca2016, umca2016natural, umca2016plantation)
+umcaHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull BAL RelHt", umcaHeightFromDiameterWeibullBalRelHt, umca2016, umca2016natural, umca2016plantation)
 
 umcaHeightFromDiameterResults = bind_rows(as_row(umcaHeightFromDiameterChapmanRichards),
                                           as_row(umcaHeightFromDiameterChapmanRichardsBal),
@@ -83,7 +87,7 @@ umcaHeightFromDiameterResults = bind_rows(as_row(umcaHeightFromDiameterChapmanRi
                                           as_row(umcaHeightFromDiameterWeibull),
                                           as_row(umcaHeightFromDiameterWeibullBal),
                                           as_row(umcaHeightFromDiameterWeibullBalRelHt)) %>%
-  mutate(responseVariable = "DBH", species = "UMCA", deltaAic = aic - min(aic)) %>%
+  mutate(responseVariable = "height", species = "UMCA", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
 print(umcaHeightFromDiameterResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
@@ -110,37 +114,35 @@ ggplot() +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03))
 
 ## Oregon myrtle height-diameter GNLS regressions
-##umcaHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 65.3, a1p = -13.1, b1 = -0.022, b2 = 1.51, b2p = -0.31), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#umcaHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 64.9, a1p = 3.8, a2 = 0.023, a2p = 0.92, a3 = 0.022, a3p = -0.22, b1 = -0.021, b1p = 0.0066, b2 = 1.47, b2p = -0.29), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#umcaHeightFromDiameterSharmaPartonGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 22.6, a2 = 0.26, a2p = -0.050, b1 = -0.021, b1p = -0.014, b2 = 0.025, b2p = -0.187, b3 = 1.51, b3p = -0.44), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-##umcaHeightFromDiameterSharmaPartonBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 18.5, a1p = 11.3, a2 = 0.30, a2p = -0.14, b1 = -0.019, b1p = -0.011, b2 = 0.089, b2p = -0.266, b3 = 1.49, b3p = -0.44), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-##umcaHeightFromDiameterSharmaZhangGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 56.1, a1p = -23.1, a2 = 0.042, a2p = 0.117, b1 = -0.0247, b1p = -0.0131, b2 = -0.0217, b2p = -0.112, b3 = 1.476, b3p = -0.456), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-##umcaHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation) * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 56.3, a1p = 14.7, a2 = 0.0412, a2p = -0.0535, a3 = 0.0146, a3p = 0.0146, b1 = -0.0249, b1p = -0.00024, b2 = -0.0240, b2p = -0.0969, b3 = 1.48, b3p = -0.370), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#umcaHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), umca2016, start = list(a1 = 63.6, a1p = -12.7, b1 = -0.00516, b1p = -0.00652, b2 = 1.29, b2p = -0.16), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#umcaHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), umca2016, start = list(a1 = 63.6, a2 = 0.035, a2p = 0.832, a3 = 0.0120, a3p = -0.184, b1 = -0.0052, b1p = -0.0024, b2 = 1.281, b2p = -0.133), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#save(umcaHeightFromDiameterChapmanRichardsBalGnls, umcaHeightFromDiameterSharmaPartonGnls, umcaHeightFromDiameterSharmaZhangBalGnls, umcaHeightFromDiameterWeibullGnls, umcaHeightFromDiameterWeibullBalGnls, file = "Timber Inventory/HtDia UMCA GNLS.rdata")
-load("trees/height-diameter/HtDia UMCA GNLS.rdata")
-umcaHeightFromDiameterWeibullGnls = umcaHeightFromDiameterWykoffGnls # temporary naming error fixup
-umcaHeightFromDiameterWeibullBalGnls = umcaHeightFromDiameterWykoffBalGnls
+#umcaHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = umcaHeightFromDiameterChapmanRichards$m$getPars(), weights = varPower(0.5, ~DBH), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot correlation
+#umcaHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, umca2016, start = umcaHeightFromDiameterChapmanRichardsBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE))
+#umcaHeightFromDiameterSharmaPartonGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^b2*DBH))^b3, umca2016, start = umcaHeightFromDiameterSharmaParton$m$getPars(), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot correlation
+#umcaHeightFromDiameterSharmaPartonBalGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b2*DBH))^(b3 + b3p * isPlantation), umca2016, start = umcaHeightFromDiameterSharmaPartonBal$m$getPars(), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot correlation
+#umcaHeightFromDiameterSharmaZhangGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 - exp(b1*tph^b2*DBH))^(b3 + b3p * isPlantation), umca2016, start = umcaHeightFromDiameterSharmaZhang$m$getPars(), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot correlation
+#umcaHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^b3, umca2016, start = umcaHeightFromDiameterSharmaZhangBal$m$getPars(), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.005, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot correlation or nlsTol = 0.001
+#umcaHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = umcaHeightFromDiameterWeibull$m$getPars(), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot correlation
+#umcaHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = umcaHeightFromDiameterWeibullBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE))
+#save(umcaHeightFromDiameterChapmanRichardsGnls, umcaHeightFromDiameterChapmanRichardsBalGnls, umcaHeightFromDiameterSharmaPartonGnls, umcaHeightFromDiameterSharmaPartonBalGnls, umcaHeightFromDiameterSharmaZhangGnls, umcaHeightFromDiameterSharmaZhangBalGnls, umcaHeightFromDiameterWeibullGnls, umcaHeightFromDiameterWeibullBalGnls, file = "trees/height-diameter/HtDia UMCA GNLS.rdata")
 
-#umcaHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", umcaHeightFromDiameterChapmanRichardsGnls, umca2016, umca2016natural, umca2016plantation)
+load("trees/height-diameter/HtDia UMCA GNLS.rdata")
+umcaHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", umcaHeightFromDiameterChapmanRichardsGnls, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BAL GNLS", umcaHeightFromDiameterChapmanRichardsBalGnls, umca2016, umca2016natural, umca2016plantation)
-#umcaHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", umcaHeightFromDiameterSharmaPartonGnls, umca2016, umca2016natural, umca2016plantation)
-#umcaHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BAL GNLS", umcaHeightFromDiameterSharmaPartonBalGnls, umca2016, umca2016natural, umca2016plantation)
-#umcaHeightFromDiameterSharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", umcaHeightFromDiameterSharmaZhangGnls, umca2016, umca2016natural, umca2016plantation)
-#umcaHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BAL GNLS", umcaHeightFromDiameterSharmaZhangBalGnls, umca2016, umca2016natural, umca2016plantation)
+umcaHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", umcaHeightFromDiameterSharmaPartonGnls, umca2016, umca2016natural, umca2016plantation)
+umcaHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BAL GNLS", umcaHeightFromDiameterSharmaPartonBalGnls, umca2016, umca2016natural, umca2016plantation)
+umcaHeightFromDiameterSharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", umcaHeightFromDiameterSharmaZhangGnls, umca2016, umca2016natural, umca2016plantation)
+umcaHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BAL GNLS", umcaHeightFromDiameterSharmaZhangBalGnls, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterWeibullGnls = get_height_error("Weibull GNLS", umcaHeightFromDiameterWeibullGnls, umca2016, umca2016natural, umca2016plantation)
 umcaHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BAL GNLS", umcaHeightFromDiameterWeibullBalGnls, umca2016, umca2016natural, umca2016plantation)
 
-umcaHeightFromDiameterResultsGnls = bind_rows(as_row(name = "Chapman-Richards GNLS"),
+umcaHeightFromDiameterResultsGnls = bind_rows(as_row(umcaHeightFromDiameterChapmanRichardsGnls),
                                               as_row(umcaHeightFromDiameterChapmanRichardsBalGnls),
-                                              as_row(name = "Sharma-Parton GNLS"),
-                                              as_row(name = "Sharma-Parton BAL GNLS"),
-                                              as_row(name = "Sharma-Zhang GNLS"),
-                                              as_row(name = "Sharma-Zhang BAL GNLS"),
+                                              as_row(umcaHeightFromDiameterSharmaPartonGnls),
+                                              as_row(umcaHeightFromDiameterSharmaPartonBalGnls),
+                                              as_row(umcaHeightFromDiameterSharmaZhangGnls),
+                                              as_row(umcaHeightFromDiameterSharmaZhangBalGnls),
                                               as_row(umcaHeightFromDiameterWeibullGnls),
                                               as_row(umcaHeightFromDiameterWeibullBalGnls)) %>%
-  mutate(responseVariable = "DBH", species = "UMCA", deltaAic = aic - min(aic)) %>%
+  mutate(responseVariable = "height", species = "UMCA", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
 umcaHeightFromDiameterResultsGnls %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic) %>% arrange(method)
@@ -261,7 +263,7 @@ umcaDiameterFromHeightResults = bind_rows(as_row(umcaDiameterFromHeightChapmanRi
                                           as_row(umcaDiameterFromHeightSibbesenFormPhysio),
                                           as_row(umcaDiameterFromHeightSibbesenFormRelHt),
                                           as_row(umcaDiameterFromHeightWeibull)) %>%
-  mutate(responseVariable = "height", species = "UMCA", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
+  mutate(responseVariable = "DBH", species = "UMCA", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
   arrange(desc(deltaAic))
 print(umcaDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
 
@@ -323,15 +325,15 @@ umcaParameters = bind_rows(bind_rows(get_coefficients(umcaHeightFromDiameterChap
                                      get_coefficients(umcaHeightFromDiameterWeibull),
                                      get_coefficients(umcaHeightFromDiameterWeibullBal),
                                      get_coefficients(umcaHeightFromDiameterWeibullBalRelHt),
-                                     #get_coefficients(umcaHeightFromDiameterChapmanRichardsGnls),
+                                     get_coefficients(umcaHeightFromDiameterChapmanRichardsGnls),
                                      get_coefficients(umcaHeightFromDiameterChapmanRichardsBalGnls),
-                                     #get_coefficients(umcaHeightFromDiameterSharmaPartonGnls),
-                                     #get_coefficients(umcaHeightFromDiameterSharmaPartonBalGnls),
-                                     #get_coefficients(umcaHeightFromDiameterSharmaZhangGnls),
-                                     #get_coefficients(umcaHeightFromDiameterSharmaZhangBalGnls),
+                                     get_coefficients(umcaHeightFromDiameterSharmaPartonGnls),
+                                     get_coefficients(umcaHeightFromDiameterSharmaPartonBalGnls),
+                                     get_coefficients(umcaHeightFromDiameterSharmaZhangGnls),
+                                     get_coefficients(umcaHeightFromDiameterSharmaZhangBalGnls),
                                      get_coefficients(umcaHeightFromDiameterWeibullGnls),
                                      get_coefficients(umcaHeightFromDiameterWeibullBalGnls)) %>%
-                             mutate(responseVariable = "DBH"),
+                             mutate(responseVariable = "height"),
                            bind_rows(get_coefficients(umcaDiameterFromHeightChapmanRichards),
                                      get_coefficients(umcaDiameterFromHeightChapmanRichardsAat),
                                      get_coefficients(umcaDiameterFromHeightChapmanRichardsPhysio),
@@ -357,7 +359,7 @@ umcaParameters = bind_rows(bind_rows(get_coefficients(umcaHeightFromDiameterChap
                                      get_coefficients(umcaDiameterFromHeightSibbesenFormPhysio),
                                      get_coefficients(umcaDiameterFromHeightSibbesenFormRelHt),
                                      get_coefficients(umcaDiameterFromHeightWeibull)) %>%
-                             mutate(responseVariable = "height")) %>%
+                             mutate(responseVariable = "DBH")) %>%
   mutate(species = "UMCA",
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
          a4 = as.numeric(a4), a4p = as.numeric(a4p), a5 = as.numeric(a5), a6 = as.numeric(a6), 

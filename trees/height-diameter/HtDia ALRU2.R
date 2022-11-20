@@ -23,8 +23,12 @@
 #alruHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), alru2016, start = list(a1 = 102, a1p = 92, b1 = -17.7, b1p = 10.3, b2 = -0.725, b2p = 0.365), weights = pmin(DBH^-2, 1))
 #alruHeightFromDiameterWeibull = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), alru2016, start = list(a1 = 63.6, a1p = -12.7, b1 = -0.00516, b1p = -0.00652, b2 = 1.29, b2p = -0.16), weights = pmin(DBH^-2, 1))
 #alruHeightFromDiameterWeibullBal = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), alru2016, start = list(a1 = 63.6, a2 = 0.035, a2p = 0.832, a3 = 0.0120, a3p = -0.184, b1 = -0.0052, b1p = -0.0024, b2 = 1.281, b2p = -0.133), weights = pmin(DBH^-2, 1))
+alru2016 = trees2016 %>% filter(Species == "RA", isLiveUnbroken, TotalHt > 0) # live red alders measured for height
+alru2016natural = alru2016 %>% filter(isPlantation == FALSE)
 alru2016physio = alru2016 %>% filter(is.na(elevation) == FALSE)
+alru2016plantation = alru2016 %>% filter(isPlantation)
 alru2016plantationPhysio = alru2016physio %>% filter(isPlantation)
+
 alruHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), alru2016, start = list(a1 = 26.4, a1p = 2.74, b1 = -0.041, b2 = 1.11, b2p = 0.027), weights = pmin(DBH^-2, 1))
 alruHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), alru2016, start = list(a1 = 28.5, a1p = 13.1, a2 = 0.212, a2p = 0.218, a3 = -0.173, b1 = -0.0404, b1p = 0.0198, b2 = 1.143, b2p = -0.122), weights = pmin(DBH^-2, 1)) # a3p not significant
 alruHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * elevation + a4 * slope + a5 * sin(3.14159/180 * aspect) + a6 * cos(3.14159/180 * aspect) + a7 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, alru2016physio, start = list(a1 = 35.1, a1p = 6.02, a2 = 0.040, a2p = 0.131, a3 = -0.0050, a4 = -0.241, a5 = 0.364, a6 = 0.102, a7 = 0, b1 = -0.040, b1p = -0.040, b2 = 1.09), weights = pmin(DBH^-2, 1)) # a5, a6 not significant
@@ -103,7 +107,7 @@ alruHeightFromDiameterResults = bind_rows(as_row(alruHeightFromDiameterChapmanRi
                                           as_row(alruHeightFromDiameterWeibull),
                                           as_row(alruHeightFromDiameterWeibullBal),
                                           as_row(alruHeightFromDiameterWeibullBalRelHt)) %>%
-  mutate(responseVariable = "DBH", species = "ALRU2", deltaAic = aic - min(aic)) %>%
+  mutate(responseVariable = "height", species = "ALRU2", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
 print(alruHeightFromDiameterResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
@@ -173,11 +177,17 @@ ggplot() +
 #alruHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation) * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), alru2016, start = list(a1 = 56.3, a1p = 14.7, a2 = 0.0412, a2p = -0.0535, a3 = 0.0146, a3p = 0.0146, b1 = -0.0249, b1p = -0.00024, b2 = -0.0240, b2p = -0.0969, b3 = 1.48, b3p = -0.370), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
 #alruHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), alru2016, start = list(a1 = 63.6, a1p = -12.7, b1 = -0.00516, b1p = -0.00652, b2 = 1.29, b2p = -0.16), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
 #alruHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), alru2016, start = list(a1 = 63.6, a2 = 0.035, a2p = 0.832, a3 = 0.0120, a3p = -0.184, b1 = -0.0052, b1p = -0.0024, b2 = 1.281, b2p = -0.133), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#save(alruHeightFromDiameterChapmanRichardsGnls, alruHeightFromDiameterChapmanRichardsBalGnls, alruHeightFromDiameterSharmaPartonGnls, alruHeightFromDiameterSharmaPartonBalGnls, alruHeightFromDiameterSharmaZhangGnls, alruHeightFromDiameterSharmaZhangBalGnls, alruHeightFromDiameterWeibullGnls, alruHeightFromDiameterWeibullBalGnls, file = "Timber Inventory/HtDia ALRU2 GNLS.rdata")
-load("trees/height-diameter/HtDia ALRU2 GNLS.rdata")
-alruHeightFromDiameterWeibullGnls = alruHeightFromDiameterWykoffGnls # temporary naming error fixup
-alruHeightFromDiameterWeibullBalGnls = alruHeightFromDiameterWykoffBalGnls
+#alruHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), alru2016, start = alruHeightFromDiameterChapmanRichards$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.01, msVerbose = FALSE, returnObject = FALSE)) # step halving with default gnlsControl(tolerance = 1E-6, nlsTol = 0.001, msTol = 1E-7), ok at 1E-6, 0.01, 1E-7
+#alruHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), alru2016, start = alruHeightFromDiameterChapmanRichardsBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.08, maxIter = 250, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.02, >250 iterations at nlsTol = 0.05
+#alruHeightFromDiameterSharmaPartonGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 - exp(b1*(tph/standBasalAreaPerHectare)^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), alru2016, start = alruHeightFromDiameterSharmaParton$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 1, msTol = 1E-5, tolerance = 1E-4, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.5, > 250+50 iterations at nlsTol = 1 or with tighter tolerances than nlsTol = 0.2, msTol = 1E-5, tolerance = 1E-4
+#alruHeightFromDiameterSharmaPartonBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^a2 * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), alru2016, start = alruHeightFromDiameterSharmaPartonBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.2, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.1, maxiter at default msTol and tolerance
+#alruHeightFromDiameterSharmaZhangGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), alru2016, start = alruHeightFromDiameterSharmaZhang$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.05, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.02
+#alruHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation) * (1 + a3 * basalAreaLarger) * (1 - exp(b1*tph^b2*DBH))^b3, alru2016, start = alruHeightFromDiameterSharmaZhangBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.02, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.01
+#alruHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), alru2016, start = alruHeightFromDiameterWeibull$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.01, msVerbose = FALSE, returnObject = FALSE)) # step factor at nlsTol = 0.005
+#alruHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), alru2016, start = alruHeightFromDiameterWeibullBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.02, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.01
+#save(alruHeightFromDiameterChapmanRichardsGnls, alruHeightFromDiameterChapmanRichardsBalGnls, alruHeightFromDiameterSharmaPartonGnls, alruHeightFromDiameterSharmaPartonBalGnls, alruHeightFromDiameterSharmaZhangGnls, alruHeightFromDiameterSharmaZhangBalGnls, alruHeightFromDiameterWeibullGnls, alruHeightFromDiameterWeibullBalGnls, file = "trees/height-diameter/HtDia ALRU2 GNLS.rdata")
 
+load("trees/height-diameter/HtDia ALRU2 GNLS.rdata")
 alruHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", alruHeightFromDiameterChapmanRichardsGnls, alru2016, alru2016natural, alru2016plantation)
 alruHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BAL GNLS", alruHeightFromDiameterChapmanRichardsBalGnls, alru2016, alru2016natural, alru2016plantation)
 alruHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", alruHeightFromDiameterSharmaPartonGnls, alru2016, alru2016natural, alru2016plantation)
@@ -195,7 +205,7 @@ alruHeightFromDiameterResultsGnls = bind_rows(as_row(alruHeightFromDiameterChapm
                                               as_row(alruHeightFromDiameterSharmaZhangBalGnls),
                                               as_row(alruHeightFromDiameterWeibullGnls),
                                               as_row(alruHeightFromDiameterWeibullBalGnls)) %>%
-  mutate(responseVariable = "DBH", species = "ALRU2", deltaAic = aic - min(aic)) %>%
+  mutate(responseVariable = "height", species = "ALRU2", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
 alruHeightFromDiameterResultsGnls %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic) %>% arrange(method)
@@ -374,7 +384,7 @@ alruDiameterFromHeightResults = bind_rows(as_row(alruDiameterFromHeightChapmanRi
                                           as_row(alruDiameterFromHeightSibbesenFormPhysio),
                                           as_row(alruDiameterFromHeightSibbesenFormRelHt),
                                           as_row(alruDiameterFromHeightWeibull)) %>% 
-  mutate(responseVariable = "height", species = "ALRU2", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
+  mutate(responseVariable = "DBH", species = "ALRU2", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
   arrange(desc(deltaAic))
 print(alruDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
 
@@ -509,7 +519,7 @@ alruParameters = bind_rows(bind_rows(get_coefficients(alruHeightFromDiameterChap
                                      get_coefficients(alruHeightFromDiameterSharmaZhangBalGnls),
                                      get_coefficients(alruHeightFromDiameterWeibullGnls),
                                      get_coefficients(alruHeightFromDiameterWeibullBalGnls)) %>%
-                             mutate(responseVariable = "DBH"),
+                             mutate(responseVariable = "height"),
                            bind_rows(get_coefficients(alruDiameterFromHeightChapmanRichards),
                                      get_coefficients(alruDiameterFromHeightChapmanRichardsAat),
                                      get_coefficients(alruDiameterFromHeightChapmanRichardsPhysio),
@@ -535,7 +545,7 @@ alruParameters = bind_rows(bind_rows(get_coefficients(alruHeightFromDiameterChap
                                      get_coefficients(alruDiameterFromHeightSibbesenFormPhysio),
                                      get_coefficients(alruDiameterFromHeightSibbesenFormRelHt),
                                      get_coefficients(alruDiameterFromHeightWeibull)) %>%
-                             mutate(responseVariable = "height")) %>%
+                             mutate(responseVariable = "DBH")) %>%
   mutate(species = "ALRU2",
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
          a4 = as.numeric(a4), a4p = as.numeric(a4p), a5 = as.numeric(a5), a6 = as.numeric(a6), 

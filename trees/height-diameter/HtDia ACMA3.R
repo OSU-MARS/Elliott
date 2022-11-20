@@ -5,8 +5,12 @@
 #acmaHeightFromDiameterChapmanRichardsPhysio = gsl_nls(TotalHt ~ 1.37 + (a1 + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 31.9, a2 = -0.0044, a3 = -8.22, a4 = 0.198, a5 = 1.387, a6 = 0.014, b1 = -0.031, b2 = 1.02, b2p = -0.108), weights = pmin(DBH^-2, 1)) # a1p, a2, a4, b1p not significant
 #acmaHeightFromDiameterMichaelisMenten = nls(TotalHt ~ 1.37 + a1*DBH / (a2 + a2p * isPlantation + DBH), acma2016, start = list(a1 = 39.5, a2 = 47.8, a2p = -9.11), weights = pmin(DBH^-2, 1))
 #acmaHeightFromDiameterRichards = nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), acma2016, start = list(Ha = 23.9, Hap = -1.1, d = 0.67, dp = -0.031, kU = 0.023, kUp = 0.008), weights = pmin(DBH^-2, 1))
+acma2016 = trees2016 %>% filter(Species == "BM", isLiveUnbroken, TotalHt > 0) # live bigleaf maples measured for height
+acma2016natural = acma2016 %>% filter(isPlantation == FALSE)
 acma2016physio = acma2016 %>% filter(is.na(elevation) == FALSE)
+acma2016plantation = acma2016 %>% filter(isPlantation)
 acma2016plantationPhysio = acma2016physio %>% filter(isPlantation)
+
 acmaHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^b2, acma2016, start = list(a1 = 26.8, a1p = 4.20, b1 = -0.026, b2 = 0.927), weights = pmin(DBH^-2, 1)) # b1p, b2p not significant
 acmaHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 64.9, a1p = 3.8, a2 = 0.023, a2p = 0.92, a3 = 0.022, a3p = -0.22, b1 = -0.021, b1p = 0.0066, b2 = 1.47, b2p = -0.29), weights = pmin(DBH^-2, 1))
 acmaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * elevation + a4 * slope + a5 * sin(3.14159/180 * aspect) + a6 * cos(3.14159/180 * aspect) + a7 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016physio, start = list(a1 = 33.2, a2 = 0.156, a3 = -0.009, a4 = -0.130, a5 = 1.872, a6 = 0.276, a7 = 0, b1 = -0.024, b2 = 0.988, b2p = -0.129), weights = pmin(DBH^-2, 1)) # a1p, a2p, a3, a4, a6, b1p not significant
@@ -85,7 +89,7 @@ acmaHeightFromDiameterResults = bind_rows(as_row(acmaHeightFromDiameterChapmanRi
                                           as_row(acmaHeightFromDiameterWeibull),
                                           as_row(acmaHeightFromDiameterWeibullBal),
                                           as_row(acmaHeightFromDiameterWeibullBalRelHt)) %>%
-  mutate(responseVariable = "DBH", species = "ACMA3", deltaAic = aic - min(aic)) %>%
+  mutate(responseVariable = "height", species = "ACMA3", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
 print(acmaHeightFromDiameterResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
@@ -112,38 +116,35 @@ ggplot() +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03))
 
 ## bigleaf maple height-diameter GNLS regressions
-#acmaHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 65.3, a1p = -13.1, b1 = -0.022, b2 = 1.51, b2p = -0.31), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#acmaHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 64.9, a1p = 3.8, a2 = 0.023, a2p = 0.92, a3 = 0.022, a3p = -0.22, b1 = -0.021, b1p = 0.0066, b2 = 1.47, b2p = -0.29), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#acmaHeightFromDiameterSharmaPartonGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), acma2016, start = list(a1 = 22.6, a2 = 0.26, a2p = -0.050, b1 = -0.021, b1p = -0.014, b2 = 0.025, b2p = -0.187, b3 = 1.51, b3p = -0.44), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#acmaHeightFromDiameterSharmaPartonBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), acma2016, start = list(a1 = 18.5, a1p = 11.3, a2 = 0.30, a2p = -0.14, b1 = -0.019, b1p = -0.011, b2 = 0.089, b2p = -0.266, b3 = 1.49, b3p = -0.44), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#acmaHeightFromDiameterSharmaZhangGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), acma2016, start = list(a1 = 56.1, a1p = -23.1, a2 = 0.042, a2p = 0.117, b1 = -0.0247, b1p = -0.0131, b2 = -0.0217, b2p = -0.112, b3 = 1.476, b3p = -0.456), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-##acmaHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation) * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), acma2016, start = list(a1 = 56.3, a1p = 14.7, a2 = 0.0412, a2p = -0.0535, a3 = 0.0146, a3p = 0.0146, b1 = -0.0249, b1p = -0.00024, b2 = -0.0240, b2p = -0.0969, b3 = 1.48, b3p = -0.370), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#acmaHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), acma2016, start = list(a1 = 63.6, a1p = -12.7, b1 = -0.00516, b1p = -0.00652, b2 = 1.29, b2p = -0.16), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-#acmaHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), acma2016, start = list(a1 = 63.6, a2 = 0.035, a2p = 0.832, a3 = 0.0120, a3p = -0.184, b1 = -0.0052, b1p = -0.0024, b2 = 1.281, b2p = -0.133), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.1, tolerance = 0.001, msTol = 0.001, msVerbose = FALSE, returnObject = TRUE))
-##save(acmaHeightFromDiameterChapmanRichardsGnls, acmaHeightFromDiameterChapmanRichardsBalGnls, acmaHeightFromDiameterSharmaPartonGnls, acmaHeightFromDiameterSharmaPartonBalGnls, acmaHeightFromDiameterSharmaZhangGnls, acmaHeightFromDiameterSharmaZhangBalGnls, acmaHeightFromDiameterWeibullGnls, acmaHeightFromDiameterWeibullBalGnls, file = "Timber Inventory/HtDia ACMA3 GNLS.rdata")
-#save(acmaHeightFromDiameterChapmanRichardsGnls, acmaHeightFromDiameterChapmanRichardsBalGnls, acmaHeightFromDiameterSharmaPartonGnls, acmaHeightFromDiameterSharmaPartonBalGnls, acmaHeightFromDiameterSharmaZhangGnls, acmaHeightFromDiameterWeibullGnls, acmaHeightFromDiameterWeibullBalGnls, file = "Timber Inventory/HtDia ACMA3 GNLS.rdata")
-load("trees/height-diameter/HtDia ACMA3 GNLS.rdata")
-acmaHeightFromDiameterWeibullGnls = acmaHeightFromDiameterWykoffGnls # temporary naming error fixup
-acmaHeightFromDiameterWeibullBalGnls = acmaHeightFromDiameterWykoffBalGnls
+#acmaHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^b2, acma2016, start = acmaHeightFromDiameterChapmanRichards$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE))
+#acmaHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), acma2016, start = acmaHeightFromDiameterChapmanRichardsBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.005, msTol = 1E-4, tolerance = 1E-3, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.001, maxiter at default msTol and tolerance
+##acmaHeightFromDiameterSharmaPartonGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 - exp(b1*(tph/standBasalAreaPerHectare)^b2*DBH))^(b3 + b3p * isPlantation), acma2016, start = acmaHeightFromDiameterSharmaParton$m$getPars(), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # foreign NaN-inf with plot correlation, step halving at nlsTOl = 1
+#acmaHeightFromDiameterSharmaPartonBalGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b2*DBH))^(b3 + b3p * isPlantation), acma2016, start = acmaHeightFromDiameterSharmaPartonBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.001, msTol = 0.01, tolerance = 0.001, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE))
+#acmaHeightFromDiameterSharmaZhangGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^a2 * (1 - exp(b1*tph^b2*DBH))^(b3 + b3p * isPlantation), acma2016, start = acmaHeightFromDiameterSharmaZhang$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.01, msTol = 0.01, tolerance = 0.01, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.005
+#acmaHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + a3*basalAreaLarger) * (1 - exp(b1*tph^b2*DBH))^(b3 + b3p * isPlantation), acma2016, start = acmaHeightFromDiameterSharmaZhangBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.01, msTol = 1E-4, tolerance = 1E-3, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.005
+#acmaHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp(b1*DBH^b2)), acma2016, start = acmaHeightFromDiameterWeibull$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.01, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5, msVerbose = FALSE, returnObject = FALSE))
+#acmaHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), acma2016, start = acmaHeightFromDiameterWeibullBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.50, ~DBH), control = gnlsControl(nlsTol = 0.01, maxIter = 250, nlsMaxIter = 50, msTol = 1E-5, tolerance = 1E-4, msVerbose = FALSE, returnObject = FALSE))
+#save(acmaHeightFromDiameterChapmanRichardsGnls, acmaHeightFromDiameterChapmanRichardsBalGnls, acmaHeightFromDiameterSharmaPartonBalGnls, acmaHeightFromDiameterSharmaPartonBalGnls, acmaHeightFromDiameterSharmaZhangGnls, acmaHeightFromDiameterSharmaZhangBalGnls, acmaHeightFromDiameterWeibullGnls, acmaHeightFromDiameterWeibullBalGnls, file = "trees/height-diameter/HtDia ACMA3 GNLS.rdata")
 
+load("trees/height-diameter/HtDia ACMA3 GNLS.rdata")
 acmaHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", acmaHeightFromDiameterChapmanRichardsGnls, acma2016, acma2016natural, acma2016plantation)
-#acmaHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BAL GNLS", acmaHeightFromDiameterChapmanRichardsBalGnls, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", acmaHeightFromDiameterSharmaPartonGnls, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BAL GNLS", acmaHeightFromDiameterChapmanRichardsBalGnls, acma2016, acma2016natural, acma2016plantation)
+#acmaHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", acmaHeightFromDiameterSharmaPartonGnls, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BAL GNLS", acmaHeightFromDiameterSharmaPartonBalGnls, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterSharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", acmaHeightFromDiameterSharmaZhangGnls, acma2016, acma2016natural, acma2016plantation)
-#acmaHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BAL GNLS", acmaHeightFromDiameterSharmaZhangBalGnls, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BAL GNLS", acmaHeightFromDiameterSharmaZhangBalGnls, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterWeibullGnls = get_height_error("Weibull GNLS", acmaHeightFromDiameterWeibullGnls, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BAL GNLS", acmaHeightFromDiameterWeibullBalGnls, acma2016, acma2016natural, acma2016plantation)
 
 acmaHeightFromDiameterResultsGnls = bind_rows(as_row(acmaHeightFromDiameterChapmanRichardsGnls),
-                                              as_row(name = "Chapman-Richards BAL GNLS"),
-                                              as_row(acmaHeightFromDiameterSharmaPartonGnls),
+                                              as_row(acmaHeightFromDiameterChapmanRichardsBalGnls),
+                                              as_row(name = "Sharma-Parton GNLS"),
                                               as_row(acmaHeightFromDiameterSharmaPartonBalGnls),
                                               as_row(acmaHeightFromDiameterSharmaZhangGnls),
-                                              as_row(name = "Sharma-Zhang BAL GNLS"),
+                                              as_row(acmaHeightFromDiameterSharmaZhangBalGnls),
                                               as_row(acmaHeightFromDiameterWeibullGnls),
                                               as_row(acmaHeightFromDiameterWeibullBalGnls)) %>%
-  mutate(responseVariable = "DBH", species = "ACMA3", deltaAic = aic - min(aic)) %>%
+  mutate(responseVariable = "height", species = "ACMA3", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
 acmaHeightFromDiameterResultsGnls %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic) %>% arrange(method)
@@ -264,7 +265,7 @@ acmaDiameterFromHeightResults = bind_rows(as_row(acmaDiameterFromHeightChapmanRi
                                           as_row(acmaDiameterFromHeightSibbesenFormPhysio),
                                           as_row(acmaDiameterFromHeightSibbesenFormRelHt),
                                           as_row(acmaDiameterFromHeightWeibull)) %>%
-  mutate(responseVariable = "height", species = "ACMA3", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
+  mutate(responseVariable = "DBH", species = "ACMA3", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
   arrange(desc(deltaAic))
 print(acmaDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
 
@@ -327,14 +328,14 @@ acmaParameters = bind_rows(bind_rows(get_coefficients(acmaHeightFromDiameterChap
                                      get_coefficients(acmaHeightFromDiameterWeibullBal),
                                      get_coefficients(acmaHeightFromDiameterWeibullBalRelHt),
                                      get_coefficients(acmaHeightFromDiameterChapmanRichardsGnls),
-                                     #get_coefficients(acmaHeightFromDiameterChapmanRichardsBalGnls),
-                                     get_coefficients(acmaHeightFromDiameterSharmaPartonGnls),
+                                     get_coefficients(acmaHeightFromDiameterChapmanRichardsBalGnls),
+                                     #get_coefficients(acmaHeightFromDiameterSharmaPartonGnls),
                                      get_coefficients(acmaHeightFromDiameterSharmaPartonBalGnls),
                                      get_coefficients(acmaHeightFromDiameterSharmaZhangGnls),
-                                     #get_coefficients(acmaHeightFromDiameterSharmaZhangBalGnls),
+                                     get_coefficients(acmaHeightFromDiameterSharmaZhangBalGnls),
                                      get_coefficients(acmaHeightFromDiameterWeibullGnls),
                                      get_coefficients(acmaHeightFromDiameterWeibullBalGnls)) %>%
-                             mutate(responseVariable = "DBH"),
+                             mutate(responseVariable = "height"),
                            bind_rows(get_coefficients(acmaDiameterFromHeightChapmanRichards),
                                      get_coefficients(acmaDiameterFromHeightChapmanRichardsAat),
                                      get_coefficients(acmaDiameterFromHeightChapmanRichardsPhysio),
@@ -360,7 +361,7 @@ acmaParameters = bind_rows(bind_rows(get_coefficients(acmaHeightFromDiameterChap
                                      get_coefficients(acmaDiameterFromHeightSibbesenFormPhysio),
                                      get_coefficients(acmaDiameterFromHeightSibbesenFormRelHt),
                                      get_coefficients(acmaDiameterFromHeightWeibull)) %>%
-                             mutate(responseVariable = "height")) %>%
+                             mutate(responseVariable = "DBH")) %>%
   mutate(species = "ACMA3",
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
          a4 = as.numeric(a4), a4p = as.numeric(a4p), a5 = as.numeric(a5), a6 = as.numeric(a6), 
