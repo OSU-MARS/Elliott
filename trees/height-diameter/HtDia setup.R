@@ -37,8 +37,9 @@ as_row = function(regression = NULL, name = NULL, significant = TRUE)
                   rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
                   nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
                   pearson = NA_real_, pearsonNaturalRegen = NA_real_, pearsonPlantation = NA_real_,
-                  aic = NA_real_, bic = regression$bic, power = NA_real_, fitting = NA_character_,
-                  n = NA_real_, significant = NA_real_, adaptiveWeightFraction = NA_real_))
+                  aic = NA_real_, bic = regression$bic, power = NA_real_, powerPlantation = NA_real,
+                  fitting = NA_character_, n = NA_real_, significant = NA_real_, 
+                  adaptiveWeightFraction = NA_real_, maxResidual = NA_real_))
   }
   if (("pae" %in% names(regression)) == FALSE)
   {
@@ -46,11 +47,17 @@ as_row = function(regression = NULL, name = NULL, significant = TRUE)
   }
   
   power = NA_real_
+  powerPlantation = NA_real_
   if (is.null(regression$modelStruct$varStruct) == FALSE)
   {
     power = regression$modelStruct$varStruct[1]
+    if (length(regression$modelStruct$varStruct) > 1)
+    {
+      powerPlantation = regression$modelStruct$varStruct[2]
+    }
   }
   
+  residuals = residuals(regression)
   return(tibble(name = regression$name, 
                 pae = regression$pae, paeNaturalRegen = regression$paeNaturalRegen, paePlantation = regression$paePlantation,
                 bias = regression$bias, biasNaturalRegen = regression$biasNaturalRegen, biasPlantation = regression$biasPlantation,
@@ -58,8 +65,9 @@ as_row = function(regression = NULL, name = NULL, significant = TRUE)
                 rmse = regression$rmse, rmseNaturalRegen = regression$rmseNaturalRegen, rmsePlantation = regression$rmsePlantation,
                 nse = regression$nse, nseNaturalRegen = regression$nseNaturalRegen, nsePlantation = regression$nsePlantation,
                 pearson = regression$pearson, pearsonNaturalRegen = regression$pearsonNaturalRegen, pearsonPlantation = regression$pearsonPlantation,
-                aic = regression$aic, bic = regression$bic, power = power, fitting = class(regression)[1],
-                n = sum(is.na(regression$residuals) == FALSE), significant = significant, adaptiveWeightFraction = regression$adaptiveWeightFraction))
+                aic = regression$aic, bic = regression$bic, power = power, powerPlantation = powerPlantation,
+                fitting = class(regression)[1], n = sum(is.na(regression$residuals) == FALSE), significant = significant, 
+                adaptiveWeightFraction = regression$adaptiveWeightFraction, maxResidual = residuals[which.max(abs(residuals))]))
 }
 
 confint_nlrob = function(regression, level = 0.99, df = df.residual(regression), weights = regression$weights)

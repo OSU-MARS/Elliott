@@ -122,6 +122,15 @@ plot_layout(nrow = 2, widths = c(250, 150))
 
 
 ## direct fitting of height residuals
+#acmaHeightChapmanRichardsResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = acma2016$DBH, isPlantation = acma2016$isPlantation, residual = abs(residuals(acmaHeightFromDiameterChapmanRichards))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#acmaHeightMichaelisMentenResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = acma2016$DBH, isPlantation = acma2016$isPlantation, residual = abs(residuals(acmaHeightFromDiameterMichaelisMenten))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#tsheHeightChapmanRichardsResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = tshe2016$DBH, isPlantation = tshe2016$isPlantation, residual = abs(residuals(tsheHeightFromDiameterChapmanRichards))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#tsheHeightMichaelisMentenResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = tshe2016$DBH, isPlantation = tshe2016$isPlantation, residual = abs(residuals(tsheHeightFromDiameterMichaelisMenten))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#umcaHeightChapmanRichardsResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = umca2016$DBH, isPlantation = umca2016$isPlantation, residual = abs(residuals(umcaHeightFromDiameterChapmanRichards))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#umcaHeightMichaelisMentenResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = umca2016$DBH, isPlantation = umca2016$isPlantation, residual = abs(residuals(umcaHeightFromDiameterMichaelisMenten))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#thplHeightChapmanRichardsResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = thpl2016$DBH, isPlantation = thpl2016$isPlantation, residual = abs(residuals(thplHeightFromDiameterChapmanRichards))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#thplHeightMichaelisMentenResidualPower = nlrob(residual ~ (a1 + a1p*isPlantation)*DBH^(b1 + b1p*isPlantation), tibble(DBH = thpl2016$DBH, isPlantation = thpl2016$isPlantation, residual = abs(residuals(thplHeightFromDiameterMichaelisMenten))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
+#confint_nlrob(thplHeightMichaelisMentenResidualPower, level = 0.99, weights = rep(1, nrow(thpl2016)))
 psmeHeightChapmanRichardsResidualPower = nlrob(residual ~ (a1 + a1p * isPlantation) * DBH^(b1 + b1p * isPlantation), tibble(DBH = psme2016$DBH, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeHeightFromDiameterChapmanRichards))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
 alruHeightChapmanRichardsResidualPower = nlrob(residual ~ a1*DBH^(b1 + b1p * isPlantation), tibble(DBH = alru2016$DBH, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruHeightFromDiameterChapmanRichards))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p, b1p not mutually significant
 tsheHeightChapmanRichardsResidualPower = nlrob(residual ~ a1*DBH^b1, tibble(DBH = tshe2016$DBH, isPlantation = tshe2016$isPlantation, residual = abs(residuals(tsheHeightFromDiameterChapmanRichards))), start = list(a1 = 1, b1 = 1)) # a1p, b1p not significant
@@ -218,7 +227,6 @@ psmeDiameterResidualLm1 = lm(residual ~ I(TotalHt - 1.37), tibble(TotalHt = psme
 psmeDiameterResidualLm2 = lm(residual ~ I(TotalHt - 1.37) + I((TotalHt - 1.37)^2), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))))
 psmeDiameterResidualLm3 = lm(residual ~ I(TotalHt - 1.37) + I((TotalHt - 1.37)^2) + I((TotalHt - 1.37)^3), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))))
 psmeDiameterRuarkResidualConstPower = gsl_nls(residual ~ a0 + a1*(TotalHt - 1.37)^b1, tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))), start = list(a0 = 0, a1 = 1, b1 = 1), control = nls.control(maxiter = 250)) # parameter evaporation
-psmeDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^b1, tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))), start = list(a1 = 1, b1 = 1))
 psmeDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))), start = list(a1 = 1, b1 = 1, b1p = 0)) # NaN-inf with a1p
 psmeDiameterRuarkResidualPower$confint = confint_nlrob(psmeDiameterRuarkResidualPower, level = 0.99, weights = rep(1, psmeDiameterRuarkResidualPower$nobs))
 
@@ -249,7 +257,6 @@ ggplot() +
   geom_line(aes(x = psme2016$TotalHt, y = predict(psmeDiameterRuarkResidualPower), color = "nlrob()", group = psme2016$isPlantation)) +
   labs(x = "height, m", y = "diameter residual, cm", color = NULL, fill = NULL) +
   theme(legend.justification = c(0, 1), legend.position = c(0.03, 1))
-
 
 alruDiameterGslNlsResidualConstPower = gsl_nls(residual ~ a0 + a1*(TotalHt - 1.37)^b1, tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))), start = list(a0 = 0, a1 = 1, b1 = 1), control = gsl_nls_control(maxiter = 250))
 alruDiameterGslNlsResidualPower = gsl_nls(residual ~ a1*(TotalHt - 1.37)^b1, tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))), start = list(a1 = 1, b1 = 1))
@@ -296,7 +303,7 @@ tsheDiameterChapmanFormResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 
 acmaDiameterChapmanFormResidualPower = nlrob(residual ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = acma2016$TotalHt, isPlantation = acma2016$isPlantation, residual = abs(residuals(acmaDiameterFromHeightChapmanForm))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
 umcaDiameterChapmanFormResidualPower = nlrob(residual ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = umca2016$TotalHt, isPlantation = umca2016$isPlantation, residual = abs(residuals(umcaDiameterFromHeightChapmanForm))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
 thplDiameterChapmanFormResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = thpl2016$TotalHt, isPlantation = thpl2016$isPlantation, residual = abs(residuals(thplDiameterFromHeightChapmanForm))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p, b1p not mutually significant
-otherDiameterChapmanFormResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = other2016$TotalHt, isPlantation = other2016$isPlantation, residual = abs(residuals(otherDiameterFromHeightChapmanForm))), maxit = 100, start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p not significant
+otherDiameterChapmanFormResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = other2016$TotalHt, isPlantation = other2016$isPlantation, residual = abs(pmin(-residuals(otherDiameterFromHeightChapmanForm), 125))), start = list(a1 = 1, b1 = 1, b1p = 0), maxit = 150, control = nls.control(maxiter = 500)) # a1p not significant, constrain maximum error to avoid polynomial runaway
 
 psmeDiameterChapmanRichardsResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightChapmanRichards))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p not significant
 alruDiameterChapmanRichardsResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightChapmanRichards))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p not significant
@@ -310,7 +317,7 @@ tsheDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p 
 acmaDiameterRuarkResidualPower = nlrob(residual ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = acma2016$TotalHt, isPlantation = acma2016$isPlantation, residual = abs(residuals(acmaDiameterFromHeightRuark))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
 umcaDiameterRuarkResidualPower = nlrob(residual ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = umca2016$TotalHt, isPlantation = umca2016$isPlantation, residual = abs(residuals(umcaDiameterFromHeightRuark))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
 thplDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = thpl2016$TotalHt, isPlantation = thpl2016$isPlantation, residual = abs(residuals(thplDiameterFromHeightRuark))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p, b1p not mutually significant
-otherDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = other2016$TotalHt, isPlantation = other2016$isPlantation, residual = abs(residuals(otherDiameterFromHeightRuark))), maxit = 100, start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p not significant
+otherDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = other2016$TotalHt, isPlantation = other2016$isPlantation, residual = abs(residuals(otherDiameterFromHeightRuark))), start = list(a1 = 1, b1 = 1, b1p = 0), maxit = 100, control = nls.control(maxiter = 100)) # a1p not significant
 
 psmeDiameterSibbesenFormResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightSibbesenForm))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p not significant
 alruDiameterSibbesenFormResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightSibbesenForm))), start = list(a1 = 1, b1 = 1, b1p = 0)) # a1p not significant
@@ -340,7 +347,10 @@ tsheDiameterRuarkResidualPower$confint = confint_nlrob(tsheDiameterRuarkResidual
 acmaDiameterRuarkResidualPower$confint = confint_nlrob(acmaDiameterRuarkResidualPower, level = 0.99, weights = rep(1, acmaDiameterRuarkResidualPower$nobs))
 umcaDiameterRuarkResidualPower$confint = confint_nlrob(umcaDiameterRuarkResidualPower, level = 0.99, weights = rep(1, umcaDiameterRuarkResidualPower$nobs))
 thplDiameterRuarkResidualPower$confint = confint_nlrob(thplDiameterRuarkResidualPower, level = 0.99, weights = rep(1, thplDiameterRuarkResidualPower$nobs))
-otherDiameterRuarkResidualPower$confint = confint_nlrob(otherDiameterRuarkResidualPower, level = 0.99, weights = rep(1, otherDiameterRuarkResidualPower$nobs))
+#otherDiameterRuarkResidualPower$confint = confint_nlrob(otherDiameterRuarkResidualPower, level = 0.99, weights = rep(1, otherDiameterRuarkResidualPower$nobs))
+otherDiameterRuarkResidualPower$confint = matrix(NA_real_, nrow = 3, ncol = 2)
+colnames(otherDiameterRuarkResidualPower$confint) = c("0.5%", "99.5%")
+rownames(otherDiameterRuarkResidualPower$confint) = c("a1", "b1", "b1p")
 
 psmeDiameterSibbesenFormResidualPower$confint = confint_nlrob(psmeDiameterSibbesenFormResidualPower, level = 0.99, weights = rep(1, psmeDiameterSibbesenFormResidualPower$nobs))
 alruDiameterSibbesenFormResidualPower$confint = confint_nlrob(alruDiameterSibbesenFormResidualPower, level = 0.99, weights = rep(1, alruDiameterSibbesenFormResidualPower$nobs))
@@ -385,9 +395,10 @@ residualPower = tribble(~species, ~htName, ~ht_b1, ~ht_b1p, ~diaName, ~dia_b1, ~
          dia_b1p_min = dia_b1_min + dia_b1p_min + sqrt(2 * (dia_b1 - dia_b1_min) * (dia_b1p - dia_b1p_min)), 
          dia_b1p_max = dia_b1_max + dia_b1p_max - sqrt(2 * (dia_b1 - dia_b1_max) * (dia_b1p - dia_b1p_max)))
 #residualPower %>% mutate(sum_center = ht_b1 + ht_b1p, sum_min = ht_b1_min + ht_b1p_min, ht_b1p_min2 = ht_b1_min + ht_b1p_min + sqrt(2*(ht_b1 - ht_b1_min) * (ht_b1p - ht_b1p_min))) %>% select(species, ht_b1_min, ht_b1, ht_b1p_min, ht_b1p, sum_min, ht_b1p_min2, sum_center)
+#residualPower %>% filter(species == "other species") %>% select(-starts_with("ht_"))
 residualPower %>% select(species, ht_b1, ht_b1p, dia_b1, dia_b1p) %>%
-  mutate(ht_b1p = ht_b1 + ht_b1p, dia_b1p = dia_b1 + dia_b1p, ht_b1 = ht_b1, dia_b1 = dia_b1) %>% 
-  group_by(species) %>% 
+  mutate(ht_b1p = ht_b1 + ht_b1p, dia_b1p = dia_b1 + dia_b1p) %>% 
+  group_by(species) %>%
   summarize(ht_b1 = round(2 * mean(ht_b1), 1), ht_b1p = round(2 * mean(ht_b1p), 1), # Table S3
             dia_b1 = round(2 * mean(dia_b1), 1), dia_b1p = round(2 * mean(dia_b1p), 1))
 residualPower %>% summarize(ht_b1 = mean(ht_b1), ht_b1p = mean(ht_b1 + if_else(is.na(ht_b1p), 0, ht_b1p)), dia_b1 = mean(dia_b1), dia_b1p = mean(dia_b1 + dia_b1p))

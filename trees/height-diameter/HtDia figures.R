@@ -24,7 +24,8 @@ heightDiameterResults = bind_rows(psmeHeightFromDiameterResults,
                                   acmaDiameterFromHeightResults,
                                   umcaDiameterFromHeightResults,
                                   thplDiameterFromHeightResults,
-                                  otherDiameterFromHeightResults) %>%
+                                  otherDiameterFromHeightResults,
+                                  otherDiameterFromHeightResultsGnls) %>%
   mutate(species = factor(species, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"), levels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other")),
          speciesFraction = recode(species, "Douglas-fir" = 0.750, "red alder" = 0.101, "western hemlock" = 0.056, "bigleaf maple" = 0.029, "Oregon myrtle" = 0.025, "western redcedar" = 0.013, "other species" = 0.017),
          weighting = if_else(fitting %in% c("gnls", "nlrob"), "reweighted", "fixed weights"),
@@ -107,7 +108,7 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
 
 
 ## Figure 3: diameter-height error summary
-diameterFromHeightResults = heightDiameterResults %>% filter(responseVariable == "DBH", str_detect(name, "BAL") == FALSE) %>%
+diameterFromHeightResults = heightDiameterResults %>% filter(responseVariable == "DBH", str_detect(name, "BAL") == FALSE, str_detect(name, "GNLS") == FALSE, ) %>%
   group_by(responseVariable, species) %>%
   mutate(name = factor(name, levels = (heightDiameterAccuracyLevels %>% filter(responseVariable == "DBH"))$name),
          deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) # recalculate ΔAICn with BAL names excluded
@@ -122,11 +123,11 @@ ggplot(diameterFromHeightResults) +
   labs(x = "RMSE, cm", y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
   scale_y_discrete(labels = NULL) +
 ggplot(diameterFromHeightResults) +
-  geom_segment(x = 0.245, xend = 0.265, y = "Schnute", yend = "Schnute", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", size = 0.4) +
-  geom_segment(x = 0.245, xend = 0.265, y = "linear", yend = "linear", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", size = 0.4) +
-  geom_segment(x = 0.245, xend = 0.265, y = "parabolic", yend = "parabolic", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", size = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "Schnute", yend = "Schnute", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "linear", yend = "linear", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "parabolic", yend = "parabolic", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_point(aes(x = deltaAicN, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 0.255)) +
+  coord_cartesian(xlim = c(0, 0.265)) +
   labs(x = bquote("normalized "*Delta*"AIC"), y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.1)) +
   #scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7), trans = scales::pseudo_log_trans()) +
@@ -153,7 +154,7 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
 #ggsave("trees/height-diameter/Figure 3 diameter accuracy.png", height = 11, width = 22, units = "cm", dpi = 150)
 
-## Figure 4: Douglas-fir, red alder, and western hemlock regression comparision
+## Figure 4: Douglas-fir, red alder, and western hemlock regression comparison
 ggplot() +
   geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
   geom_line(aes(x = psme2016physio$DBH, y = psmeHeightFromDiameterSharmaPartonBalPhysio$fitted.values, color = "Sharma-Parton BAL physiological", group = psme2016physio$isPlantation), alpha = 0.4) +
@@ -409,17 +410,18 @@ ggplot(residualPower) +
   geom_errorbar(aes(xmin = ht_b1p_min, xmax = ht_b1p_max, y = htName, color = species), width = 0.25, na.rm = TRUE) +
   geom_point(aes(x = ht_b1, y = htName, color = species, shape = "b1"), size = 1.7) +
   geom_point(aes(x = ht_b1 + ht_b1p, y = htName, color = species, shape = "b1p"), size = 1.7, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 2)) +
+  coord_cartesian(xlim = c(0, 2.1)) +
   facet_grid(rows = vars(species), labeller = label_wrap_gen(width = 10), switch = "y") +
   labs(x = "power fitted to height residuals", y = NULL, color = NULL, shape = NULL) +
   scale_y_discrete(limits = rev) +
   theme(strip.background = element_blank(), strip.placement = "outside") +
 ggplot(residualPower) +
+  geom_segment(x = 2.01, xend = 2.11, y = "Ruark", yend = "Ruark", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", data = tibble(species = factor("other species", levels = levels(residualPower$species))), linewidth = 0.4) +
   geom_errorbar(aes(xmin = dia_b1_min, xmax = dia_b1_max, y = diaName, color = species), width = 0.25) +
   geom_errorbar(aes(xmin = dia_b1p_min, xmax = dia_b1p_max, y = diaName, color = species), width = 0.25) +
   geom_point(aes(x = dia_b1, y = diaName, color = species, shape = "b1"), size = 1.7) +
   geom_point(aes(x = dia_b1 + dia_b1p, y = diaName, color = species, shape = "b1p"), size = 1.7) +
-  coord_cartesian(xlim = c(0, 2)) +
+  coord_cartesian(xlim = c(0, 2.1)) +
   facet_grid(rows = vars(species), labeller = label_wrap_gen(width = 10), switch = "y") +
   labs(x = "power fitted to DBH residuals", y = NULL, color = NULL, shape = NULL) +
   scale_y_discrete(limits = rev) +
@@ -427,13 +429,13 @@ ggplot(residualPower) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(nrow = 1, guides = "collect") &
   guides(color = "none") &
-  scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = c("forestgreen", "firebrick", "blue2", "red2", "green3", "mediumorchid1", "grey65")) &
+  scale_color_manual(breaks = levels(residualPower$species), limits = levels(residualPower$species), values = c("forestgreen", "firebrick", "blue2", "red2", "green3", "mediumorchid1", "grey65")) &
   scale_shape_manual(breaks = c("b1", "b1p"), labels = c("base power", "plantations"), values = c(15, 17)) &
   theme(legend.position = "bottom")
 ggsave("trees/height-diameter/Figure S06 residual power estimates.png", height = 14, width = 20, units = "cm", dpi = 150)
 
 
-## Figures S7-: Q-Q plots
+## Figures S7-12: Q-Q plots
 plot_qq(psmeHeightFromDiameterChapmanRichards, psmeHeightFromDiameterMichaelisMenten, psmeHeightFromDiameterSharmaParton, psmeHeightFromDiameterSharmaZhang,
         psmeDiameterFromHeightChapmanRichards, psmeDiameterFromHeightChapmanForm, psmeDiameterFromHeightRuark, psmeDiameterFromHeightSibbesenForm,
         "Douglas-fir")
@@ -483,16 +485,17 @@ ggplot(heightDiameterResults %>% filter(is.na(power) == FALSE) %>% mutate(name =
 
 ggplot(heightDiameterResults %>% filter(responseVariable == "height", fitting != "gnls")) +
   geom_point(aes(x = bias, y = species, color = species)) +
-  coord_cartesian(xlim = c(-3, 2.5)) +
+  coord_cartesian(xlim = c(-2, 2)) +
   guides(color = "none") +
   labs(x = "nlrob() or gsl_nls() bias, m height", y = NULL, color = NULL, shape = NULL) +
   scale_color_manual(breaks = levels(heightFromDiameterResults$species), limits = levels(heightFromDiameterResults$species), values = c("forestgreen", "firebrick", "blue2", "red2", "green3", "mediumorchid1", "grey65")) +
   theme(legend.position = "none") +
 ggplot(heightDiameterResults %>% filter(responseVariable == "height", fitting == "gnls")) +
   geom_point(aes(x = bias, y = species, color = species)) +
-  coord_cartesian(xlim = c(-3, 2.5)) +
+  coord_cartesian(xlim = c(-2, 2)) +
   guides(color = "none") +
   labs(x = "gnls() bias, m height", y = NULL, color = NULL, shape = NULL) +
   scale_color_manual(breaks = levels(heightFromDiameterResults$species), limits = levels(heightFromDiameterResults$species), values = c("forestgreen", "firebrick", "blue2", "red2", "green3", "mediumorchid1", "grey65")) +
+  scale_y_discrete(labels = NULL) +
   theme(legend.position = "none")
   
