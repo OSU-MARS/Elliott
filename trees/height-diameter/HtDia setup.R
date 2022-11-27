@@ -190,7 +190,10 @@ get_height_error = function(name, regression, data, dataNaturalRegen, dataPlanta
 {
   regression$name = name
   regression$fitted.values = predict(regression, data)
-  regression$residuals = data$TotalHt - regression$fitted.values
+  if (is.null(regression$residuals))
+  {
+    regression$residuals = data$TotalHt - regression$fitted.values
+  }
   regression$adaptiveWeightFraction = 0
   if (class(regression)[1] == "nlrob")
   {
