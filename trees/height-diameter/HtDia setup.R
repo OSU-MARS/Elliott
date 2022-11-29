@@ -1,7 +1,10 @@
+#.libPaths(.libPaths()[2])
+#install.packages(c("dplyr", "ggplot2", "gslnls", "magrittr", "mgcv", "nlme", "nls.multstart", "nlstools", "patchwork", "readxl", "robustbase", "sn", "stringr", "tibble", "tidyr", "writexl"))
 library(dplyr)
 library(ggplot2)
 library(gslnls)
 library(magrittr)
+library(mgcv)
 library(nlme)
 library(nls.multstart)
 library(nlstools)
@@ -37,7 +40,7 @@ as_row = function(regression = NULL, name = NULL, significant = TRUE)
                   rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
                   nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
                   pearson = NA_real_, pearsonNaturalRegen = NA_real_, pearsonPlantation = NA_real_,
-                  aic = NA_real_, bic = regression$bic, power = NA_real_, powerPlantation = NA_real,
+                  aic = NA_real_, bic = regression$bic, power = NA_real_, powerPlantation = NA_real_,
                   fitting = NA_character_, n = NA_real_, significant = NA_real_, 
                   adaptiveWeightFraction = NA_real_, maxResidual = NA_real_))
   }
@@ -98,12 +101,14 @@ get_coefficients = function(regression)
     {
       stop(paste("Regression for", regression$name, "lacks a both a coefficients and an m property."))
     }
-    coefficients = bind_rows(c(name = regression$name, regression$m$getPars()))
+    coefficients = tibble(!!!set_names(regression$m$getPars(), names(regression$m$getPars())))
   }
   else
   {
-    coefficients = bind_rows(c(name = regression$name, regression$coefficients))
+    coefficients = tibble(!!!set_names(regression$coefficients, names(regression$coefficients)))
   }
+  coefficients %<>% mutate(name = regression$name, fitting = class(regression)[1]) %>%
+    relocate(name, fitting)
   
   if (class(regression)[1] == "lm")
   {

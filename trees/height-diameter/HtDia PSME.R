@@ -1,7 +1,7 @@
 # load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
 
 ## Douglas-fir height-diameter regression form sweep
-# preferred forms: Sharma-Parton BAL, Sharma-Parton, Sharma-Zhang BAL, Chapman-Richards BAL
+# preferred forms: Sharma-Parton BA+L, Sharma-Parton, Sharma-Zhang BA+L, Chapman-Richards BA+L
 # fits without isPlantation as a factor
 #psmeHeightFromDiameterChapmanRichards = nls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^b2, psme2016, start = list(a1 = 74, b1 = -0.014, b2 = 1.14), weights = pmin(DBH^-2, 1))
 #psmeHeightFromDiameterChapmanRichardsBal = nls(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, psme2016, start = list(a1 = 80, a2 = 0.49, a3 = -0.053, b1 = -0.011, b2 = 1.09), weights = pmin(DBH^-2, 1))
@@ -41,6 +41,10 @@ psmeHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + (a
 psmeHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 8.8, a1p = 11.0, a2 = 0.18, a2p = 0.42, a3 = -0.0083, a3p = 0.070, a4 = 54.0, a4p = -28.3, b1 = -0.021, b2 = 0.65, b2p = 0.37), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
 psmeHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016physio, start = list(a1 = 68.5, a1p = -13.4, a2 = -0.0045, a3 = -8.09, a4 = 0.783, a5 = 0.766, a6 = 0.213, b1 = -0.022, b2 = 1.50, b2p = -0.31), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1)) # a4p not significant, a5p induces overfitting
 psmeHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + (a1 + a1p*isPlantation) * DBH / (1 + DBH)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.409, a1p = -0.685, b1 = 0.200, b1p = -0.156), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
+psmeHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation)), data = psme2016)
+psmeHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation)), data = psme2016)
+#psmeHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = psme2016physio)
+#psmeHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = psme2016physio)
 psmeHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) * DBH^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 75.4, a1p = -11.4, b1 = 462, b1p = -322, b2 = -1.54, b2p = 0.28), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
 psmeHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + a1*exp(b1*DBH^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 320, b1 = -7.83, b2 = -0.323, b2p = 0.084), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1), control = nls.control(maxiter = 500)) # a1p parameter evaporation, b1p not significant
 psmeHeightFromDiameterLinear = lm(TotalHt ~ 0 + DBH + I(isPlantation*DBH), psme2016, offset = breastHeight, weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
@@ -52,7 +56,7 @@ psmeHeightFromDiameterRatkowsky = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantatio
 psmeHeightFromDiameterRichards = nlrob(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), psme2016, start = list(Ha = 65.3, Hap = -29.3, d = 0.574, dp = 0.151, kU = 0.0118, kUp = 0.0126), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
 psmeHeightFromDiameterSharmaParton = nlrob(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016, start = list(a1 = 37.66, a2 = 0.19, a2p = -0.123, b1 = -0.017, b1p = -0.026, b2 = 0.061, b2p = -0.259, b3 = 1.33, b3p = -0.22), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
 psmeHeightFromDiameterSharmaPartonBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016, start = list(a1 = 18.5, a1p = 11.3, a2 = 0.30, a2p = -0.14, b1 = -0.019, b1p = -0.011, b2 = 0.089, b2p = -0.266, b3 = 1.49, b3p = -0.44), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
-psmeHeightFromDiameterSharmaPartonBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016physio, start = list(a1 = 16.5, a1p = 12.4, a2 = 0.33, a2p = -0.162, a3 = -0.00008, a4 = 0.0090, a5 = 0.0045, a6 = 0.00256, b1 = -0.020, b1p = -0.0091, b2 = 0.062, b2p = -0.235, b3 = 1.50, b3p = -0.45), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1))
+psmeHeightFromDiameterSharmaPartonBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(a2 + a2p * isPlantation) * (1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016physio, start = list(a1 = 16.5, a1p = 12.4, a2 = 0.33, a2p = -0.162, a3 = -0.00008, a4 = 0.0090, a5 = 0.0045, a6 = 0.00256, b1 = -0.020, b1p = -0.0091, b2 = 0.062, b2p = -0.235, b3 = 1.50, b3p = -0.45), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1)) # slow
 psmeHeightFromDiameterSharmaPartonPhysio = nlrob(TotalHt ~ 1.37 + a1*topHeight^(a2 + a2p * isPlantation)*(1 + a3 * elevation + a4 * sin(3.14159/180 * aspect) + a5 * cos(3.14159/180 * aspect) + a6 * topographicShelterIndex)*(1 - exp((b1 + b1p * isPlantation)*(tph/standBasalAreaPerHectare)^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016physio, start = list(a1 = 38.4, a2 = 0.21, a2p = -0.122, a3 = -0.0002, a4 = 0.012, a5 = 0.007, a6 = 0.0006, b1 = -0.018, b1p = -0.024, b2 = 0.033, b2p = -0.225, b3 = 1.32, b3p = -0.21), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1)) # nlrob() step factor with a1p
 psmeHeightFromDiameterSharmaZhang = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016, start = list(a1 = 56.1, a1p = -23.1, a2 = 0.042, a2p = 0.117, b1 = -0.0247, b1p = -0.0131, b2 = -0.0217, b2p = -0.112, b3 = 1.476, b3p = -0.456), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1)) # a2 not significant
 psmeHeightFromDiameterSharmaZhangBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^a2 * (1 + (a3 + a3p * isPlantation) * basalAreaLarger) * (1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), psme2016, start = list(a1 = 53.5, a1p = -10.1, a2 = 0.070, a3 = -0.00003, a3p = 0.012, b1 = -0.027, b1p = -0.017, b2 = -0.064, b2p = -0.096, b3 = 1.28, b3p = -0.16), weights = pmin(DBH^if_else(isPlantation, -1.2, -0.4), 1)) # a2p, a3, b2 not significant
@@ -63,11 +67,17 @@ psmeHeightFromDiameterWeibullBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p *
 #confint2(psmeHeightFromDiameterWeibullBalRelHt, level = 0.99)
 
 psmeHeightFromDiameterChapmanRichards = get_height_error("Chapman-Richards", psmeHeightFromDiameterChapmanRichards, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterChapmanRichardsBal = get_height_error("Chapman-Richards BAL", psmeHeightFromDiameterChapmanRichardsBal, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterChapmanRichardsBalPhysio = get_height_error("Chapman-Richards BAL physio", psmeHeightFromDiameterChapmanRichardsBalPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
-psmeHeightFromDiameterChapmanRichardsBalRelHt = get_height_error("Chapman-Richards BAL RelHt", psmeHeightFromDiameterChapmanRichardsBalRelHt, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterChapmanRichardsBal = get_height_error("Chapman-Richards BA+L", psmeHeightFromDiameterChapmanRichardsBal, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterChapmanRichardsBalPhysio = get_height_error("Chapman-Richards BA+L physio", psmeHeightFromDiameterChapmanRichardsBalPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
+psmeHeightFromDiameterChapmanRichardsBalRelHt = get_height_error("Chapman-Richards BA+L RelHt", psmeHeightFromDiameterChapmanRichardsBalRelHt, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterChapmanRichardsPhysio = get_height_error("Chapman-Richards physio", psmeHeightFromDiameterChapmanRichardsPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
 psmeHeightFromDiameterCurtis = get_height_error("Curtis", psmeHeightFromDiameterCurtis, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterGam = get_height_error("GCV GAM", psmeHeightFromDiameterGam, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterGamBal = get_height_error("GCV GAM BA+L", psmeHeightFromDiameterGamBal, psme2016, psme2016natural, psme2016plantation)
+#psmeHeightFromDiameterGamBalPhysio = get_height_error("GCV GAM BA+L physio", psmeHeightFromDiameterGamBalPhysio, psme2016physio, psme2016natural, psme2016plantation) # slow
+#psmeHeightFromDiameterGamPhysio = get_height_error("GCV GAM physio", psmeHeightFromDiameterGamPhysio, psme2016physio, psme2016natural, psme2016plantation)
+#save(psmeHeightFromDiameterGamBalPhysio, psmeHeightFromDiameterGamPhysio, file = "trees/height-diameter/HtDia PSME spline height.rdata")
+load("trees/height-diameter/HtDia PSME spline height.rdata")
 psmeHeightFromDiameterHossfeld = get_height_error("Hossfeld IV", psmeHeightFromDiameterHossfeld, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterKorf = get_height_error("Korf", psmeHeightFromDiameterKorf, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterLinear = get_height_error("linear", psmeHeightFromDiameterLinear, psme2016, psme2016natural, psme2016plantation)
@@ -78,15 +88,15 @@ psmeHeightFromDiameterProdan = get_height_error("Prodan", psmeHeightFromDiameter
 psmeHeightFromDiameterRatkowsky = get_height_error("Ratkowsky", psmeHeightFromDiameterRatkowsky, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterRichards = get_height_error("unified Richards", psmeHeightFromDiameterRichards, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterSharmaParton = get_height_error("Sharma-Parton", psmeHeightFromDiameterSharmaParton, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterSharmaPartonBal = get_height_error("Sharma-Parton BAL", psmeHeightFromDiameterSharmaPartonBal, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterSharmaPartonBalPhysio = get_height_error("Sharma-Parton BAL physio", psmeHeightFromDiameterSharmaPartonBalPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
+psmeHeightFromDiameterSharmaPartonBal = get_height_error("Sharma-Parton BA+L", psmeHeightFromDiameterSharmaPartonBal, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterSharmaPartonBalPhysio = get_height_error("Sharma-Parton BA+L physio", psmeHeightFromDiameterSharmaPartonBalPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
 psmeHeightFromDiameterSharmaPartonPhysio = get_height_error("Sharma-Parton physio", psmeHeightFromDiameterSharmaPartonPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
 psmeHeightFromDiameterSharmaZhang = get_height_error("Sharma-Zhang", psmeHeightFromDiameterSharmaZhang, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterSharmaZhangBal = get_height_error("Sharma-Zhang BAL", psmeHeightFromDiameterSharmaZhangBal, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterSharmaZhangBal = get_height_error("Sharma-Zhang BA+L", psmeHeightFromDiameterSharmaZhangBal, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterSibbesen = get_height_error("Sibbesen", psmeHeightFromDiameterSibbesen, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterWeibull = get_height_error("Weibull", psmeHeightFromDiameterWeibull, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterWeibullBal = get_height_error("Weibull BAL", psmeHeightFromDiameterWeibullBal, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull BAL RelHt", psmeHeightFromDiameterWeibullBalRelHt, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterWeibullBal = get_height_error("Weibull BA+L", psmeHeightFromDiameterWeibullBal, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull BA+L RelHt", psmeHeightFromDiameterWeibullBalRelHt, psme2016, psme2016natural, psme2016plantation)
 
 psmeHeightFromDiameterResults = bind_rows(as_row(psmeHeightFromDiameterChapmanRichards),
                                           as_row(psmeHeightFromDiameterChapmanRichardsBal),
@@ -94,6 +104,10 @@ psmeHeightFromDiameterResults = bind_rows(as_row(psmeHeightFromDiameterChapmanRi
                                           as_row(psmeHeightFromDiameterChapmanRichardsBalRelHt),
                                           as_row(psmeHeightFromDiameterChapmanRichardsPhysio),
                                           as_row(psmeHeightFromDiameterCurtis),
+                                          as_row(psmeHeightFromDiameterGam),
+                                          as_row(psmeHeightFromDiameterGamBal),
+                                          as_row(psmeHeightFromDiameterGamBalPhysio),
+                                          as_row(psmeHeightFromDiameterGamPhysio),
                                           as_row(psmeHeightFromDiameterHossfeld),
                                           as_row(psmeHeightFromDiameterKorf),
                                           as_row(psmeHeightFromDiameterLinear),
@@ -174,13 +188,13 @@ ggplot() +
 
 load("trees/height-diameter/HtDia PSME GNLS.rdata")
 psmeHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", psmeHeightFromDiameterChapmanRichardsGnls, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BAL GNLS", psmeHeightFromDiameterChapmanRichardsBalGnls, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BA+L GNLS", psmeHeightFromDiameterChapmanRichardsBalGnls, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", psmeHeightFromDiameterSharmaPartonGnls, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BAL GNLS", psmeHeightFromDiameterSharmaPartonBalGnls, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BA+L GNLS", psmeHeightFromDiameterSharmaPartonBalGnls, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterSharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", psmeHeightFromDiameterSharmaZhangGnls, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BAL GNLS", psmeHeightFromDiameterSharmaZhangBalGnls, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BA+L GNLS", psmeHeightFromDiameterSharmaZhangBalGnls, psme2016, psme2016natural, psme2016plantation)
 psmeHeightFromDiameterWeibullGnls = get_height_error("Weibull GNLS", psmeHeightFromDiameterWeibullGnls, psme2016, psme2016natural, psme2016plantation)
-psmeHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BAL GNLS", psmeHeightFromDiameterWeibullBalGnls, psme2016, psme2016natural, psme2016plantation)
+psmeHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BA+L GNLS", psmeHeightFromDiameterWeibullBalGnls, psme2016, psme2016natural, psme2016plantation)
 
 psmeHeightFromDiameterResultsGnls = bind_rows(as_row(psmeHeightFromDiameterChapmanRichardsGnls),
                                               as_row(psmeHeightFromDiameterChapmanRichardsBalGnls),
@@ -201,14 +215,14 @@ psmeHeightFromDiameterResultsGnls %>% select(-responseVariable, -species, -biasN
 
 ggplot() +
   geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
-  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterChapmanRichardsBal$fitted.values, color = "Chapman-Richards BAL", group = psme2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterChapmanRichardsBal$fitted.values, color = "Chapman-Richards BA+L", group = psme2016$isPlantation), alpha = 0.5) +
   #geom_line(aes(x = psme2016physio$DBH, y = psmeHeightFromDiameterChapmanRichardsPhysio$fitted.values, color = "Chapman-Richards physio", group = psme2016physio$isPlantation), alpha = 0.5) +
   geom_line(aes(x = psme2016physio$DBH, y = psmeHeightFromDiameterChapmanRichardsTopo$fitted.values, color = "Chapman-Richards topo", group = psme2016physio$isPlantation), alpha = 0.5) +
   #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaParton$fitted.values, color = "Sharma-Parton", group = psme2016$isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaPartonBal$fitted.values, color = "Sharma-Parton BAL", group = psme2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaPartonBal$fitted.values, color = "Sharma-Parton BA+L", group = psme2016$isPlantation), alpha = 0.5) +
   #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaZhang$fitted.values, color = "Sharma-Zhang", group = psme2016$isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaZhangBal$fitted.values, color = "Sharma-Zhang BAL", group = psme2016$isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterWeibullBal$fitted.values, color = "Weibull BAL", group = psme2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaZhangBal$fitted.values, color = "Sharma-Zhang BA+L", group = psme2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterWeibullBal$fitted.values, color = "Weibull BA+L", group = psme2016$isPlantation), alpha = 0.5) +
   #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSharmaPartonGnls$fitted.values, color = "Sharma-Parton GNLS"), alpha = 0.35) +
   #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterWeibullGnls$fitted.values, color = "Weibull GNLS"), alpha = 0.35) + 
   geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = psme2016$isPlantation)) +
@@ -216,7 +230,7 @@ ggplot() +
   annotate("text", x = 0, y = 85, label = "a) Douglas-fir, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
-  #scale_color_manual(breaks = c("ElliottChapmanRichards", "ElliottWeibull", "ElliottChapmanRichardsBal", "ElliottWeibullBalNatural", "ElliottWeibullBalPlantation", "TemesgenWeibull"), labels = c("Chapman-Richards", "Weibull", "Chapman-Richards with BAL", "Weibull with BAL, natural regeneration", "Weibull with BAL, plantation", "Weibull, Temesgen et al. 2007"), values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
+  #scale_color_manual(breaks = c("ElliottChapmanRichards", "ElliottWeibull", "ElliottChapmanRichardsBal", "ElliottWeibullBalNatural", "ElliottWeibullBalPlantation", "TemesgenWeibull"), labels = c("Chapman-Richards", "Weibull", "Chapman-Richards with BA+L", "Weibull with BA+L, natural regeneration", "Weibull with BA+L, plantation", "Weibull, Temesgen et al. 2007"), values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
   scale_color_manual(values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
   scale_y_continuous(breaks = seq(0, 100, by = 20)) +
   theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
@@ -268,6 +282,10 @@ psmeDiameterFromHeightChapmanRichards = nlrob(DBH ~ (a1 + a1p * isPlantation)*lo
 psmeDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * tallerQuasiBasalArea + a3 * standQuasiBasalArea)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016, start = list(a1 = -136, a1p = 59.2, a2 = 0.109, a3 = 0.0684, b1 = 0.00811, b1p = 0.00403, b2 = 0.786), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.7), 0.5)) # a2p, a3p, b2p not significant
 psmeDiameterFromHeightChapmanRichardsPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016physio, start = list(a1 = -17.9, a1p = -0133, a2 = 0.0024, a3 = -7.189, a4 = 0.359, a5 = 0.170, a6 = 0.180, b1 = 0.0176, b1p = 0.0058, b2 = 0.404), maxit = 20, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.7), 0.5), control = nls.control(maxiter = 50)) # a5 not significant
 psmeDiameterFromHeightChapmanRichardsRelHt = nlrob(DBH ~ (a1 + a2 * relativeHeight)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^(b2 + b2p * isPlantation), 0.9999)), psme2016, start = list(a1 = -1.22, a2 = -3.11, b1 = 0.018, b1p = 0.006, b2 = 0.003, b2p = 0.052), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.7), 0.5), maxit = 20) # a1p not significant
+psmeDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation)), data = psme2016)
+psmeDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, by = as.factor(isPlantation)), data = psme2016)
+#psmeDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = psme2016physio) # warnings
+#psmeDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = psme2016physio)
 psmeDiameterFromHeightLinear = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), psme2016, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.7), 0.5))
 psmeDiameterFromHeightMichaelisMentenForm = nlrob(DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016, start = list(a1 = 190, a1p = -118, a2 = 67.3, a2p = -38.3, b1 = 0.78, b1p = -0.08), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.7), 0.5))
 psmeDiameterFromHeightNaslund = nlrob(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), psme2016, start = list(a1 = 5.0, a1p = -1.6, a2 = -0.085, a2p = -0.018), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.7), 0.5))
@@ -287,27 +305,33 @@ psmeDiameterFromHeightWeibull = nlrob(DBH ~ ((a1 + a1p * isPlantation)*log(1 - p
 #confint2(psmeDiameterFromHeightWeibull, level = 0.99)
 
 psmeDiameterFromHeightChapmanForm = get_dbh_error("Chapman-Richards form", psmeDiameterFromHeightChapmanForm, psme2016, psme2016natural, psme2016plantation)
-psmeDiameterFromHeightChapmanFormAat = get_dbh_error("Chapman-Richards form AAT", psmeDiameterFromHeightChapmanFormAat, psme2016, psme2016natural, psme2016plantation)
-psmeDiameterFromHeightChapmanFormBal = get_dbh_error("Chapman-Richards form BAL", psmeDiameterFromHeightChapmanFormBal, psme2016, psme2016natural, psme2016plantation)
-psmeDiameterFromHeightChapmanFormBalRelHt = get_dbh_error("Chapman-Richards form BAL RelHt", psmeDiameterFromHeightChapmanFormBalRelHt, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightChapmanFormAat = get_dbh_error("Chapman-Richards form AA+T", psmeDiameterFromHeightChapmanFormAat, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightChapmanFormBal = get_dbh_error("Chapman-Richards form BA+L", psmeDiameterFromHeightChapmanFormBal, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightChapmanFormBalRelHt = get_dbh_error("Chapman-Richards form BA+L RelHt", psmeDiameterFromHeightChapmanFormBalRelHt, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightChapmanFormRelHt = get_dbh_error("Chapman-Richards form RelHt", psmeDiameterFromHeightChapmanFormRelHt, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightChapmanRichards = get_dbh_error("Chapman-Richards", psmeDiameterFromHeightChapmanRichards, psme2016, psme2016natural, psme2016plantation)
-psmeDiameterFromHeightChapmanRichardsAat = get_dbh_error("Chapman-Richards AAT", psmeDiameterFromHeightChapmanRichardsAat, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightChapmanRichardsAat = get_dbh_error("Chapman-Richards AA+T", psmeDiameterFromHeightChapmanRichardsAat, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightChapmanRichardsPhysio = get_dbh_error("Chapman-Richards physio", psmeDiameterFromHeightChapmanRichardsPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
 psmeDiameterFromHeightChapmanRichardsRelHt = get_dbh_error("Chapman-Richards RelHt", psmeDiameterFromHeightChapmanRichardsRelHt, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightGam = get_dbh_error("GCV GAM", psmeDiameterFromHeightGam, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightGamAat = get_dbh_error("GCV GAM AA+T", psmeDiameterFromHeightGamAat, psme2016, psme2016natural, psme2016plantation)
+#psmeDiameterFromHeightGamAatPhysio = get_dbh_error("GCV GAM AA+T physio", psmeDiameterFromHeightGamAatPhysio, psme2016physio, psme2016natural, psme2016plantation)
+#psmeDiameterFromHeightGamPhysio = get_dbh_error("GCV GAM physio", psmeDiameterFromHeightGamPhysio, psme2016physio, psme2016natural, psme2016plantation)
+#save(psmeDiameterFromHeightGamAatPhysio, psmeDiameterFromHeightGamPhysio, file = "trees/height-diameter/HtDia PSME spline DBH.rdata")
+load("trees/height-diameter/HtDia PSME spline DBH.rdata")
 psmeDiameterFromHeightLinear = get_dbh_error("linear", psmeDiameterFromHeightLinear, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightMichaelisMentenForm = get_dbh_error("Michaelis-Menten form", psmeDiameterFromHeightMichaelisMentenForm, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightNaslund = get_dbh_error("Näslund", psmeDiameterFromHeightNaslund, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightParabolic = get_dbh_error("parabolic", psmeDiameterFromHeightParabolic, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightPower = get_dbh_error("power", psmeDiameterFromHeightPower, psme2016, psme2016natural, psme2016plantation)
-psmeDiameterFromHeightPowerAat = get_dbh_error("power AAT", psmeDiameterFromHeightPowerAat, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightPowerAat = get_dbh_error("power AA+T", psmeDiameterFromHeightPowerAat, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightPowerPhysio = get_dbh_error("power physio", psmeDiameterFromHeightPowerPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
 psmeDiameterFromHeightPowerRelHt = get_dbh_error("power RelHt", psmeDiameterFromHeightPowerRelHt, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightRuark = get_dbh_error("Ruark", psmeDiameterFromHeightRuark, psme2016, psme2016natural, psme2016plantation)
 #psmeDiameterFromHeightSchnute = get_dbh_error("Schnute", psmeDiameterFromHeightSchnute, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightSharmaParton = get_dbh_error("modified Sharma-Parton", psmeDiameterFromHeightSharmaParton, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightSibbesenForm = get_dbh_error("Sibbesen form", psmeDiameterFromHeightSibbesenForm, psme2016, psme2016natural, psme2016plantation)
-psmeDiameterFromHeightSibbesenFormAat = get_dbh_error("Sibbesen form AAT", psmeDiameterFromHeightSibbesenFormAat, psme2016, psme2016natural, psme2016plantation)
+psmeDiameterFromHeightSibbesenFormAat = get_dbh_error("Sibbesen form AA+T", psmeDiameterFromHeightSibbesenFormAat, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightSibbesenFormPhysio = get_dbh_error("Sibbesen form physio", psmeDiameterFromHeightSibbesenFormPhysio, psme2016physio, psme2016natural, psme2016plantationPhysio)
 psmeDiameterFromHeightSibbesenFormRelHt = get_dbh_error("Sibbesen form RelHt", psmeDiameterFromHeightSibbesenFormRelHt, psme2016, psme2016natural, psme2016plantation)
 psmeDiameterFromHeightWeibull = get_dbh_error("Weibull", psmeDiameterFromHeightWeibull, psme2016, psme2016natural, psme2016plantation)
@@ -321,6 +345,10 @@ psmeDiameterFromHeightResults = bind_rows(as_row(psmeDiameterFromHeightChapmanRi
                                           as_row(psmeDiameterFromHeightChapmanFormBal),
                                           as_row(psmeDiameterFromHeightChapmanFormBalRelHt),
                                           as_row(psmeDiameterFromHeightChapmanFormRelHt),
+                                          as_row(psmeDiameterFromHeightGam),
+                                          as_row(psmeDiameterFromHeightGamAat),
+                                          as_row(psmeDiameterFromHeightGamAatPhysio),
+                                          as_row(psmeDiameterFromHeightGamPhysio),
                                           as_row(psmeDiameterFromHeightLinear),
                                           as_row(psmeDiameterFromHeightMichaelisMentenForm),
                                           as_row(psmeDiameterFromHeightNaslund),
@@ -344,8 +372,8 @@ print(psmeDiameterFromHeightResults %>% select(-responseVariable, -species, -bia
 ggplot(psme2016) +
   geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
   #geom_line(aes(x = psmeDiameterFromHeightChapmanForm$fitted.values, y = TotalHt, color = "Chapman form", group = isPlantation)) +
-  #geom_line(aes(x = psmeDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman form AAT", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = psmeDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman form BAL", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = psmeDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman form AA+T", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = psmeDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman form BA+L", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = psmeDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
   #geom_line(aes(x = psmeDiameterFromHeightLinear$fitted.values, y = TotalHt, color = "linear", group = isPlantation)) +
   geom_line(aes(x = psmeDiameterFromHeightMichaelisMentenForm$fitted.values, y = TotalHt, color = "Michaelis-Menten form", group = isPlantation), alpha = 0.5) +
@@ -361,7 +389,7 @@ ggplot(psme2016) +
   #geom_line(aes(x = -155 * log(1 - pmin((0.00839*(TotalHt - 1.37))^0.970, 0.999)), y = TotalHt, color = "Chapman-Richards"), na.rm = TRUE) +
   #geom_line(aes(x = 0.05*topHeight*exp(0.02*(tph/topHeight)^0.26*(TotalHt - 1.37))^0.9, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 15 * (exp(0.1*(TotalHt - 1.37)) - 1)^0.35, y = TotalHt, color = "Chapman form", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman form BAL", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman form BA+L", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 0.03*topHeight*exp(1.6*(TotalHt - 1.37)^0.26), y = TotalHt, color = "Chapman top height", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 3.5*sqrt(TotalHt - 1.37) / (1 - 0.1*sqrt(TotalHt - 1.37)), y = TotalHt, color = "Näslund", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 1*topHeight^1*(1 - exp(-0.01 * (tph/standBasalAreaPerHectare)^1*(TotalHt - 1.37)))^1, y = TotalHt, color = "Sharma-Parton"), alpha = 0.5) +
@@ -432,6 +460,10 @@ psmeParameters = bind_rows(bind_rows(get_coefficients(psmeHeightFromDiameterChap
                                      get_coefficients(psmeHeightFromDiameterChapmanRichardsBalRelHt),
                                      get_coefficients(psmeHeightFromDiameterChapmanRichardsPhysio),
                                      get_coefficients(psmeHeightFromDiameterCurtis),
+                                     get_coefficients(psmeHeightFromDiameterGam),
+                                     get_coefficients(psmeHeightFromDiameterGamBal),
+                                     get_coefficients(psmeHeightFromDiameterGamBalPhysio),
+                                     get_coefficients(psmeHeightFromDiameterGamPhysio),
                                      get_coefficients(psmeHeightFromDiameterHossfeld),
                                      get_coefficients(psmeHeightFromDiameterKorf),
                                      get_coefficients(psmeHeightFromDiameterLinear),
@@ -469,6 +501,10 @@ psmeParameters = bind_rows(bind_rows(get_coefficients(psmeHeightFromDiameterChap
                                      get_coefficients(psmeDiameterFromHeightChapmanFormBal),
                                      get_coefficients(psmeDiameterFromHeightChapmanFormBalRelHt),
                                      get_coefficients(psmeDiameterFromHeightChapmanFormRelHt),
+                                     get_coefficients(psmeDiameterFromHeightGam),
+                                     get_coefficients(psmeDiameterFromHeightGamAat),
+                                     get_coefficients(psmeDiameterFromHeightGamAatPhysio),
+                                     get_coefficients(psmeDiameterFromHeightGamPhysio),
                                      get_coefficients(psmeDiameterFromHeightLinear),
                                      get_coefficients(psmeDiameterFromHeightMichaelisMentenForm),
                                      get_coefficients(psmeDiameterFromHeightNaslund),
@@ -490,7 +526,7 @@ psmeParameters = bind_rows(bind_rows(get_coefficients(psmeHeightFromDiameterChap
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
          a4 = as.numeric(a4), a4p = as.numeric(a4p), a5 = as.numeric(a5), a6 = as.numeric(a6), 
          b1 = as.numeric(b1), b1p = as.numeric(b1p), b2 = as.numeric(b2), b2p = as.numeric(b2p), b3 = as.numeric(b3), b3p = as.numeric(b3p)) %>%
-  relocate(responseVariable, species, name, a1, a1p, a2, a2p, a3, a3p, a4, a4p, a5, a6, b1, b1p, b2, b2p, b3, b3p)
+  relocate(responseVariable, species, name, fitting, a1, a1p, a2, a2p, a3, a3p, a4, a4p, a5, a6, b1, b1p, b2, b2p, b3, b3p)
 
 
 ## basal area from height

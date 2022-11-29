@@ -1,7 +1,7 @@
 # load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
 
 ## bigleaf maple height-diameter regression form sweep
-# preferred forms: Sharma-Parton BAL, Ratkowsky, Sharma-Parton, Hossfeld, Weibull, Chapman-Richards
+# preferred forms: Sharma-Parton BA+L, Ratkowsky, Sharma-Parton, Hossfeld, Weibull, Chapman-Richards
 #acmaHeightFromDiameterChapmanRichardsPhysio = gsl_nls(TotalHt ~ 1.37 + (a1 + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 31.9, a2 = -0.0044, a3 = -8.22, a4 = 0.198, a5 = 1.387, a6 = 0.014, b1 = -0.031, b2 = 1.02, b2p = -0.108), weights = pmin(DBH^-0.8, 1)) # a1p, a2, a4, b1p not significant
 #acmaHeightFromDiameterMichaelisMenten = nls(TotalHt ~ 1.37 + a1*DBH / (a2 + a2p * isPlantation + DBH), acma2016, start = list(a1 = 39.5, a2 = 47.8, a2p = -9.11), weights = pmin(DBH^-0.8, 1))
 #acmaHeightFromDiameterRichards = nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), acma2016, start = list(Ha = 23.9, Hap = -1.1, d = 0.67, dp = -0.031, kU = 0.023, kUp = 0.008), weights = pmin(DBH^-0.8, 1))
@@ -17,6 +17,10 @@ acmaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2
 acmaHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = -2.4, a1p = 1.51, a2 = -0.023, a2p = 0.159, a3 = 0.045, a4 = 59.4, a4p = -25.9, b1 = -0.033, b2 = 0.018, b2p = 0.406), weights = pmin(DBH^-0.8, 1)) # a2, a3p not significant, NaN-inf with b1p
 acmaHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 32.5, a2 = -0.0052, a3 = -8.37, a4 = 0.187, a5 = 1.557, a6 = 0.014, b1 = -0.031, b2 = 1.01, b2p = -0.1-4), weights = pmin(DBH^-0.8, 1)) # a1p, a2, a4, b1p not significant
 acmaHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * DBH / (1 + DBH)^b1, acma2016, start = list(a1 = 1.24, a1p = 0.23, b1 = 0.28), weights = pmin(DBH^-0.8, 1)) # b1p not significant
+acmaHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation)), data = acma2016)
+acmaHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation)), data = acma2016)
+#acmaHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio) # insufficient data
+acmaHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio)
 acmaHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + b1 * DBH^b2), acma2016, start = list(a1 = 40.1, a1p = 6.30, b1 = 44.9, b2 = -0.97), weights = pmin(DBH^-0.8, 1)) # b1p, b2p not significant
 acmaHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), acma2016, start = list(a1 = 102, a1p = 92, b1 = -17.7, b1p = 10.3, b2 = -0.725, b2p = 0.365), weights = pmin(DBH^-0.8, 1))
 acmaHeightFromDiameterLinear = lm(TotalHt ~ 0 + DBH + I(isPlantation*DBH), acma2016, offset = breastHeight, weights = pmin(DBH^-0.8, 1))
@@ -39,11 +43,17 @@ acmaHeightFromDiameterWeibullBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalA
 #confint_nlrob(acmaHeightFromDiameterWeibullBalRelHt, level = 0.99, weights = pmin(acma2016$DBH^-2, 1))
 
 acmaHeightFromDiameterChapmanRichards = get_height_error("Chapman-Richards", acmaHeightFromDiameterChapmanRichards, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterChapmanRichardsBal = get_height_error("Chapman-Richards BAL", acmaHeightFromDiameterChapmanRichardsBal, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterChapmanRichardsBalPhysio = get_height_error("Chapman-Richards BAL physio", acmaHeightFromDiameterChapmanRichardsBalPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
-acmaHeightFromDiameterChapmanRichardsBalRelHt = get_height_error("Chapman-Richards BAL RelHt", acmaHeightFromDiameterChapmanRichardsBalRelHt, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterChapmanRichardsBal = get_height_error("Chapman-Richards BA+L", acmaHeightFromDiameterChapmanRichardsBal, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterChapmanRichardsBalPhysio = get_height_error("Chapman-Richards BA+L physio", acmaHeightFromDiameterChapmanRichardsBalPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
+acmaHeightFromDiameterChapmanRichardsBalRelHt = get_height_error("Chapman-Richards BA+L RelHt", acmaHeightFromDiameterChapmanRichardsBalRelHt, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterChapmanRichardsPhysio = get_height_error("Chapman-Richards physio", acmaHeightFromDiameterChapmanRichardsPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
 acmaHeightFromDiameterCurtis = get_height_error("Curtis", acmaHeightFromDiameterCurtis, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterGam = get_height_error("GCV GAM", acmaHeightFromDiameterGam, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterGamBal = get_height_error("GCV GAM BA+L", acmaHeightFromDiameterGamBal, acma2016, acma2016natural, acma2016plantation)
+#acmaHeightFromDiameterGamBalPhysio = get_height_error("GCV GAM BA+L physio", acmaHeightFromDiameterGamBalPhysio, acma2016physio, acma2016natural, acma2016plantation) # slow
+acmaHeightFromDiameterGamPhysio = get_height_error("GCV GAM physio", acmaHeightFromDiameterGamPhysio, acma2016physio, acma2016natural, acma2016plantation)
+#save(acmaHeightFromDiameterGamBalPhysio, acmaHeightFromDiameterGamPhysio, file = "trees/height-diameter/HtDia ACMA3 spline height.rdata")
+#load("trees/height-diameter/HtDia ACMA3 spline height.rdata")
 acmaHeightFromDiameterHossfeld = get_height_error("Hossfeld IV", acmaHeightFromDiameterHossfeld, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterKorf = get_height_error("Korf", acmaHeightFromDiameterKorf, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterLinear = get_height_error("linear", acmaHeightFromDiameterLinear, acma2016, acma2016natural, acma2016plantation)
@@ -54,15 +64,15 @@ acmaHeightFromDiameterPower = get_height_error("power", acmaHeightFromDiameterPo
 acmaHeightFromDiameterRatkowsky = get_height_error("Ratkowsky", acmaHeightFromDiameterRatkowsky, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterRichards = get_height_error("unified Richards", acmaHeightFromDiameterRichards, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterSharmaParton = get_height_error("Sharma-Parton", acmaHeightFromDiameterSharmaParton, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterSharmaPartonBal = get_height_error("Sharma-Parton BAL", acmaHeightFromDiameterSharmaPartonBal, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterSharmaPartonBalPhysio = get_height_error("Sharma-Parton BAL physio", acmaHeightFromDiameterSharmaPartonBalPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
+acmaHeightFromDiameterSharmaPartonBal = get_height_error("Sharma-Parton BA+L", acmaHeightFromDiameterSharmaPartonBal, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterSharmaPartonBalPhysio = get_height_error("Sharma-Parton BA+L physio", acmaHeightFromDiameterSharmaPartonBalPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
 acmaHeightFromDiameterSharmaPartonPhysio = get_height_error("Sharma-Parton physio", acmaHeightFromDiameterSharmaPartonPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
 acmaHeightFromDiameterSharmaZhang = get_height_error("Sharma-Zhang", acmaHeightFromDiameterSharmaZhang, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterSharmaZhangBal = get_height_error("Sharma-Zhang BAL", acmaHeightFromDiameterSharmaZhangBal, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterSharmaZhangBal = get_height_error("Sharma-Zhang BA+L", acmaHeightFromDiameterSharmaZhangBal, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterSibbesen = get_height_error("Sibbesen", acmaHeightFromDiameterSibbesen, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterWeibull = get_height_error("Weibull", acmaHeightFromDiameterWeibull, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterWeibullBal = get_height_error("Weibull BAL", acmaHeightFromDiameterWeibullBal, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull BAL RelHt", acmaHeightFromDiameterWeibullBalRelHt, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterWeibullBal = get_height_error("Weibull BA+L", acmaHeightFromDiameterWeibullBal, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull BA+L RelHt", acmaHeightFromDiameterWeibullBalRelHt, acma2016, acma2016natural, acma2016plantation)
 
 acmaHeightFromDiameterResults = bind_rows(as_row(acmaHeightFromDiameterChapmanRichards),
                                           as_row(acmaHeightFromDiameterChapmanRichardsBal),
@@ -70,6 +80,10 @@ acmaHeightFromDiameterResults = bind_rows(as_row(acmaHeightFromDiameterChapmanRi
                                           as_row(acmaHeightFromDiameterChapmanRichardsBalRelHt),
                                           as_row(acmaHeightFromDiameterChapmanRichardsPhysio),
                                           as_row(acmaHeightFromDiameterCurtis),
+                                          as_row(acmaHeightFromDiameterGam),
+                                          as_row(acmaHeightFromDiameterGamBal),
+                                          #as_row(acmaHeightFromDiameterGamBalPhysio),
+                                          as_row(acmaHeightFromDiameterGamPhysio),
                                           as_row(acmaHeightFromDiameterHossfeld),
                                           as_row(acmaHeightFromDiameterKorf),
                                           as_row(acmaHeightFromDiameterLinear),
@@ -128,13 +142,13 @@ ggplot() +
 
 load("trees/height-diameter/HtDia ACMA3 GNLS.rdata")
 acmaHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", acmaHeightFromDiameterChapmanRichardsGnls, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BAL GNLS", acmaHeightFromDiameterChapmanRichardsBalGnls, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BA+L GNLS", acmaHeightFromDiameterChapmanRichardsBalGnls, acma2016, acma2016natural, acma2016plantation)
 #acmaHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", acmaHeightFromDiameterSharmaPartonGnls, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BAL GNLS", acmaHeightFromDiameterSharmaPartonBalGnls, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BA+L GNLS", acmaHeightFromDiameterSharmaPartonBalGnls, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterSharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", acmaHeightFromDiameterSharmaZhangGnls, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BAL GNLS", acmaHeightFromDiameterSharmaZhangBalGnls, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BA+L GNLS", acmaHeightFromDiameterSharmaZhangBalGnls, acma2016, acma2016natural, acma2016plantation)
 acmaHeightFromDiameterWeibullGnls = get_height_error("Weibull GNLS", acmaHeightFromDiameterWeibullGnls, acma2016, acma2016natural, acma2016plantation)
-acmaHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BAL GNLS", acmaHeightFromDiameterWeibullBalGnls, acma2016, acma2016natural, acma2016plantation)
+acmaHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BA+L GNLS", acmaHeightFromDiameterWeibullBalGnls, acma2016, acma2016natural, acma2016plantation)
 
 acmaHeightFromDiameterResultsGnls = bind_rows(as_row(acmaHeightFromDiameterChapmanRichardsGnls),
                                               as_row(acmaHeightFromDiameterChapmanRichardsBalGnls),
@@ -174,7 +188,7 @@ ggplot() +
   annotate("text", x = 0, y = 85, label = "a) bigleaf maple, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
-  scale_color_manual(breaks = c("base", "ElliottWeibull", "ElliottBAL", "ElliottBALn", "ElliottBALp", "TemesgenWeibull"), labels = c(bquote("1.37 + b"[0]*"DBH"^{b[1]}), "Weibull", "Weibull with BAL", "Weibull with BAL, natural regeneration", "Weibull with BAL, plantation", "Weibull, Temesgen et al. 2007"), values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
+  scale_color_manual(breaks = c("base", "ElliottWeibull", "ElliottBAL", "ElliottBALn", "ElliottBALp", "TemesgenWeibull"), labels = c(bquote("1.37 + b"[0]*"DBH"^{b[1]}), "Weibull", "Weibull with BA+L", "Weibull with BA+L, natural regeneration", "Weibull with BA+L, plantation", "Weibull, Temesgen et al. 2007"), values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
   scale_y_continuous(breaks = seq(0, 100, by = 20)) +
   theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
 
@@ -196,6 +210,10 @@ acmaDiameterFromHeightChapmanRichards = nlrob(DBH ~ a1*log(1 - pmin(b1*(TotalHt 
 acmaDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), acma2016, start = list(a1 = 24.2, a2 = -0.005, b1 = -0.021, b2 = 2.02, b2p = -0.19), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = list(maxiter = 500))
 acmaDiameterFromHeightChapmanRichardsPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), acma2016physio, start = list(a1 = 3.30, a1p = 4.985, a2 = 0.00031, a3 = -0.172, a4 = -0.215, a5 = -0.839, a6 = 1.459, b1 = -0.0035, b1p = 0.00193, b2 = 1.798), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a2, a4, a5 not significant
 acmaDiameterFromHeightChapmanRichardsRelHt = nlrob(DBH ~ (a1 + a2 * relativeHeight)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), acma2016, start = list(a1 = 36.1, a2 = -2.78, b1 = -0.028, b1p = 0.009, b2 = 1.63), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a1p, a2p, b2p not significant
+acmaDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation)), data = acma2016)
+acmaDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, by = as.factor(isPlantation)), data = acma2016)
+#acmaDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio) # insufficient data
+acmaDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio)
 acmaDiameterFromHeightLinear = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), acma2016, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 acmaDiameterFromHeightMichaelisMentenForm = nlrob(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), acma2016, start = list(a1 = -116, a2 = -128, b1 = 1.50), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 acmaDiameterFromHeightNaslund = nlrob(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), acma2016, start = list(a1 = 5.1, a1p = -2.0, a2 = -0.12, a2p = -0.023), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
@@ -215,27 +233,33 @@ acmaDiameterFromHeightWeibull = gsl_nls(DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.3
 #confint2(acmaDiameterFromHeightWeibull, level = 0.99)
 
 acmaDiameterFromHeightChapmanRichards = get_dbh_error("Chapman-Richards", acmaDiameterFromHeightChapmanRichards, acma2016, acma2016natural, acma2016plantation)
-acmaDiameterFromHeightChapmanRichardsAat = get_dbh_error("Chapman-Richards AAT", acmaDiameterFromHeightChapmanRichardsAat, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightChapmanRichardsAat = get_dbh_error("Chapman-Richards AA+T", acmaDiameterFromHeightChapmanRichardsAat, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightChapmanRichardsPhysio = get_dbh_error("Chapman-Richards physio", acmaDiameterFromHeightChapmanRichardsPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
 acmaDiameterFromHeightChapmanRichardsRelHt = get_dbh_error("Chapman-Richards RelHt", acmaDiameterFromHeightChapmanRichardsRelHt, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightChapmanForm = get_dbh_error("Chapman-Richards form", acmaDiameterFromHeightChapmanForm, acma2016, acma2016natural, acma2016plantation)
-acmaDiameterFromHeightChapmanFormAat = get_dbh_error("Chapman-Richards form AAT", acmaDiameterFromHeightChapmanFormAat, acma2016, acma2016natural, acma2016plantation)
-acmaDiameterFromHeightChapmanFormBal = get_dbh_error("Chapman-Richards form BAL", acmaDiameterFromHeightChapmanFormBal, acma2016, acma2016natural, acma2016plantation)
-acmaDiameterFromHeightChapmanFormBalRelHt = get_dbh_error("Chapman-Richards form BAL RelHt", acmaDiameterFromHeightChapmanFormBalRelHt, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightChapmanFormAat = get_dbh_error("Chapman-Richards form AA+T", acmaDiameterFromHeightChapmanFormAat, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightChapmanFormBal = get_dbh_error("Chapman-Richards form BA+L", acmaDiameterFromHeightChapmanFormBal, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightChapmanFormBalRelHt = get_dbh_error("Chapman-Richards form BA+L RelHt", acmaDiameterFromHeightChapmanFormBalRelHt, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightChapmanFormRelHt = get_dbh_error("Chapman-Richards form RelHt", acmaDiameterFromHeightChapmanFormRelHt, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightGam = get_dbh_error("GCV GAM", acmaDiameterFromHeightGam, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightGamAat = get_dbh_error("GCV GAM AA+T", acmaDiameterFromHeightGamAat, acma2016, acma2016natural, acma2016plantation)
+#acmaDiameterFromHeightGamAatPhysio = get_dbh_error("GCV GAM AA+T physio", acmaDiameterFromHeightGamAatPhysio, acma2016physio, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightGamPhysio = get_dbh_error("GCV GAM physio", acmaDiameterFromHeightGamPhysio, acma2016physio, acma2016natural, acma2016plantation)
+#save(acmaDiameterFromHeightGamAatPhysio, acmaDiameterFromHeightGamPhysio, file = "trees/height-diameter/HtDia ACMA3 spline DBH.rdata")
+#load("trees/height-diameter/HtDia ACMA3 spline DBH.rdata")
 acmaDiameterFromHeightLinear = get_dbh_error("linear", acmaDiameterFromHeightLinear, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightMichaelisMentenForm = get_dbh_error("Michaelis-Menten form", acmaDiameterFromHeightMichaelisMentenForm, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightNaslund = get_dbh_error("Näslund", acmaDiameterFromHeightNaslund, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightParabolic = get_dbh_error("parabolic", acmaDiameterFromHeightParabolic, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightPower = get_dbh_error("power", acmaDiameterFromHeightPower, acma2016, acma2016natural, acma2016plantation)
-acmaDiameterFromHeightPowerAat = get_dbh_error("power AAT", acmaDiameterFromHeightPowerAat, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightPowerAat = get_dbh_error("power AA+T", acmaDiameterFromHeightPowerAat, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightPowerPhysio = get_dbh_error("power physio", acmaDiameterFromHeightPowerPhysio, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightPowerRelHt = get_dbh_error("power RelHt", acmaDiameterFromHeightPowerRelHt, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightRuark = get_dbh_error("Ruark", acmaDiameterFromHeightRuark, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightSchnute = get_dbh_error("Schnute", acmaDiameterFromHeightSchnute, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightSharmaParton = get_dbh_error("modified Sharma-Parton", acmaDiameterFromHeightSharmaParton, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightSibbesenForm = get_dbh_error("Sibbesen form", acmaDiameterFromHeightSibbesenForm, acma2016, acma2016natural, acma2016plantation)
-acmaDiameterFromHeightSibbesenFormAat = get_dbh_error("Sibbesen form AAT", acmaDiameterFromHeightSibbesenFormAat, acma2016, acma2016natural, acma2016plantation)
+acmaDiameterFromHeightSibbesenFormAat = get_dbh_error("Sibbesen form AA+T", acmaDiameterFromHeightSibbesenFormAat, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightSibbesenFormPhysio = get_dbh_error("Sibbesen form physio", acmaDiameterFromHeightSibbesenFormPhysio, acma2016physio, acma2016natural, acma2016plantationPhysio)
 acmaDiameterFromHeightSibbesenFormRelHt = get_dbh_error("Sibbesen form RelHt", acmaDiameterFromHeightSibbesenFormRelHt, acma2016, acma2016natural, acma2016plantation)
 acmaDiameterFromHeightWeibull = get_dbh_error("Weibull", acmaDiameterFromHeightWeibull, acma2016, acma2016natural, acma2016plantation)
@@ -250,6 +274,10 @@ acmaDiameterFromHeightResults = bind_rows(as_row(acmaDiameterFromHeightChapmanRi
                                           as_row(acmaDiameterFromHeightChapmanFormBalRelHt),
                                           as_row(acmaDiameterFromHeightChapmanFormRelHt),
                                           as_row(acmaDiameterFromHeightLinear),
+                                          as_row(acmaDiameterFromHeightGam),
+                                          as_row(acmaDiameterFromHeightGamAat),
+                                          #as_row(acmaDiameterFromHeightGamAatPhysio),
+                                          as_row(acmaDiameterFromHeightGamPhysio),
                                           as_row(acmaDiameterFromHeightMichaelisMentenForm),
                                           as_row(acmaDiameterFromHeightNaslund),
                                           as_row(acmaDiameterFromHeightParabolic),
@@ -273,8 +301,8 @@ ggplot(acma2016) +
   geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
   #geom_line(aes(x = acmaDiameterFromHeightSharmaParton$fitted.values, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = acmaDiameterFromHeightChapmanForm$fitted.values, y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman-Richards approximate BAL", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = acmaDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards BAL", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = acmaDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman-Richards approximate BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = acmaDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards BA+L", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = acmaDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
   #geom_line(aes(x = acmaDiameterFromHeightMichaelisMentenForm$fitted.values, y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
   #geom_line(aes(x = acmaDiameterFromHeightNaslund$fitted.values, y = TotalHt, color = "Näslund", group = isPlantation)) +
@@ -285,7 +313,7 @@ ggplot(acma2016) +
   #geom_line(aes(x = -70 * log(1 - pmin(0.01*(TotalHt - 1.37)^1.1, 0.999)), y = TotalHt, color = "Chapman-Richards form"), na.rm = TRUE) +
   #geom_line(aes(x = 1*(TotalHt - 1.37)^1*exp(0.02*(tph/topHeight)^0.26*(TotalHt - 1.37))^0.9, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 15 * (exp(0.12*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "Chapman-Richards form", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AAT", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AA+T", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 0.03*topHeight*exp(1.6*(TotalHt - 1.37)^0.26), y = TotalHt, color = "Chapman-Richards form top height", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = -116*(TotalHt - 1.37)^1.5/(-128 - (TotalHt - 1.37)^1.5), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation), alpha = 0.5) +#geom_line(aes(x = acmaDiameterFromHeightSchnute$fitted.values, y = TotalHt, color = "Schnute", group = isPlantation)) +
   #geom_line(aes(x = -1/0.0003*log(1 - (1 - exp(-0.1))*(TotalHt^1.5 - 1.37^1.5)/(75^1.5 - 1.37^1.5)), y = TotalHt, color = "Schnute"), alpha = 0.5) +
@@ -308,6 +336,10 @@ acmaParameters = bind_rows(bind_rows(get_coefficients(acmaHeightFromDiameterChap
                                      get_coefficients(acmaHeightFromDiameterChapmanRichardsBalRelHt),
                                      get_coefficients(acmaHeightFromDiameterChapmanRichardsPhysio),
                                      get_coefficients(acmaHeightFromDiameterCurtis),
+                                     get_coefficients(acmaHeightFromDiameterGam),
+                                     get_coefficients(acmaHeightFromDiameterGamBal),
+                                     #get_coefficients(acmaHeightFromDiameterGamBalPhysio),
+                                     get_coefficients(acmaHeightFromDiameterGamPhysio),
                                      get_coefficients(acmaHeightFromDiameterHossfeld),
                                      get_coefficients(acmaHeightFromDiameterKorf),
                                      get_coefficients(acmaHeightFromDiameterLinear),
@@ -345,6 +377,10 @@ acmaParameters = bind_rows(bind_rows(get_coefficients(acmaHeightFromDiameterChap
                                      get_coefficients(acmaDiameterFromHeightChapmanFormBal),
                                      get_coefficients(acmaDiameterFromHeightChapmanFormBalRelHt),
                                      get_coefficients(acmaDiameterFromHeightChapmanFormRelHt),
+                                     get_coefficients(acmaDiameterFromHeightGam),
+                                     get_coefficients(acmaDiameterFromHeightGamAat),
+                                     #get_coefficients(acmaDiameterFromHeightGamAatPhysio),
+                                     get_coefficients(acmaDiameterFromHeightGamPhysio),
                                      get_coefficients(acmaDiameterFromHeightLinear),
                                      get_coefficients(acmaDiameterFromHeightMichaelisMentenForm),
                                      get_coefficients(acmaDiameterFromHeightNaslund),
@@ -366,7 +402,7 @@ acmaParameters = bind_rows(bind_rows(get_coefficients(acmaHeightFromDiameterChap
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
          a4 = as.numeric(a4), a4p = as.numeric(a4p), a5 = as.numeric(a5), a6 = as.numeric(a6), 
          b1 = as.numeric(b1), b1p = as.numeric(b1p), b2 = as.numeric(b2), b2p = as.numeric(b2p), b3 = as.numeric(b3), b3p = as.numeric(b3p)) %>%
-  relocate(responseVariable, species, name, a1, a1p, a2, a2p, a3, a3p, a4, a4p, a5, a6, b1, b1p, b2, b2p, b3, b3p)
+  relocate(responseVariable, species, name, fitting, a1, a1p, a2, a2p, a3, a3p, a4, a4p, a5, a6, b1, b1p, b2, b2p, b3, b3p)
 
 
 ## basal area from height
