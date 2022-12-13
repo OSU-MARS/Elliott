@@ -1,6 +1,7 @@
 #.libPaths(.libPaths()[2])
 #install.packages(c("dplyr", "ggplot2", "gslnls", "magrittr", "mgcv", "nlme", "nls.multstart", "nlstools", "patchwork", "readxl", "robustbase", "sn", "stringr", "tibble", "tidyr", "writexl"))
 library(dplyr)
+library(forcats)
 library(ggplot2)
 library(gslnls)
 library(magrittr)
@@ -460,7 +461,7 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          quasiBasalArea = SampleFactor * if_else(SamplingMethod == "BAF", 0.092903, impute_basal_area(Species, TotalHt, isPlantation))) %>% # m², stack basal area regression on height regression when possible; BAF has to be used with prism trees
   select(-GrossAc) %>%
   group_by(PlotID) %>%
-  mutate(plotTrees = sum(SampleFactor),
+  mutate(plotTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * SampleFactor),
          plotTreesWithDbh = sum(if_else(is.na(DBH), 0, SampleFactor)),
          plotContributionToStandBasalArea = 0,
          plotContributionToStandBasalArea = replace(plotContributionToStandBasalArea, 1, sum(treeBasalAreaPerHectare)),
@@ -498,14 +499,21 @@ liveUnbrokenTrees2016 = trees2016 %>% filter(isLiveUnbroken) %>%
 #               weight = if_else(remainingFraction >= 1, 1, if_else(remainingFraction > 0, remainingFraction, 0))),
 #      n = 40)
 
+#plotTreeProperties = trees2016 %>% group_by(PlotID) %>%
+#  summarize(liveTrees = sum(CompCode %in% c("D.", "SN") == FALSE), snags = sum(CompCode %in% c("D.", "SN")), tph = plotTrees[1], primarySpecies = unique(Species)[which.max(tabulate(match(Species, unique(Species))))], stemsWithDbh = sum(is.na(DBH) == FALSE), stemsWithHeight = sum((is.na(TotalHt) == FALSE) | (is.na(Ht2) == FALSE))) %>% # mode of species
+#  mutate(stems = liveTrees + snags) %>%
+#  rename(PltInteger = PlotID) # for GIS joins
+#plotTreeProperties %>% summarize(plots = n(), measure = sum(stemsWithDbh > 0), count = n() - measure)
+#write_xlsx(plotTreeProperties, "GIS/Trees/2015-16 cruise/CruisePlots_All_treeProperties.xlsx")
 
 ## data tabulation and basic plotting
 trees2016summary = trees2016 %>% 
-  mutate(isLive = CompCode %in% c("D.", "SN")) %>%
+  mutate(isLive = CompCode %in% c("D.", "SN") == FALSE) %>%
   #mutate(speciesClassification = if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other")) %>%
   #group_by(speciesClassification) %>%
   group_by(Species) %>% 
-  summarize(percentage = 100 * n() / nrow(trees2016), 
+  summarize(stands = length(unique(StandID)),
+            pctStems = 100 * n() / nrow(trees2016), 
             trees = n(),
             live = sum(isLive), plantation = sum(isPlantation), retention = sum(CompCode == "RT"), snag = sum(isLive == FALSE), 
             dbh = sum(DBH > 0, na.rm = TRUE), 
@@ -515,11 +523,14 @@ trees2016summary = trees2016 %>%
             dia1 = sum(Dia1 > 0, na.rm = TRUE), height1 = sum(Ht1 > 0, na.rm = TRUE), 
             height2 = sum(Ht2 > 0, na.rm = TRUE), 
             .groups = "drop") %>%
+  mutate(pctStands = 100 * stands / length(unique(trees2016$StandID))) %>%
   arrange(desc(trees))
 print(trees2016summary, n = 25)
-trees2016 %>% filter((CompCode %in% c("D.", "SN")) == FALSE, DBH > 0, Ht2 > 0) %>% summarize(n = n())
-trees2016 %>% filter((CompCode %in% c("D.", "SN")) == FALSE, TotalHt > 0 | Ht2 > 0) %>% summarize(n = n())
-trees2016 %>% filter(CompCode == OS) %>% group_by(Stand) summarize(n = n())
+
+trees2016 %>% summarize(live = sum(CompCode %in% c("D.", "SN") == FALSE), measureTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * (DBH > 0), na.rm = TRUE), countTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * is.na(DBH)),
+                        snag = sum(CompCode %in% c("D.", "SN")), measureSnag = sum(CompCode %in% c("D.", "SN") * (DBH > 0), na.rm = TRUE), countSnag = sum(CompCode %in% c("D.", "SN") * is.na(DBH)))
+
+trees2016 %>% filter((CompCode %in% c("D.", "SN")) == FALSE, TotalHt > 0 | Ht2 > 0) %>% summarize(n = n()) # measured snags
 print(trees2016 %>% filter(CompCode == "RT", isPlantation == FALSE) %>% select(StandID, Species, DBH, standAge2020), n = 35)
 
 trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%
@@ -527,6 +538,10 @@ trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tp
 
 liveUnbrokenTrees2016 %>% filter(is.na(TotalHt) == FALSE) %>% 
   summarize(conifers = sum(isConifer), broadleaves = sum(isConifer == FALSE))
+
+liveUnbrokenTrees2016 %>% filter(is.na(TotalHt) == FALSE) %>% 
+  group_by(speciesGroup) %>% 
+  summarize(trees = n(), plantation = sum(isPlantation), pctPlantation = 100 * plantation/trees)
 
 ggplot(trees2016 %>% filter(is.na(Ht1) == FALSE)) +
   geom_histogram(aes(y = 100 * Ht1 / TotalHt, x = 100 * ..count.. / sum(..count..)), binwidth = 1) +
