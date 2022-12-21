@@ -29,6 +29,8 @@ heightDiameterResults = bind_rows(psmeHeightFromDiameterResults,
   mutate(species = factor(species, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"), levels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other")),
          speciesFraction = recode(species, "Douglas-fir" = 0.750, "red alder" = 0.101, "western hemlock" = 0.056, "bigleaf maple" = 0.029, "Oregon myrtle" = 0.025, "western redcedar" = 0.013, "other species" = 0.017),
          isBaseForm = (str_detect(name, "AA\\+T") == FALSE) & (str_detect(name, "BA\\+L") == FALSE) & (str_detect(name, "physio") == FALSE) & (str_detect(name, "RelHt") == FALSE) & (fitting != "gnls"),
+         hasStand = str_detect(name, "AA\\+T") | str_detect(name, "BA\\+L") | str_detect(name, "RelHt"),
+         hasPhysio = str_detect(name, "physio"),
          weighting = if_else(fitting %in% c("gnls", "nlrob"), "reweighted", "fixed weights"),
          sizeShapeAlpha = as.factor(if_else(significant == TRUE, weighting, "not significant"))) %>%
   group_by(responseVariable, species) %>%
@@ -50,8 +52,14 @@ heightDiameterAccuracyLevels = heightDiameterResults %>% group_by(responseVariab
 
 ## summary for Abstract
 heightDiameterResults %>% filter(fitting %in% c("nlrob", "gsl_nls"), responseVariable != "height" | str_detect(name, "RelHt") == FALSE) %>% 
+  mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name))) %>%
+  group_by(responseVariable, species, baseName) %>%
+  mutate(nseBase = first(na.omit(if_else(isBaseForm, nse, NA_real_))),
+         nseStandDelta = if_else(hasStand & (hasPhysio == FALSE), nse, NA_real_) - nseBase,
+         nsePhysioDelta = if_else(hasPhysio & (hasStand == FALSE), nse, NA_real_) - nseBase,
+         nseCombinedDelta = if_else(hasPhysio & hasStand, nse, NA_real_) - nseBase) %>%
   group_by(responseVariable, species) %>%
-  #slice_max(nse, n = 20) %>%
+  slice_max(nse, n = 3) %>%
   group_by(responseVariable) %>%
   summarize(nForms = length(unique(name)),
             nFits = n(),
@@ -60,16 +68,21 @@ heightDiameterResults %>% filter(fitting %in% c("nlrob", "gsl_nls"), responseVar
             rmse = mean(rmse),
             deltaAicN = mean(deltaAicN),
             nse = mean(nse),
-            pearson = mean(pearson))
+            pearson = mean(pearson),
+            nseBase = median(if_else((is.na(nseStandDelta) == FALSE) | (is.na(nsePhysioDelta) == FALSE), nseBase, NA_real_), na.rm = TRUE),
+            nseStandDelta = median(nseStandDelta, na.rm = TRUE),
+            nsePhysioDelta = median(nsePhysioDelta, na.rm = TRUE),
+            nseCombinedDelta = median(nseCombinedDelta, na.rm = TRUE)) %>%
+  arrange(desc(responseVariable))
 
 ## summaries for Results
 #unique((heightDiameterResults %>% filter(isBaseForm))$name)
 heightDiameterResults %>% filter(isBaseForm) %>% group_by(responseVariable, species) %>% 
-  mutate(deltaAicNgamRank = deltaAicNrank[which(name == "GCV GAM")],
-         maeGamRank = maeRank[which(name == "GCV GAM")],
-         nseGamRank = nseRank[which(name == "GCV GAM")],
-         pearsonGamRank = pearsonRank[which(name == "GCV GAM")],
-         rmseGamRank = rmseRank[which(name == "GCV GAM")]) %>%
+  mutate(deltaAicNgamRank = deltaAicNrank[which(name == "REML GAM")],
+         maeGamRank = maeRank[which(name == "REML GAM")],
+         nseGamRank = nseRank[which(name == "REML GAM")],
+         pearsonGamRank = pearsonRank[which(name == "REML GAM")],
+         rmseGamRank = rmseRank[which(name == "REML GAM")]) %>%
   summarize(n = n(),
             deltaAicN = sum(deltaAicNrank < deltaAicNgamRank, na.rm = TRUE),
             mae = sum(maeRank < maeGamRank, na.rm = TRUE),
@@ -153,7 +166,7 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
 
 
 ## Figure 2: height-diameter error summary
-heightFromDiameterResults = heightDiameterResults %>% filter(responseVariable == "height", str_detect(name, "GNLS") == FALSE, str_detect(name, "RelHt") == FALSE, name != "GCV GAM BA+L physio") %>%
+heightFromDiameterResults = heightDiameterResults %>% filter(responseVariable == "height", str_detect(name, "GNLS") == FALSE, str_detect(name, "RelHt") == FALSE, name != "REML GAM BA+L physio") %>%
   group_by(responseVariable, species) %>%
   mutate(name = factor(name, levels = (heightDiameterAccuracyLevels %>% filter(responseVariable == "height"))$name),
          deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) # recalculate ΔAICn with relative height forms excluded, requires regrouping by species
@@ -171,9 +184,9 @@ ggplot(heightFromDiameterResults) +
 ggplot(heightFromDiameterResults) +
   geom_segment(x = 0.255, xend = 0.275, y = "linear", yend = "linear", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_segment(x = 0.255, xend = 0.275, y = "parabolic", yend = "parabolic", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
-  geom_segment(x = 0.255, xend = 0.275, y = "GCV GAM", yend = "GCV GAM", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
-  geom_segment(x = 0.255, xend = 0.275, y = "GCV GAM BA+L", yend = "GCV GAM BA+L", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
-  geom_segment(x = 0.255, xend = 0.275, y = "GCV GAM physio", yend = "GCV GAM physio", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "REML GAM", yend = "REML GAM", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "REML GAM BA+L", yend = "REML GAM BA+L", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "REML GAM physio", yend = "REML GAM physio", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_point(aes(x = deltaAicN, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE) +
   labs(x = bquote("normalized "*Delta*"AIC"), y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
   coord_cartesian(xlim = c(0, 0.265)) + # exclude high AIC of linear, parabolic, and Douglas-fir power+Curtis fits to avoid squashing of nonlinear differences
@@ -203,7 +216,7 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
 
 
 ## Figure 3: diameter-height error summary
-diameterFromHeightResults = heightDiameterResults %>% filter(responseVariable == "DBH", str_detect(name, "BA\\+L") == FALSE, str_detect(name, "GNLS") == FALSE, name != "GCV GAM AA+T physio") %>%
+diameterFromHeightResults = heightDiameterResults %>% filter(responseVariable == "DBH", str_detect(name, "BA\\+L") == FALSE, str_detect(name, "GNLS") == FALSE, name != "REML GAM AA+T physio") %>%
   group_by(responseVariable, species) %>%
   mutate(name = factor(name, levels = (heightDiameterAccuracyLevels %>% filter(responseVariable == "DBH"))$name),
          deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) # recalculate ΔAICn with BA+L names excluded
@@ -221,9 +234,9 @@ ggplot(diameterFromHeightResults) +
   geom_segment(x = 0.255, xend = 0.275, y = "Schnute", yend = "Schnute", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_segment(x = 0.255, xend = 0.275, y = "linear", yend = "linear", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_segment(x = 0.255, xend = 0.275, y = "parabolic", yend = "parabolic", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
-  geom_segment(x = 0.255, xend = 0.275, y = "GCV GAM", yend = "GCV GAM", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
-  geom_segment(x = 0.255, xend = 0.275, y = "GCV GAM AA+T", yend = "GCV GAM AA+T", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
-  geom_segment(x = 0.255, xend = 0.275, y = "GCV GAM physio", yend = "GCV GAM physio", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "REML GAM", yend = "REML GAM", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "REML GAM AA+T", yend = "REML GAM AA+T", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  geom_segment(x = 0.255, xend = 0.275, y = "REML GAM physio", yend = "REML GAM physio", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_point(aes(x = deltaAicN, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 0.265)) +
   labs(x = bquote("normalized "*Delta*"AIC"), y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
@@ -328,32 +341,32 @@ preferredBaseForms %>% filter(species %in% c("Douglas-fir", "western hemlock", "
 
 ggplot() +
   geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = psme2016physio$DBH, y = psmeHeightFromDiameterChapmanRichardsBalPhysio$fitted.values, color = "Chapman-Richards BA+L physio", group = psme2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterGam$fitted.values, color = "GCV GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
-  geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterProdan$fitted.values, color = "Prodan", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
-  #geom_line(aes(x = psme2016$DBH, y = psmeHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = psme2016$isPlantation)) +
+  geom_line(aes(x = psme2016physio$DBH, y = predict(psmeHeightFromDiameterChapmanRichardsBalPhysio), color = "Chapman-Richards BA+L physio", group = psme2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterGam), color = "REML GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
+  geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterProdan), color = "Prodan", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
+  #geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterSibbesen), color = "Sibbesen", group = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), color = "Temesgen et al. 2007")) + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "a) Douglas-fir height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = NULL, y = "height, m", color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("GCV GAM", "Prodan", "Chapman-Richards BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey60")) +
+  scale_color_manual(breaks = c("REML GAM", "Prodan", "Chapman-Richards BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey60")) +
   theme(legend.key = element_rect(fill = alpha("white", 0.5)), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = psmeDiameterFromHeightSharmaParton$fitted.values, y = psme2016$TotalHt, color = "modified Sharma-Parton", group = psme2016$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = psmeDiameterFromHeightGam$fitted.values, y = psme2016$TotalHt, color = "GCV GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
-  geom_line(aes(x = psmeDiameterFromHeightRuark$fitted.values, y = psme2016$TotalHt, color = "Ruark", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
+  geom_line(aes(x = predict(psmeDiameterFromHeightSharmaParton), y = psme2016$TotalHt, color = "modified Sharma-Parton", group = psme2016$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = predict(psmeDiameterFromHeightGam), y = psme2016$TotalHt, color = "REML GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
+  geom_line(aes(x = predict(psmeDiameterFromHeightRuark), y = psme2016$TotalHt, color = "Ruark", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "b) Douglas-fir DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("GCV GAM", "Ruark", "modified Sharma-Parton", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey50")) +
+  scale_color_manual(breaks = c("REML GAM", "Ruark", "modified Sharma-Parton", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey50")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = alru2016physio$DBH, y = alruHeightFromDiameterChapmanRichardsBalPhysio$fitted.values, color = "Chapman-Richards BA+L physio", group = alru2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = alru2016$DBH, y = alruHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
-  geom_line(aes(x = alru2016$DBH, y = alruHeightFromDiameterWeibull$fitted.values, color = "Weibull", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = alru2016physio$DBH, y = predict(alruHeightFromDiameterChapmanRichardsBalPhysio), color = "Chapman-Richards BA+L physio", group = alru2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterChapmanRichards), color = "Chapman-Richards", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterWeibull), color = "Weibull", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) red alder height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -363,9 +376,9 @@ ggplot() +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = alruDiameterFromHeightSibbesenFormPhysio$fitted.values, y = alru2016physio$TotalHt, color = "Chapman-Richards physio", group = alru2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = alruDiameterFromHeightChapmanRichards$fitted.values, y = alru2016$TotalHt, color = "Chapman-Richards", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
-  geom_line(aes(x = alruDiameterFromHeightSibbesenForm$fitted.values, y = alru2016$TotalHt, color = "Sibbesen form", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = predict(alruDiameterFromHeightSibbesenFormPhysio), y = alru2016physio$TotalHt, color = "Chapman-Richards physio", group = alru2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = predict(alruDiameterFromHeightChapmanRichards), y = alru2016$TotalHt, color = "Chapman-Richards", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = predict(alruDiameterFromHeightSibbesenForm), y = alru2016$TotalHt, color = "Sibbesen form", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "d) red alder DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -382,20 +395,20 @@ plot_layout(nrow = 2, ncol = 2) &
 ## Figure 7: western hemlock and bigleaf maple regression comparison
 ggplot() +
   geom_point(aes(x = tshe2016$DBH, y = tshe2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = tshe2016physio$DBH, y = tsheHeightFromDiameterChapmanRichardsBalPhysio$fitted.values, color = "Chapman-Richards BA+L physio", group = tshe2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = tshe2016$DBH, y = tsheHeightFromDiameterGam$fitted.values, color = "GCV GAM", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
-  geom_line(aes(x = tshe2016$DBH, y = tsheHeightFromDiameterProdan$fitted.values, color = "Prodan", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
+  geom_line(aes(x = tshe2016physio$DBH, y = predict(tsheHeightFromDiameterChapmanRichardsBalPhysio), color = "Chapman-Richards BA+L physio", group = tshe2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterGam), color = "REML GAM", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
+  geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterProdan), color = "Prodan", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "a) western hemlock height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = NULL, y = "height, m", color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("GCV GAM", "Prodan", "Chapman-Richards BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey50")) +
+  scale_color_manual(breaks = c("REML GAM", "Prodan", "Chapman-Richards BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey50")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = tshe2016$DBH, y = tshe2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = tsheDiameterFromHeightSibbesenFormAat$fitted.values, y = tshe2016$TotalHt, color = "Sibbesen form AA+T", group = tshe2016$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = tsheDiameterFromHeightChapmanRichards$fitted.values, y = tshe2016$TotalHt, color = "Chapman-Richards", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
-  geom_line(aes(x = tsheDiameterFromHeightSibbesenForm$fitted.values, y = tshe2016$TotalHt, color = "Sibbesen form", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
+  geom_line(aes(x = predict(tsheDiameterFromHeightSibbesenFormAat), y = tshe2016$TotalHt, color = "Sibbesen form AA+T", group = tshe2016$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = predict(tsheDiameterFromHeightChapmanRichards), y = tshe2016$TotalHt, color = "Chapman-Richards", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
+  geom_line(aes(x = predict(tsheDiameterFromHeightSibbesenForm), y = tshe2016$TotalHt, color = "Sibbesen form", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "b) western hemlock DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -404,20 +417,20 @@ ggplot() +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = acma2016physio$DBH, y = acmaHeightFromDiameterChapmanRichardsBalPhysio$fitted.values, color = "Chapman-Richards BA+L physio", group = acma2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterGam$fitted.values, color = "GCV GAM", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterRichards$fitted.values, color = "unified Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016physio$DBH, y = predict(acmaHeightFromDiameterChapmanRichardsBalPhysio), color = "Chapman-Richards BA+L physio", group = acma2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterGam), color = "REML GAM", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterRichards), color = "unified Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) bigleaf maple height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
-  scale_color_manual(breaks = c("GCV GAM", "unified Richards", "Chapman-Richards BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey50")) +
+  scale_color_manual(breaks = c("REML GAM", "unified Richards", "Chapman-Richards BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey50")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
   geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = acmaDiameterFromHeightSibbesenFormPhysio$fitted.values, y = acma2016physio$TotalHt, color = "Chapman-Richards physio", group = acma2016physio$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = acmaDiameterFromHeightPower$fitted.values, y = acma2016$TotalHt, color = "power", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
-  geom_line(aes(x = acmaDiameterFromHeightRuark$fitted.values, y = acma2016$TotalHt, color = "Ruark", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
+  geom_line(aes(x = predict(acmaDiameterFromHeightSibbesenFormPhysio), y = acma2016physio$TotalHt, color = "Chapman-Richards physio", group = acma2016physio$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = predict(acmaDiameterFromHeightPower), y = acma2016$TotalHt, color = "power", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
+  geom_line(aes(x = predict(acmaDiameterFromHeightRuark), y = acma2016$TotalHt, color = "Ruark", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "d) bigleaf maple diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -442,9 +455,9 @@ plot_layout(nrow = 2, ncol = 2) &
 #  arrange(desc(responseVariable), species) 
 ggplot() +
   geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = umca2016physio$DBH, y = umcaHeightFromDiameterSharmaPartonBalPhysio$fitted.values, color = "Sharma-Parton BA+L physio", group = umca2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterMichaelisMenten$fitted.values, color = "Michaelis-Menten", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
+  geom_line(aes(x = umca2016physio$DBH, y = predict(umcaHeightFromDiameterSharmaPartonBalPhysio), color = "Sharma-Parton BA+L physio", group = umca2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterMichaelisMenten), color = "Michaelis-Menten", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterSibbesen), color = "Sibbesen", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "a) Oregon myrtle height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -453,20 +466,20 @@ ggplot() +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
   geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = umcaDiameterFromHeightChapmanRichardsPhysio$fitted.values, y = umca2016physio$TotalHt, color = "Chapman-Richards physio", group = umca2016physio$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = umcaDiameterFromHeightGam$fitted.values, y = umca2016$TotalHt, color = "GCV GAM", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
-  geom_line(aes(x = umcaDiameterFromHeightRuark$fitted.values, y = umca2016$TotalHt, color = "Ruark", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
+  geom_line(aes(x = predict(umcaDiameterFromHeightChapmanRichardsPhysio), y = umca2016physio$TotalHt, color = "Chapman-Richards physio", group = umca2016physio$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = predict(umcaDiameterFromHeightGam), y = umca2016$TotalHt, color = "REML GAM", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
+  geom_line(aes(x = predict(umcaDiameterFromHeightRuark), y = umca2016$TotalHt, color = "Ruark", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "b) Oregon myrtle diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = NULL, y = NULL, color = NULL) +
-  scale_color_manual(breaks = c("GCV GAM", "Ruark", "Chapman-Richards physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey50")) +
+  scale_color_manual(breaks = c("REML GAM", "Ruark", "Chapman-Richards physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey50")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
   geom_point(aes(x = thpl2016$DBH, y = thpl2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = thpl2016physio$DBH, y = thplHeightFromDiameterSharmaPartonBalPhysio$fitted.values, color = "Sharma-Parton BA+L physio", group = thpl2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = thpl2016$DBH, y = thplHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
-  geom_line(aes(x = thpl2016$DBH, y = thplHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
+  geom_line(aes(x = thpl2016physio$DBH, y = predict(thplHeightFromDiameterSharmaPartonBalPhysio), color = "Sharma-Parton BA+L physio", group = thpl2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterChapmanRichards), color = "Chapman-Richards", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
+  geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterSibbesen), color = "Sibbesen", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) western redcedar height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -475,14 +488,14 @@ ggplot() +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = thpl2016$DBH, y = thpl2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = thplDiameterFromHeightPowerRelHt$fitted.values, y = thpl2016physio$TotalHt, color = "power RelHt", group = thpl2016physio$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = thplDiameterFromHeightGam$fitted.values, y = thpl2016$TotalHt, color = "GCV GAM", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
-  geom_line(aes(x = thplDiameterFromHeightSibbesenForm$fitted.values, y = thpl2016$TotalHt, color = "Sibbesen form", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
+  geom_line(aes(x = predict(thplDiameterFromHeightPowerRelHt), y = thpl2016physio$TotalHt, color = "power RelHt", group = thpl2016physio$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = predict(thplDiameterFromHeightGam), y = thpl2016$TotalHt, color = "REML GAM", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
+  geom_line(aes(x = predict(thplDiameterFromHeightSibbesenForm), y = thpl2016$TotalHt, color = "Sibbesen form", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "d) western redcedar diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = NULL, color = NULL) +
-  scale_color_manual(breaks = c("GCV GAM", "Sibbesen form", "power RelHt", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey50")) +
+  scale_color_manual(breaks = c("REML GAM", "Sibbesen form", "power RelHt", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey50")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(nrow = 2, ncol = 2) &
@@ -502,9 +515,9 @@ plot_layout(nrow = 2, ncol = 2) &
 #  arrange(desc(responseVariable), species) 
 ggplot() +
   geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterSharmaPartonBal$fitted.values, color = "Sharma-Parton BA+L", group = other2016$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterSharmaPartonBal), color = "Sharma-Parton BA+L", group = other2016$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterChapmanRichards), color = "Chapman-Richards", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterSibbesen), color = "Sibbesen", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "a) other species height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -513,9 +526,9 @@ ggplot() +
   theme(legend.justification = c(1, 1), legend.position = c(1, 1)) +
 ggplot() +
   geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = otherDiameterFromHeightSibbesenFormPhysio$fitted.values, y = other2016physio$TotalHt, color = "Sibbesen form physio", group = other2016physio$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = otherDiameterFromHeightParabolic$fitted.values, y = other2016$TotalHt, color = "parabolic", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
-  geom_line(aes(x = otherDiameterFromHeightSibbesenForm$fitted.values, y = other2016$TotalHt, color = "Sibbesen form", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
+  geom_line(aes(x = predict(otherDiameterFromHeightSibbesenFormPhysio), y = other2016physio$TotalHt, color = "Sibbesen form physio", group = other2016physio$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = predict(otherDiameterFromHeightParabolic), y = other2016$TotalHt, color = "parabolic", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
+  geom_line(aes(x = predict(otherDiameterFromHeightSibbesenForm), y = other2016$TotalHt, color = "Sibbesen form", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795)), color = "grey70", linetype = "longdash") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "b) other species diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -539,13 +552,13 @@ smallTreeEfficiency = left_join(liveUnbrokenTrees2016 %>% filter(is.na(TotalHt) 
 
 ggplot(heightDiameterResults %>% filter(fitting != "gnls", responseVariable == "height")) +
   geom_histogram(aes(x = nse, y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  annotate("text", x = 0, y = 21.5, label = "a) height imputation", hjust = 0, size = 3.5) +
+  annotate("text", x = 0, y = 21.5, label = "a) height prediction", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
   labs(x = "model efficiency", y = "fraction of models, %", fill = NULL) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(heightDiameterResults %>% filter(fitting != "gnls", responseVariable == "DBH")) +
   geom_histogram(aes(x = nse, y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  annotate("text", x = 0, y = 21.5, label = "b) DBH imputation", hjust = 0, size = 3.5) +
+  annotate("text", x = 0, y = 21.5, label = "b) DBH prediction", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
   labs(x = "model efficiency", y = NULL, fill = NULL) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +

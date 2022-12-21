@@ -3,13 +3,16 @@
 ## bigleaf maple height-diameter regression form sweep
 # preferred forms: Sharma-Parton BA+L, Ratkowsky, Sharma-Parton, Hossfeld, Weibull, Chapman-Richards
 #acmaHeightFromDiameterChapmanRichardsPhysio = gsl_nls(TotalHt ~ 1.37 + (a1 + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 31.9, a2 = -0.0044, a3 = -8.22, a4 = 0.198, a5 = 1.387, a6 = 0.014, b1 = -0.031, b2 = 1.02, b2p = -0.108), weights = pmin(DBH^-0.8, 1)) # a1p, a2, a4, b1p not significant
-#acmaHeightFromDiameterMichaelisMenten = nls(TotalHt ~ 1.37 + a1*DBH / (a2 + a2p * isPlantation + DBH), acma2016, start = list(a1 = 39.5, a2 = 47.8, a2p = -9.11), weights = pmin(DBH^-0.8, 1))
-#acmaHeightFromDiameterRichards = nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), acma2016, start = list(Ha = 23.9, Hap = -1.1, d = 0.67, dp = -0.031, kU = 0.023, kUp = 0.008), weights = pmin(DBH^-0.8, 1))
-acma2016 = trees2016 %>% filter(Species == "BM", isLiveUnbroken, TotalHt > 0) # live bigleaf maples measured for height
-acma2016natural = acma2016 %>% filter(isPlantation == FALSE)
+#acmaHeightFromDiameterMichaelisMenten = gsl_nls(TotalHt ~ 1.37 + a1*DBH / (a2 + a2p * isPlantation + DBH), acma2016, start = list(a1 = 39.5, a2 = 47.8, a2p = -9.11), weights = pmin(DBH^-0.8, 1))
+#acmaHeightFromDiameterRichards = gsl_nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), acma2016, start = list(Ha = 23.9, Hap = -1.1, d = 0.67, dp = -0.031, kU = 0.023, kUp = 0.008), weights = pmin(DBH^-0.8, 1))
+acma2016 = trees2016 %>% filter(Species == "BM", isLiveUnbroken, TotalHt > 0) %>% # live bigleaf maples measured for height
+  mutate(dbhWeights = ,
+         heightWeights = )
 acma2016physio = acma2016 %>% filter(is.na(elevation) == FALSE)
-acma2016plantation = acma2016 %>% filter(isPlantation)
-acma2016plantationPhysio = acma2016physio %>% filter(isPlantation)
+acma2016gamConstraint = c(DBH = -1.7882/0.7564, TotalHt = 1.37, standBasalAreaPerHectare = median(acma2016$standBasalAreaPerHectare), basalAreaLarger = median(acma2016$basalAreaLarger), standBasalAreaApprox = median(acma2016$standBasalAreaApprox), tallerApproxBasalArea = median(acma2016$tallerApproxBasalArea), elevation = median(acma2016physio$elevation), slope = median(acma2016physio$slope), aspect = median(acma2016physio$aspect), topographicShelterIndex = median(acma2016physio$topographicShelterIndex), relativeHeight = median(acma2016$relativeHeight)) # point constraint for mgcv::s()
+#acma2016natural = acma2016 %>% filter(isPlantation == FALSE)
+#acma2016plantation = acma2016 %>% filter(isPlantation)
+#acma2016plantationPhysio = acma2016physio %>% filter(isPlantation)
 
 acmaHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^b2, acma2016, start = list(a1 = 26.8, a1p = 4.20, b1 = -0.026, b2 = 0.927), weights = pmin(DBH^-0.8, 1)) # b1p, b2p not significant
 acmaHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 64.9, a1p = 3.8, a2 = 0.023, a2p = 0.92, a3 = 0.022, a3p = -0.22, b1 = -0.021, b1p = 0.0066, b2 = 1.47, b2p = -0.29), weights = pmin(DBH^-0.8, 1))
@@ -17,10 +20,10 @@ acmaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2
 acmaHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = -2.4, a1p = 1.51, a2 = -0.023, a2p = 0.159, a3 = 0.045, a4 = 59.4, a4p = -25.9, b1 = -0.033, b2 = 0.018, b2p = 0.406), weights = pmin(DBH^-0.8, 1)) # a2, a3p not significant, NaN-inf with b1p
 acmaHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, start = list(a1 = 32.5, a4 = -0.0052, a5 = -8.37, a6 = 0.187, a7 = 1.557, a8 = 0.014, b1 = -0.031, b2 = 1.01, b2p = -0.1-4), weights = pmin(DBH^-0.8, 1)) # a1p, a2, a4, b1p not significant
 acmaHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * DBH / (1 + DBH)^b1, acma2016, start = list(a1 = 1.24, a1p = 0.23, b1 = 0.28), weights = pmin(DBH^-0.8, 1)) # b1p not significant
-acmaHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation)), data = acma2016)
-acmaHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation)), data = acma2016)
-#acmaHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio) # insufficient data
-acmaHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio)
+acmaHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016)
+acmaHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016)
+#acmaHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016physio) # insufficient data
+acmaHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016physio)
 acmaHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + b1 * DBH^b2), acma2016, start = list(a1 = 40.1, a1p = 6.30, b1 = 44.9, b2 = -0.97), weights = pmin(DBH^-0.8, 1)) # b1p, b2p not significant
 acmaHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), acma2016, start = list(a1 = 102, a1p = 92, b1 = -17.7, b1p = 10.3, b2 = -0.725, b2p = 0.365), weights = pmin(DBH^-0.8, 1))
 acmaHeightFromDiameterLinear = lm(TotalHt ~ 0 + DBH + I(isPlantation*DBH), acma2016, offset = breastHeight, weights = pmin(DBH^-0.8, 1))
@@ -110,20 +113,20 @@ print(acmaHeightFromDiameterResults %>% select(-responseVariable, -species, -bia
 
 ggplot() +
   geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterSharmaZhang$fitted.values, color = "Sharma-Zhang", group = acma2016$isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterSharmaParton$fitted.values, color = "Sharma-Parton", group = acma2016$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterCurtis$fitted.values, color = "Curtis", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterKorf$fitted.values, color = "Korf", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterLinear$fitted.values, color = "linear", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterMichaelisMenten$fitted.values, color = "Michaelis-Menten", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterParabolic$fitted.values, color = "parabolic", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterPower$fitted.values, color = "power", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterProdan$fitted.values, color = "Prodan", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterRatkowsky$fitted.values, color = "Ratkowsky", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterRichards$fitted.values, color = "unified Richards", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterWeibull$fitted.values, color = "Weibull", group = acma2016$isPlantation)) +
+  #geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterSharmaZhang), color = "Sharma-Zhang", group = acma2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterSharmaParton), color = "Sharma-Parton", group = acma2016$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterChapmanRichards), color = "Chapman-Richards", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterCurtis), color = "Curtis", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterKorf), color = "Korf", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterLinear), color = "linear", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterMichaelisMenten), color = "Michaelis-Menten", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterParabolic), color = "parabolic", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPower), color = "power", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterProdan), color = "Prodan", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterRatkowsky), color = "Ratkowsky", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterRichards), color = "unified Richards", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterSibbesen), color = "Sibbesen", group = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterWeibull), color = "Weibull", group = acma2016$isPlantation)) +
   annotate("text", x = 0, y = 40, label = "bigleaf maple, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(ylim = c(0, 40)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
@@ -180,11 +183,11 @@ ggplot() +
 
 ggplot() +
   geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.15, color = "black", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterWeibullBAL$fitted.values, color = "ElliottBAL"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = acma2016natural$DBH, y = acmaHeightFromDiameterWeibullBALnatural$fitted.values, color = "ElliottBALn"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = acma2016plantation$DBH, y = acmaHeightFromDiameterWeibullBALplantation$fitted.values, color = "ElliottBALp"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterBase$fitted.values, color = "base")) +
-  geom_line(aes(x = acma2016$DBH, y = acmaHeightFromDiameterWeibull$fitted.values, color = "ElliottWeibull")) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterWeibullBAL), color = "ElliottBAL"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = acma2016natural$DBH, y = predict(acmaHeightFromDiameterWeibullBALnatural), color = "ElliottBALn"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = acma2016plantation$DBH, y = predict(acmaHeightFromDiameterWeibullBALplantation), color = "ElliottBALp"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterBase), color = "base")) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterWeibull), color = "ElliottWeibull")) +
   annotate("text", x = 0, y = 85, label = "a) bigleaf maple, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
@@ -202,31 +205,31 @@ ggplot() +
 #                                                   start_upper = list(a1 = 100, a2 = 3, b1 = 10, b2 = 1, b3 = 1), modelweights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 #acmaDiameterFromHeightSharmaParton = nlrob(DBH ~ a1*(TotalHt - 1.37)^(a2 + a2p * isPlantation)*(exp(b1*(tph/topHeight)^(b2 + b2p * isPlantation)*(TotalHt - 1.37)) - 1)^(b3 + b3p * isPlantation), acma2016, start = list(a1 = 1, a2 = 1, a2p = 0, b1 = 0.02, b2 = 0.26, b2p = 0, b3 = 0.9, b3p = 0), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # signular gradient
 acmaDiameterFromHeightChapmanForm = gsl_nls(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, acma2016, start = list(a1 = 540000, b1 = 0.00001, b2 = 1.11), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # NaN-inf from nls() at multiple nls_multstart() positions, NaN-inf from nlrob()
-acmaDiameterFromHeightChapmanFormAat = gsl_nls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, acma2016, start = list(a1 = 46000, a2 = 159, b1 = 0.000013, b2 = 1.11), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # NaN-inf from nls() and nlrob()
+acmaDiameterFromHeightChapmanFormAat = gsl_nls(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, acma2016, start = list(a1 = 46000, a2 = 159, b1 = 0.000013, b2 = 1.11), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # NaN-inf from nls() and nlrob()
 acmaDiameterFromHeightChapmanFormBal = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), acma2016, start = list(a1 = 23600, a2 = -1955, b1 = 0.00001, b2 = 1.07), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # NaN-inf from nls(), step factor from nlrob()
 acmaDiameterFromHeightChapmanFormBalRelHt = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), acma2016, start = list(a1 = 261000, a2 = -7700, a3 = 4881, a9 = -216000, b1 = 0.00001, b2 = 1.06), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # step factor from nls()
 acmaDiameterFromHeightChapmanFormRelHt = gsl_nls(DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), acma2016, start = list(a1 = 241000, a9 = -114000, b1 = 0.000007, b2 = 1.23), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # step factor from nls() and nlrob()
 acmaDiameterFromHeightChapmanRichards = nlrob(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), acma2016, start = list(a1 = 23.5, b1 = -0.022, b2 = 2.01, b2p = -0.17), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # b1p not significant
-acmaDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), acma2016, start = list(a1 = 24.2, a2 = -0.005, b1 = -0.021, b2 = 2.02, b2p = -0.19), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = list(maxiter = 500))
+acmaDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), acma2016, start = list(a1 = 24.2, a2 = -0.005, b1 = -0.021, b2 = 2.02, b2p = -0.19), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = list(maxiter = 500))
 acmaDiameterFromHeightChapmanRichardsPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), acma2016physio, start = list(a1 = 3.30, a1p = 4.985, a4 = 0.00031, a5 = -0.172, a6 = -0.215, a7 = -0.839, a8 = 1.459, b1 = -0.0035, b1p = 0.00193, b2 = 1.798), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a4, a6, a7 not significant
 acmaDiameterFromHeightChapmanRichardsRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), acma2016, start = list(a1 = 36.1, a9 = -2.78, b1 = -0.028, b1p = 0.009, b2 = 1.63), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a1p, a2p, b2p not significant
-acmaDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation)), data = acma2016)
-acmaDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, by = as.factor(isPlantation)), data = acma2016)
-#acmaDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio) # insufficient data
-acmaDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = acma2016physio)
+acmaDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016)
+acmaDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016)
+#acmaDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016physio) # insufficient data
+acmaDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = acma2016gamConstraint), data = acma2016physio)
 acmaDiameterFromHeightLinear = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), acma2016, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 acmaDiameterFromHeightMichaelisMentenForm = nlrob(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), acma2016, start = list(a1 = -116, a2 = -128, b1 = 1.50), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 acmaDiameterFromHeightNaslund = nlrob(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), acma2016, start = list(a1 = 5.1, a1p = -2.0, a2 = -0.12, a2p = -0.023), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 acmaDiameterFromHeightParabolic = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I(isPlantation*(TotalHt - 1.37)^2), acma2016, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # (TotalHt - 1.37)^2 not significant (p = 0.058)
 acmaDiameterFromHeightPower = nlrob(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), acma2016, start = list(a1 = 3.57, a1p = -2.30, b1 = 0.894, b1p = 0.282), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
-acmaDiameterFromHeightPowerAat = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), acma2016, start = list(a1 = 3.63, a1p = -2.32, a2 = -0.00064, b1 = 0.898, b1p = 0.272), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a2p not significant
+acmaDiameterFromHeightPowerAat = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), acma2016, start = list(a1 = 3.63, a1p = -2.32, a2 = -0.00064, b1 = 0.898, b1p = 0.272), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a2p not significant
 acmaDiameterFromHeightPowerPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), acma2016physio, start = list(a1 = 4.38, a1p = -1.88, a4 = 0.00014, a5 = -1.61, a6 = -0.021, a7 = -0.112, a8 = 0.0096, b1 = 0.895, b1p = 0.189), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a4, a6, a7, a8 not significant
 acmaDiameterFromHeightPowerRelHt = nlrob(DBH ~ (a1 + a1p * isPlantation + (a9 + a9p * isPlantation) * relativeHeight)*(TotalHt - 1.37)^b1, acma2016, start = list(a1 = 2.37, a1p = -0.887, a9 = -1.508, a9p = 1513, b1 = 1.123), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) 
 acmaDiameterFromHeightRuark = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.20, b1 = 1.52, b1p = -0.32, b2 = -0.038, b2p = 0.037), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a1p not significant
 acmaDiameterFromHeightSchnute = gsl_nls(DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # singular gradient or step factor with nlrob()
 acmaDiameterFromHeightSharmaParton = gsl_nls(DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, acma2016, start = list(a1 = 0.0001, b1 = 3.8, b2 = 0.0174, b3 = 0.112, b4 = -2.4), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # NaN-inf from nls() at nls_multstart() positions, NaN-inf or code error with nlrob()
 acmaDiameterFromHeightSibbesenForm = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.43, b1 = 2.45, b2 = -0.15), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # no significant plantation effects
-acmaDiameterFromHeightSibbesenFormAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.36, a2 = 0.0002, b1 = 2.59, b2 = -0.156), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a2 not significant
+acmaDiameterFromHeightSibbesenFormAat = nlrob(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.36, a2 = 0.0002, b1 = 2.59, b2 = -0.156), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # a2 not significant
 acmaDiameterFromHeightSibbesenFormPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), acma2016physio, start = list(a1 = 0.792, a1p = -0.272, a4 = 0.00003, a5 = -0.345, a6 = -0.0044, a7 = -0.020, a8 = 0.0021, b1 = 2.433, b2 = -0.164, b2p = 0.0277), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5)) # no physiographic parameters significant
 acmaDiameterFromHeightSibbesenFormRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.496, a9 = -0.188, b1 = 2.31, b2 = -0.12), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5))
 acmaDiameterFromHeightWeibull = gsl_nls(DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, acma2016, start = list(a1 = -185000, b1 = 0.00001, b2 = 1.11), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -0.9), 0.5), control = gsl_nls_control(maxiter = 50)) # unfavorable to concave up curvature, NaN-inf with nlrob()
@@ -299,23 +302,23 @@ print(acmaDiameterFromHeightResults %>% select(-responseVariable, -species, -bia
 
 ggplot(acma2016) +
   geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = acmaDiameterFromHeightSharmaParton$fitted.values, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = acmaDiameterFromHeightChapmanForm$fitted.values, y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman-Richards approximate BA+L", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = acmaDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards BA+L", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = acmaDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightMichaelisMentenForm$fitted.values, y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightNaslund$fitted.values, y = TotalHt, color = "Näslund", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightPower$fitted.values, y = TotalHt, color = "power", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightRuark$fitted.values, y = TotalHt, color = "Ruark", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightSibbesenForm$fitted.values, y = TotalHt, color = "Sibbesen", group = isPlantation)) +
-  #geom_line(aes(x = acmaDiameterFromHeightWeibull$fitted.values, y = TotalHt, color = "Weibull", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightSharmaParton), y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightChapmanForm), y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightChapmanFormAat), y = TotalHt, color = "Chapman-Richards approximate BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightChapmanFormBal), y = TotalHt, color = "Chapman-Richards BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightChapmanRichards), y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightMichaelisMentenForm), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightNaslund), y = TotalHt, color = "Näslund", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightPower), y = TotalHt, color = "power", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightRuark), y = TotalHt, color = "Ruark", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightSibbesenForm), y = TotalHt, color = "Sibbesen", group = isPlantation)) +
+  #geom_line(aes(x = predict(acmaDiameterFromHeightWeibull), y = TotalHt, color = "Weibull", group = isPlantation)) +
   #geom_line(aes(x = -70 * log(1 - pmin(0.01*(TotalHt - 1.37)^1.1, 0.999)), y = TotalHt, color = "Chapman-Richards form"), na.rm = TRUE) +
   #geom_line(aes(x = 1*(TotalHt - 1.37)^1*exp(0.02*(tph/topHeight)^0.26*(TotalHt - 1.37))^0.9, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 15 * (exp(0.12*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "Chapman-Richards form", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AA+T", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = (1.75 + 0.000001 * tallerApproxBasalArea + -0.000001 * standBasalAreaApprox) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AA+T", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 0.03*topHeight*exp(1.6*(TotalHt - 1.37)^0.26), y = TotalHt, color = "Chapman-Richards form top height", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = -116*(TotalHt - 1.37)^1.5/(-128 - (TotalHt - 1.37)^1.5), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation), alpha = 0.5) +#geom_line(aes(x = acmaDiameterFromHeightSchnute$fitted.values, y = TotalHt, color = "Schnute", group = isPlantation)) +
+  #geom_line(aes(x = -116*(TotalHt - 1.37)^1.5/(-128 - (TotalHt - 1.37)^1.5), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation), alpha = 0.5) +#geom_line(aes(x = predict(acmaDiameterFromHeightSchnute), y = TotalHt, color = "Schnute", group = isPlantation)) +
   #geom_line(aes(x = -1/0.0003*log(1 - (1 - exp(-0.1))*(TotalHt^1.5 - 1.37^1.5)/(75^1.5 - 1.37^1.5)), y = TotalHt, color = "Schnute"), alpha = 0.5) +
   #geom_line(aes(x = 1*(TotalHt - 1.37)^1.5*(1 - exp(-0.01 * (tph/standBasalAreaPerHectare)^0.5*(TotalHt - 1.37)))^0.9, y = TotalHt, color = "Sharma-Parton"), alpha = 0.5) +
   #geom_line(aes(x = 5*standBasalAreaPerHectare^0.5 * exp(0.0005*tph^0.5*(TotalHt - 1.37))^1, y = TotalHt, color = "Sharma-Zhang"), alpha = 0.5) +
@@ -412,21 +415,16 @@ acmaBasalAreaFromHeightPower = nlrob(basalArea ~ (a1 + a1p*isPlantation)*(impute
 #confint2(acmaBasalAreaFromHeightKorf, level = 0.99)
 #confint_nlrob(acmaBasalAreaFromHeightPower, level = 0.99)
 
-acmaBasalAreaFromHeightKorf$fitted.values = predict(acmaBasalAreaFromHeightKorf, acma2016)
-acmaBasalAreaFromHeightKorf$residuals = acmaBasalAreaFromHeightKorf$fitted.values - acma2016$basalArea
-acmaBasalAreaFromHeightPower$fitted.values = predict(acmaBasalAreaFromHeightPower, acma2016)
-acmaBasalAreaFromHeightPower$residuals = acmaBasalAreaFromHeightPower$fitted.values - acma2016$basalArea
-
 tribble(~method, ~aic, ~biasCm2, ~maeM2, ~nse,
-        "Korf", AIC(acmaBasalAreaFromHeightKorf), 100^2 * mean(acmaBasalAreaFromHeightKorf$residuals), mean(abs(acmaBasalAreaFromHeightKorf$residuals)), 1 - sum(acmaBasalAreaFromHeightKorf$residuals^2) / sum((acma2016$basalArea - mean(acma2016$basalArea)^2)),
-        "power", AIC(acmaBasalAreaFromHeightPower), 100^2 * mean(acmaBasalAreaFromHeightPower$residuals), mean(abs(acmaBasalAreaFromHeightPower$residuals)), 1 - sum(acmaBasalAreaFromHeightPower$residuals^2) / sum((acma2016$basalArea - mean(acma2016$basalArea)^2))) %>%
+        "Korf", AIC(acmaBasalAreaFromHeightKorf), 100^2 * mean(residuals(acmaBasalAreaFromHeightKorf)), mean(abs(residuals(acmaBasalAreaFromHeightKorf))), 1 - sum(residuals(acmaBasalAreaFromHeightKorf)^2) / sum((acma2016$basalArea - mean(acma2016$basalArea)^2)),
+        "power", AIC(acmaBasalAreaFromHeightPower), 100^2 * mean(residuals(acmaBasalAreaFromHeightPower)), mean(abs(residuals(acmaBasalAreaFromHeightPower))), 1 - sum(residuals(acmaBasalAreaFromHeightPower)^2) / sum((acma2016$basalArea - mean(acma2016$basalArea)^2))) %>%
   mutate(deltaAIC = aic - min(aic)) %>%
   arrange(desc(deltaAIC))
 
 ggplot(acma2016) +
   geom_point(aes(x = imputedHeight, y = 0.25*pi*(0.01*DBH)^2), alpha = 0.1, color = "grey25", shape = 16) +
-  geom_line(aes(x = imputedHeight, y = acmaBasalAreaFromHeightKorf$fitted.values, color = "Korf", group = isPlantation)) +
-  geom_line(aes(x = imputedHeight, y = acmaBasalAreaFromHeightPower$fitted.values, color = "power", group = isPlantation)) +
+  geom_line(aes(x = imputedHeight, y = predict(acmaBasalAreaFromHeightKorf), color = "Korf", group = isPlantation)) +
+  geom_line(aes(x = imputedHeight, y = predict(acmaBasalAreaFromHeightPower), color = "power", group = isPlantation)) +
   #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
   labs(x = "bigleaf maple height, m", y = "basal area, m²", color = NULL) +
   theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))

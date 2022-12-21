@@ -1,12 +1,15 @@
 # load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
 
 ## Oregon myrtle (California bay) height-diameter regression form sweep
-#umcaHeightFromDiameterRichards = nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), umca2016, start = list(Ha = 14.4, Hap = -3.6, d = 2.78, dp = -0.99, kU = 0.054, kUp = 0.026), weights = pmin(DBH^-0.8, 1))
-umca2016 = trees2016 %>% filter(Species == "OM", isLiveUnbroken, TotalHt > 0) # live Oregon myrtles measured for height
-umca2016natural = umca2016 %>% filter(isPlantation == FALSE)
+#umcaHeightFromDiameterRichards = gsl_nls(TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/Ha)^(1 - (d + dp*isPlantation)) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/(d + dp*isPlantation)^((d + dp*isPlantation)/(1 - (d + dp*isPlantation)))))^(1/(1 - (d + dp*isPlantation))), umca2016, start = list(Ha = 14.4, Hap = -3.6, d = 2.78, dp = -0.99, kU = 0.054, kUp = 0.026), weights = pmin(DBH^-0.8, 1))
+umca2016 = trees2016 %>% filter(Species == "OM", isLiveUnbroken, TotalHt > 0) %>% # live Oregon myrtles measured for height
+  mutate(dbhWeights = ,
+         heightWeights = )
 umca2016physio = umca2016 %>% filter(is.na(elevation) == FALSE)
-umca2016plantation = umca2016 %>% filter(isPlantation)
-umca2016plantationPhysio = umca2016physio %>% filter(isPlantation)
+umca2016gamConstraint = c(DBH = -0.8547/0.8790, TotalHt = 1.37, standBasalAreaPerHectare = median(umca2016$standBasalAreaPerHectare), basalAreaLarger = median(umca2016$basalAreaLarger), standBasalAreaApprox = median(umca2016$standBasalAreaApprox), tallerApproxBasalArea = median(umca2016$tallerApproxBasalArea), elevation = median(umca2016physio$elevation), slope = median(umca2016physio$slope), aspect = median(umca2016physio$aspect), topographicShelterIndex = median(umca2016physio$topographicShelterIndex), relativeHeight = median(umca2016$relativeHeight)) # point constraint for mgcv::s()
+#umca2016natural = umca2016 %>% filter(isPlantation == FALSE)
+#umca2016plantation = umca2016 %>% filter(isPlantation)
+#umca2016plantationPhysio = umca2016physio %>% filter(isPlantation)
 
 umcaHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + a1 * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = 16.5, b1 = -0.064, b2 = 1.270, b2p = -0.177), weights = pmin(DBH^-0.8, 1)) # a1p, b1p not significant
 umcaHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, umca2016, start = list(a1 = 19.0, a2 = 0.201, a3 = -0.152, b1 = -0.049, b1p = -0.0105, b2 = 1.156), weights = pmin(DBH^-0.8, 1)) # a2, a2p, a3, a3p, b2p not significant
@@ -14,10 +17,10 @@ umcaHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2
 umcaHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = -1.48, a2 = 0.030, a2p = -0.131, a3 = -0.009, a3p = 0.192, a4 = 56.1, a4p = -32.7, b1 = -0.278, b2 = 0.389, b2p = 0.684), weights = pmin(DBH^-0.8, 1)) # a1p not significant
 umcaHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 8.58, a4 = -0.018, a5 = 16.5, a6 = -1.117, a7 = 0.476, a8 = -0.014, b1 = -0.064, b2 = 1.261, b2p = -0.193), weights = pmin(DBH^-0.8, 1)) # a4, a5, a6, b1p not significant
 umcaHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * DBH / (1 + DBH)^b1, umca2016, start = list(a1 = 0.909, a1p = 0.221, b1 = 0.219), weights = pmin(DBH^-0.8, 1)) # b1p not significant
-umcaHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation)), data = umca2016)
-umcaHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation)), data = umca2016)
-#umcaHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = umca2016physio) # insufficient data
-umcaHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = umca2016physio)
+umcaHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016)
+umcaHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016)
+#umcaHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016physio) # insufficient data
+umcaHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016physio)
 umcaHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) *DBH^b2), umca2016, start = list(a1 = 21.4, a1p = -4.37, b1 = 43.8, b1p = -19.9, b2 = -1.27), weights = pmin(DBH^-0.8, 1)) # b2p not significant
 umcaHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + a1*exp((b1 + b1p * isPlantation)*DBH^b2), umca2016, start = list(a1 = 49.8, b1 = -5.02, b1p = 0.404, b2 = -0.386), weights = pmin(DBH^-0.8, 1)) # a1p, b2p not significant
 umcaHeightFromDiameterLinear = lm(TotalHt ~ 0 + DBH + I(isPlantation*DBH), umca2016, offset = breastHeight, weights = pmin(DBH^-0.8, 1))
@@ -107,20 +110,20 @@ print(umcaHeightFromDiameterResults %>% select(-responseVariable, -species, -bia
 
 ggplot() +
   geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterSharmaZhang$fitted.values, color = "Sharma-Zhang", group = umca2016$isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterSharmaParton$fitted.values, color = "Sharma-Parton", group = umca2016$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterCurtis$fitted.values, color = "Curtis", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterKorf$fitted.values, color = "Korf", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterLinear$fitted.values, color = "linear", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterMichaelisMenten$fitted.values, color = "Michaelis-Menten", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterParabolic$fitted.values, color = "parabolic", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterPower$fitted.values, color = "power", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterProdan$fitted.values, color = "Prodan", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterRatkowsky$fitted.values, color = "Ratkowsky", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterRichards$fitted.values, color = "unified Richards", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = umca2016$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterWeibull$fitted.values, color = "Weibull", group = umca2016$isPlantation)) +
+  #geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterSharmaZhang), color = "Sharma-Zhang", group = umca2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterSharmaParton), color = "Sharma-Parton", group = umca2016$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterChapmanRichards), color = "Chapman-Richards", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterCurtis), color = "Curtis", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterKorf), color = "Korf", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterLinear), color = "linear", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterMichaelisMenten), color = "Michaelis-Menten", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterParabolic), color = "parabolic", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPower), color = "power", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterProdan), color = "Prodan", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterRatkowsky), color = "Ratkowsky", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterRichards), color = "unified Richards", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterSibbesen), color = "Sibbesen", group = umca2016$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterWeibull), color = "Weibull", group = umca2016$isPlantation)) +
   annotate("text", x = 0, y = 35, label = "Oregon myrtle, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(ylim = c(0, 35)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
@@ -177,11 +180,11 @@ ggplot() +
 
 ggplot() +
   geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.15, color = "black", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterWeibullBAL$fitted.values, color = "ElliottBAL"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = umca2016natural$DBH, y = umcaHeightFromDiameterWeibullBALnatural$fitted.values, color = "ElliottBALn"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = umca2016plantation$DBH, y = umcaHeightFromDiameterWeibullBALplantation$fitted.values, color = "ElliottBALp"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterBase$fitted.values, color = "base")) +
-  geom_line(aes(x = umca2016$DBH, y = umcaHeightFromDiameterWeibull$fitted.values, color = "ElliottWeibull")) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterWeibullBAL), color = "ElliottBAL"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = umca2016natural$DBH, y = predict(umcaHeightFromDiameterWeibullBALnatural), color = "ElliottBALn"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = umca2016plantation$DBH, y = predict(umcaHeightFromDiameterWeibullBALplantation), color = "ElliottBALp"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterBase), color = "base")) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterWeibull), color = "ElliottWeibull")) +
   annotate("text", x = 0, y = 85, label = "a) Oregon myrtle, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
@@ -193,37 +196,37 @@ ggplot() +
 #umcaDiameterFromHeightChapmanForm = nls_multstart(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, iter = 100,
 #                                                  start_lower = list(a1 = -10, b1 = -2, b2 = -1), 
 #                                                  start_upper = list(a1 = 100, b1 = 2.5, b2 = 1), modelweights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
-#umcaDiameterFromHeightChapmanFormAat = gsl_nls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 15, a2 = 0, b1 = 0.1, b2 = 0.5), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5), control = nls.control(maxiter = 500)) # step factor with nlrob()
+#umcaDiameterFromHeightChapmanFormAat = gsl_nls(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 15, a2 = 0, b1 = 0.1, b2 = 0.5), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5), control = nls.control(maxiter = 500)) # step factor with nlrob()
 #umcaDiameterFromHeightSharmaParton = nls_multstart(DBH ~ a1*(TotalHt - 1.37)^a2*(exp(b1*(tph/topHeight)^b2*(TotalHt - 1.37)) - 1)^b3, umca2016, iter = 100, 
 #                                                   start_lower = list(a1 = 0.01, a2 = -1, b1 = -10, b2 = -0.5, b3 = 0.2),
 #                                                   start_upper = list(a1 = 100, a2 = 2, b1 = 10, b2 = 0.5, b3 = 1.5), modelweights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
 #umcaDiameterFromHeightSharmaParton = gsl_nls(DBH ~ a1*(TotalHt - 1.37)^(a2 + a2p * isPlantation)*(exp(b1*(tph/topHeight)^(b2 + b2p * isPlantation)*(TotalHt - 1.37)) - 1)^(b3 + b3p * isPlantation), umca2016, start = list(a1 = 89, a2 = 0.61, a2p = 0.05, b1 = 0.0002, b2 = -0.73, b2p = -0.79, b3 = 0.34, b3p = -0.03), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # singnular gradient with nls()
 umcaDiameterFromHeightChapmanForm = gsl_nls(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 50000, b1 = 0.00001, b2 = 1.034), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5), control = gsl_nls_control(maxiter = 50)) # NaN-inf with nls() at multiple nls_multstart() points, NaN-inf with nlrob()
-umcaDiameterFromHeightChapmanFormAat = gsl_nls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 604, a2 = 0.51, b1 = 0.0004, b2 = 1.01), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # NaN-inf with nls(), step factor with nlrob()
+umcaDiameterFromHeightChapmanFormAat = gsl_nls(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 604, a2 = 0.51, b1 = 0.0004, b2 = 1.01), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # NaN-inf with nls(), step factor with nlrob()
 umcaDiameterFromHeightChapmanFormBal = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 1000, a2 = -16, b1 = 0.001, b2 = 1.02), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # NaN-inf with nls(), step factor with nlrob()
 umcaDiameterFromHeightChapmanFormBalRelHt = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 1500, a2 = -400.0, a3 = 520, a9 = -2000, b1 = 0.0006, b2 = 1.02), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # step factor with nls() and nlrob()
 umcaDiameterFromHeightChapmanFormRelHt = gsl_nls(DBH ~ (a1 + a9 * pmin(relativeHeight, 1.25))*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 665, a9 = -406, b1 = 0.0034, b2 = 1.12), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5), control = nls.control(maxiter = 50)) # step factor with nls(), step factor with nlrob()
 umcaDiameterFromHeightChapmanRichards = nlrob(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, start = list(a1 = 33.9, b1 = -0.047, b2 = 1.43, b2p = -0.15), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
-umcaDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, start = list(a1 = 34.4, a2 = 0.004, b1 = -0.047, b2 = 1.41, b2p = -0.13), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
+umcaDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, start = list(a1 = 34.4, a2 = 0.004, b1 = -0.047, b2 = 1.41, b2p = -0.13), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
 umcaDiameterFromHeightChapmanRichardsPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), umca2016physio, start = list(a1 = 58.6, a1p = 166.3, a4 = 0.0133, a5 = -52.7, a6 = 5.394, a7 = -0.837, a8 = 0.602, b1 = -0.0637, b1p = 0.0584, b2 = 1.329), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a4, a5, a5, a7 not significant
 umcaDiameterFromHeightChapmanRichardsRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, start = list(a1 = 39.0, a9 = -2.62, b1 = -0.043, b2 = 1.40, b2p = -0.132), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a1p convergence questionable, b1p not significant
-umcaDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation)), data = umca2016)
-umcaDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, by = as.factor(isPlantation)), data = umca2016)
-#umcaDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = umca2016physio) # insufficient data
-umcaDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = umca2016physio)
+umcaDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016)
+umcaDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016)
+#umcaDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016physio) # insufficient data
+umcaDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation), pc = umca2016gamConstraint), data = umca2016physio)
 umcaDiameterFromHeightLinear = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), umca2016, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
 umcaDiameterFromHeightMichaelisMentenForm = gsl_nls(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), umca2016, start = list(a1 = 100, a2 = 100, b1 = 1), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # collapses to linear
 umcaDiameterFromHeightNaslund = nlrob(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), umca2016, start = list(a1 = 4.3, a1p = -1.8, a2 = -0.14, a2p = -0.038), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
 umcaDiameterFromHeightParabolic = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), umca2016, weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # collapses to linear since (TotalHt - 1.37)^2 and isPlantation*(TotalHt - 1.37)^2 not significant
 umcaDiameterFromHeightPower = nlrob(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 3.28, a1p = -2.10, b1 = 0.917, b1p = 0.332), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
-umcaDiameterFromHeightPowerAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 2.71, a2 = 0.00054, b1 = 0.975, b1p = -0.0696), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a1p, a2p not significant
+umcaDiameterFromHeightPowerAat = nlrob(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 2.71, a2 = 0.00054, b1 = 0.975, b1p = -0.0696), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a1p, a2p not significant
 umcaDiameterFromHeightPowerPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^b1, umca2016physio, start = list(a1 = 5.12, a1p = -0.67, a4 = 0.0013, a5 = -4.15, a6 = 0.46, a7 = -0.11, a8 = 0.044, b1 = 0.93), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a1p, a2, b1p not significant
 umcaDiameterFromHeightPowerRelHt = nlrob(DBH ~ (a1 + a1p * isPlantation + (a9 + a9p * isPlantation) * relativeHeight)*(TotalHt - 1.37)^b1, umca2016, start = list(a1 = 2.37, a1p = -0.887, a9 = -1.508, a9p = 1513, b1 = 1.123), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5))
 umcaDiameterFromHeightRuark = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), umca2016, start = list(a1 = 2.48, b1 = 1.14, b1p = -0.57, b2 = -0.019, b2p = 0.092), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a1p not significant
 umcaDiameterFromHeightSchnute = gsl_nls(DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), umca2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 177), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # NaN-inf with nlrob()
 umcaDiameterFromHeightSharmaParton = gsl_nls(DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, umca2016, start = list(a1 = 104, b1 = 0.66, b2 = 0.0001, b3 = -1.17, b4 = 0.31), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a2p, b2p, b3p not significant, NaN-inf with nls() at nls_multistart() point, NaN-inf or code error with nlrob()
 umcaDiameterFromHeightSibbesenForm = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.43, b1 = 2.45, b2 = -0.15), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # no significant plantation effects
-umcaDiameterFromHeightSibbesenFormAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.36, a2 = 0.0002, b1 = 2.59, b2 = -0.156), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a2 not significant
+umcaDiameterFromHeightSibbesenFormAat = nlrob(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.36, a2 = 0.0002, b1 = 2.59, b2 = -0.156), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a2 not significant
 umcaDiameterFromHeightSibbesenFormPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 1.53, a1p = -0.38, a4 = 0.001, a5 = -1.15, a6 = 0.14, a7 = -0.01, a8 = 0.02, b1 = 1.95, b2 = -0.15), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a4, a5, a6 not significant, step factor with b1p
 umcaDiameterFromHeightSibbesenFormRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.496, a9 = -0.188, b1 = 2.31, b2 = -0.12), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # a4 not significant
 umcaDiameterFromHeightWeibull = gsl_nls(DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, umca2016, start = list(a1 = -3800, b1 = 0.0006, b2 = 1.03), weights = pmin(TotalHt^if_else(isPlantation, -1.6, -1.1), 0.5)) # NaN-inf with nlrob()
@@ -296,23 +299,23 @@ print(umcaDiameterFromHeightResults %>% select(-responseVariable, -species, -bia
 
 ggplot(umca2016) +
   geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = umcaDiameterFromHeightChapmanForm$fitted.values, y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman-Richards form approximate BA+L", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = umcaDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards form BA+L", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = umcaDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightMichaelisMentenForm$fitted.values, y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightNaslund$fitted.values, y = TotalHt, color = "Näslund", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightPower$fitted.values, y = TotalHt, color = "power", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightRuark$fitted.values, y = TotalHt, color = "Ruark", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightSchnute$fitted.values, y = TotalHt, color = "Schnute", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightSharmaParton$fitted.values, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = umcaDiameterFromHeightSibbesenForm$fitted.values, y = TotalHt, color = "Sibbesen form", group = isPlantation)) +
-  #geom_line(aes(x = umcaDiameterFromHeightWeibull$fitted.values, y = TotalHt, color = "Weibull", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightChapmanForm), y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightChapmanFormAat), y = TotalHt, color = "Chapman-Richards form approximate BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightChapmanFormBal), y = TotalHt, color = "Chapman-Richards form BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightChapmanRichards), y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightMichaelisMentenForm), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightNaslund), y = TotalHt, color = "Näslund", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightPower), y = TotalHt, color = "power", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightRuark), y = TotalHt, color = "Ruark", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightSchnute), y = TotalHt, color = "Schnute", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightSharmaParton), y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightSibbesenForm), y = TotalHt, color = "Sibbesen form", group = isPlantation)) +
+  #geom_line(aes(x = predict(umcaDiameterFromHeightWeibull), y = TotalHt, color = "Weibull", group = isPlantation)) +
   #geom_line(aes(x = -70 * log(1 - pmin(0.01*(TotalHt - 1.37)^1.1, 0.999)), y = TotalHt, color = "Chapman-Richards"), na.rm = TRUE) +
   #geom_line(aes(x = 15 * (exp(0.1*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "Chapman form", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 1*(TotalHt - 1.37)^1*exp(0.02*(tph/topHeight)^0.26*(TotalHt - 1.37))^0.9, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 15 * (exp(0.12*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "Chapman-Richards", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AA+T", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = (1.75 + 0.000001 * tallerApproxBasalArea + -0.000001 * standBasalAreaApprox) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form AA+T", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 0.03*topHeight*exp(1.6*(TotalHt - 1.37)^0.26), y = TotalHt, color = "Chapman-Richards form top height", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 1*(TotalHt - 1.37)^1.5, y = TotalHt, color = "power"), alpha = 0.5) +
   geom_line(aes(x = 1*(TotalHt - 1.37)^1.5*(1 - exp(-0.01 * (tph/standBasalAreaPerHectare)^1*(TotalHt - 1.37)))^1, y = TotalHt, color = "Sharma-Parton"), alpha = 0.5) +
@@ -409,21 +412,16 @@ umcaBasalAreaFromHeightPower = nlrob(basalArea ~ (a1 + a1p*isPlantation)*(impute
 #confint2(umcaBasalAreaFromHeightKorf, level = 0.99)
 #confint_nlrob(umcaBasalAreaFromHeightPower, level = 0.99, weights = pmin(1/umca2016$basalArea, 1E4))
 
-umcaBasalAreaFromHeightKorf$fitted.values = predict(umcaBasalAreaFromHeightKorf, umca2016)
-umcaBasalAreaFromHeightKorf$residuals = umcaBasalAreaFromHeightKorf$fitted.values - umca2016$basalArea
-umcaBasalAreaFromHeightPower$fitted.values = predict(umcaBasalAreaFromHeightPower, umca2016)
-umcaBasalAreaFromHeightPower$residuals = umcaBasalAreaFromHeightPower$fitted.values - umca2016$basalArea
-
 tribble(~method, ~aic, ~biasCm2, ~maeM2, ~nse,
-        "Korf", AIC(umcaBasalAreaFromHeightKorf), 100^2 * mean(umcaBasalAreaFromHeightKorf$residuals), mean(abs(umcaBasalAreaFromHeightKorf$residuals)), 1 - sum(umcaBasalAreaFromHeightKorf$residuals^2) / sum((umca2016$basalArea - mean(umca2016$basalArea)^2)),
-        "power", AIC(umcaBasalAreaFromHeightPower), 100^2 * mean(umcaBasalAreaFromHeightPower$residuals), mean(abs(umcaBasalAreaFromHeightPower$residuals)), 1 - sum(umcaBasalAreaFromHeightPower$residuals^2) / sum((umca2016$basalArea - mean(umca2016$basalArea)^2))) %>%
+        "Korf", AIC(umcaBasalAreaFromHeightKorf), 100^2 * mean(residuals(umcaBasalAreaFromHeightKorf)), mean(abs(residuals(umcaBasalAreaFromHeightKorf))), 1 - sum(residuals(umcaBasalAreaFromHeightKorf)^2) / sum((umca2016$basalArea - mean(umca2016$basalArea)^2)),
+        "power", AIC(umcaBasalAreaFromHeightPower), 100^2 * mean(residuals(umcaBasalAreaFromHeightPower)), mean(abs(residuals(umcaBasalAreaFromHeightPower))), 1 - sum(residuals(umcaBasalAreaFromHeightPower)^2) / sum((umca2016$basalArea - mean(umca2016$basalArea)^2))) %>%
   mutate(deltaAIC = aic - min(aic)) %>%
   arrange(desc(deltaAIC))
 
 ggplot(umca2016) +
   geom_point(aes(x = imputedHeight, y = 0.25*pi*(0.01*DBH)^2), alpha = 0.1, color = "grey25", shape = 16) +
-  geom_line(aes(x = imputedHeight, y = umcaBasalAreaFromHeightKorf$fitted.values, color = "Korf", group = isPlantation)) +
-  geom_line(aes(x = imputedHeight, y = umcaBasalAreaFromHeightPower$fitted.values, color = "power", group = isPlantation)) +
+  geom_line(aes(x = imputedHeight, y = predict(umcaBasalAreaFromHeightKorf), color = "Korf", group = isPlantation)) +
+  geom_line(aes(x = imputedHeight, y = predict(umcaBasalAreaFromHeightPower), color = "power", group = isPlantation)) +
   #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
   labs(x = "Oregon myrtle height, m", y = "basal area, m²", color = NULL) +
   theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))

@@ -26,52 +26,64 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
                              legend.title = element_text(size = 10),
                              panel.border = element_blank()))
 
-as_row = function(regression = NULL, name = NULL, significant = TRUE)
+as_row = function(model = NULL, name = NULL, fixedWeight = NA_real_)
 {
-  if (is.null(regression))
+  if (is.null(model))
   {
     if (is.null(name))
     {
       stop("Name must be specified if regression is null.")
     }
     return(tibble(name = name, 
-                  pae = NA_real_, paeNaturalRegen = NA_real_, paePlantation = NA_real_,
+                  fitting = NA_character_, n = NA_real_, significant = NA_real_, fixedWeight = fixedWeight,
                   bias = NA_real_, biasNaturalRegen = NA_real_, biasPlantation = NA_real_,
-                  mae = NA_real_, maeNaturalRegen = NA_real_, maePlantation = NA_real_,
-                  rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
+                  aic = NA_real_, aicN = NA_real_, aict = NA_real_,
+                  bic = NA_real_, bict = NA_real_,
+                  mab = NA_real_, mapb = NA_real_,
+                  mape = NA_real_, mapeNaturalRegen = NA_real_, mapePlantation = NA_real_,
                   nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
+                  pae = NA_real_, paeNaturalRegen = NA_real_, paePlantation = NA_real_,
                   pearson = NA_real_, pearsonNaturalRegen = NA_real_, pearsonPlantation = NA_real_,
-                  aic = NA_real_, bic = regression$bic, power = NA_real_, powerPlantation = NA_real_,
-                  fitting = NA_character_, n = NA_real_, significant = NA_real_, 
+                  rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
+                  rmspe = NA_real_,
+                  power = NA_real_, powerPlantation = NA_real_,
                   adaptiveWeightFraction = NA_real_, maxResidual = NA_real_))
   }
-  if (("pae" %in% names(regression)) == FALSE)
+  if (("mape" %in% names(model)) == FALSE)
   {
-    stop(paste("Regression for", name, " is missing summary statistics."))
+    stop(paste("Regression for", model$name, " is missing summary statistics."))
+  }
+  if ((is.null(model$convInfo) == FALSE) && (model$convInfo$isConv == FALSE))
+  {
+    stop(paste("Regression for", model$name, " is not converged."))
   }
   
   power = NA_real_
   powerPlantation = NA_real_
-  if (is.null(regression$modelStruct$varStruct) == FALSE)
+  if (is.null(model$modelStruct$varStruct) == FALSE)
   {
-    power = regression$modelStruct$varStruct[1]
-    if (length(regression$modelStruct$varStruct) > 1)
+    power = model$modelStruct$varStruct[1]
+    if (length(model$modelStruct$varStruct) > 1)
     {
-      powerPlantation = regression$modelStruct$varStruct[2]
+      powerPlantation = model$modelStruct$varStruct[2]
     }
   }
   
-  residuals = residuals(regression)
-  return(tibble(name = regression$name, 
-                pae = regression$pae, paeNaturalRegen = regression$paeNaturalRegen, paePlantation = regression$paePlantation,
-                bias = regression$bias, biasNaturalRegen = regression$biasNaturalRegen, biasPlantation = regression$biasPlantation,
-                mae = regression$mae, maeNaturalRegen = regression$maeNaturalRegen, maePlantation = regression$maePlantation,
-                rmse = regression$rmse, rmseNaturalRegen = regression$rmseNaturalRegen, rmsePlantation = regression$rmsePlantation,
-                nse = regression$nse, nseNaturalRegen = regression$nseNaturalRegen, nsePlantation = regression$nsePlantation,
-                pearson = regression$pearson, pearsonNaturalRegen = regression$pearsonNaturalRegen, pearsonPlantation = regression$pearsonPlantation,
-                aic = regression$aic, bic = regression$bic, power = power, powerPlantation = powerPlantation,
-                fitting = class(regression)[1], n = sum(is.na(regression$residuals) == FALSE), significant = significant, 
-                adaptiveWeightFraction = regression$adaptiveWeightFraction, maxResidual = residuals[which.max(abs(residuals))]))
+  residuals = residuals(model)
+  return(tibble(name = model$name, 
+                fitting = class(model)[1], n = sum(is.na(residuals) == FALSE), significant = model$significant, fixedWeight = fixedWeight,
+                aic = model$aic, aicN = model$aic / nobs(model), aict = model$aict,
+                bic = model$bic, bict = model$bict,
+                bias = model$bias, biasNaturalRegen = model$biasNaturalRegen, biasPlantation = model$biasPlantation,
+                mab = model$mab, mapb = model$mapb,
+                mae = model$mae, maeNaturalRegen = model$mapeNaturalRegen, maePlantation = model$mapePlantation,
+                mape = model$mape, mapeNaturalRegen = model$mapeNaturalRegen, mapePlantation = model$mapePlantation,
+                nse = model$nse, nseNaturalRegen = model$nseNaturalRegen, nsePlantation = model$nsePlantation,
+                pearson = model$pearson, pearsonNaturalRegen = model$pearsonNaturalRegen, pearsonPlantation = model$pearsonPlantation,
+                rmse = model$rmse, rmseNaturalRegen = model$rmseNaturalRegen, rmsePlantation = model$rmsePlantation,
+                rmspe = model$rmspe,
+                power = power, powerPlantation = powerPlantation,
+                adaptiveWeightFraction = model$adaptiveWeightFraction, maxResidual = residuals[which.max(abs(residuals))]))
 }
 
 confint_nlrob = function(regression, level = 0.99, df = df.residual(regression), weights = regression$weights)
@@ -92,6 +104,77 @@ confint_nlrob = function(regression, level = 0.99, df = df.residual(regression),
   colnames(confidenceInterval) = sprintf("%g%%", 100*levels)
   rownames(confidenceInterval) = names(parameterValues)
   return(confidenceInterval)
+}
+
+# wrap calls to fitting functions for consistency of arguments and use of get_*_error()
+# This is a little fragile from a code maintenance perspective as the weights need to be column in data for R to flow them
+# correctly but the risk appears low and worth the simplification elsewhere.
+fit_gam = function(name, formula, data, start, tDegreesOfFreedom = 8, control = gsl_nls_control(), significant = TRUE)
+{
+  if (formula[2] == "TotalHt()")
+  {
+    model = gam(formula = formula, data = data, method = "REML", select = TRUE, weights = dbhWeight)
+    model = get_height_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  else
+  {
+    stopifnot("Expected response variable to be DBH." = formula[2] == "DBH()")
+    model = gam(formula = formula, data = data, method = "REML", select = TRUE, weights = heightWeight)
+    model = get_dbh_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  
+  return(model)
+}
+
+fit_gsl_nls = function(name, formula, data, start, tDegreesOfFreedom = 8, control = gsl_nls_control(), significant = TRUE)
+{
+  if (formula[2] == "TotalHt()")
+  {
+    model = gsl_nls(fn = formula, data = data, start = start, weights = dbhWeight, control = control)
+    model = get_height_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  else
+  {
+    stopifnot("Expected response variable to be DBH." = formula[2] == "DBH()")
+    model = gsl_nls(fn = formula, data = data, start = start, weights = heightWeight, control = control)
+    model = get_dbh_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  
+  return(model)
+}
+
+fit_lm = function(name, formula, data, tDegreesOfFreedom = 8, significant = TRUE)
+{
+  if (formula[2] == "TotalHt()")
+  {
+    model = lm(formula = formula, data = data, offset = breastHeight, weights = dbhWeight)
+    model = get_height_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  else
+  {
+    stopifnot("Expected response variable to be DBH." = formula[2] == "DBH()")
+    model = lm(formula = formula, data = data, weights = heightWeight)
+    model = get_dbh_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  
+  return(model)
+}
+
+fit_nlrob = function(name, formula, data, start, tDegreesOfFreedom = 8, control = nls.control(), maxit = 20, significant = TRUE)
+{
+  if (formula[2] == "TotalHt()")
+  {
+    model = nlrob(formula = formula, data = data, maxit = maxit, start = start, weights = dbhWeight, control = control)
+    model = get_height_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  else
+  {
+    stopifnot("Expected response variable to be DBH." = formula[2] == "DBH()")
+    model = nlrob(formula = formula, data = data, maxit = maxit, start = start, weights = heightWeight, control = control)
+    model = get_dbh_error(name = name, model = model, data = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+  }
+  
+  return(model)
 }
 
 get_coefficients = function(regression)
@@ -151,89 +234,152 @@ get_coefficients = function(regression)
   return(coefficients)
 }
 
-get_dbh_error = function(name, regression, data, dataNaturalRegen, dataPlantation)
+get_dbh_error = function(name, model, data, significant = TRUE, tDegreesOfFreedom = 8, weights = data$heightWeight)
 {
-  regression$name = name
-  regression$fitted.values = predict(regression, data)
-  regression$residuals = data$DBH - regression$fitted.values
-  regression$adaptiveWeightFraction = 0
-  if (class(regression)[1] == "nlrob")
+  model$name = name
+  model$adaptiveWeightFraction = 0
+  if (class(model)[1] == "nlrob")
   {
-    regression$adaptiveWeightFraction = sum(regression$rweights != 1) / regression$nobs
+    model$adaptiveWeightFraction = sum(model$rweights != 1) / nobs(model)
+  }
+  if (is.null(model$weights))
+  {
+    # if weights aren't set, capture them (needed for nlrob(), not needed by lm(), gam(), gsl_nls()), nls())
+    model$weights = weights
   }
 
-  regression$aic = AIC(regression)
-  regression$bias = mean(regression$residuals)
-  regression$bic = BIC(regression)
-  regression$mae = mean(abs(regression$residuals))
-  regression$nse = 1 - sum(regression$residuals^2) / sum((data$DBH - mean(data$DBH))^2)
-  regression$pae = 100 * mean(abs(regression$residuals / data$DBH))
-  regression$pearson = cor(regression$fitted.values, data$DBH)
-  regression$rmse = sqrt(mean(regression$residuals^2))
+  fittedValues = predict(model, data)
+  residuals = fittedValues - data$DBH
+  errorByHeightClass = tibble(heightClass = 1*floor(data$TotalHt/1) + 0.5*1, dbh = data$DBH, residual = residuals) %>%
+    group_by(heightClass) %>%
+    summarize(n = n(),
+              meanBiasPerTree = sum(residual) / n,
+              meanBiasPerTreePct = 100 * sum(residual / dbh) / n,
+              .groups = "drop") %>%
+    filter(n >= 10)
   
-  dbhNaturalRegen = predict(regression, dataNaturalRegen)
+  effectiveDegreesOfFreedom = length(coef(model)) + 1 # for linear and nonlinear regressions assume one degree of freedom per model parameter
+  if (is.null(model$edf) == FALSE)
+  {
+    effectiveDegreesOfFreedom = sum(model$edf) + 1 # for GAMs use indicated effective degrees of freedom
+  }
+
+  standardDeviation = sqrt(1/df.residual(model) * sum(weights * residuals^2)) / sqrt(weights)
+  logLikelihoodGaussian = sum(dnorm(residuals, sd = standardDeviation, log = TRUE))
+  logLikelihoodT = sum(dt(residuals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
+  
+  # logLik.lm() (https://github.com/wch/r-source/blob/trunk/src/library/stats/R/logLik.R)
+  #  log likelihood = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(w*res^2))))
+  # logLik.nls() (https://github.com/wch/r-source/blob/trunk/src/library/stats/R/nls.R)
+  #  log likelihood = -N/2 * (log(2 * pi) + 1 - log(N) - sum(log(w + zw))/N + log(sum(regression$m$resid()^2)))
+  #                 = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(regression$m$resid()^2)))) if no weights are zero
+  model$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # calculate AIC and BIC manually because nlrob objects implement weighting differently from nls and gslnls
+  model$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
+  model$bias = mean(residuals)
+  model$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nobs(model))
+  model$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nobs(model))
+  model$mae = mean(abs(residuals))
+  model$mab = sum(errorByHeightClass$n * abs(errorByHeightClass$meanBiasPerTree)) / sum(errorByHeightClass$n)
+  model$mapb = sum(errorByHeightClass$n * abs(errorByHeightClass$meanBiasPerTreePct)) / sum(errorByHeightClass$n)
+  model$mape = 100 * mean(abs(residuals / data$DBH))
+  model$nse = 1 - sum(residuals^2) / sum((data$DBH - mean(data$DBH))^2)
+  model$pearson = cor(fittedValues, data$DBH)
+  model$rmse = sqrt(mean(residuals^2))
+  model$rmspe = 100 * sqrt(mean((residuals / data$DBH)^2))
+  model$significant = significant
+  
+  dataNaturalRegen = data %>% filter(isPlantation == FALSE)
+  dbhNaturalRegen = predict(model, dataNaturalRegen)
   residualsNaturalRegen = dbhNaturalRegen - dataNaturalRegen$DBH
-  regression$biasNaturalRegen = mean(residualsNaturalRegen)
-  regression$maeNaturalRegen = mean(abs(residualsNaturalRegen))
-  regression$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((dataNaturalRegen$DBH - mean(dataNaturalRegen$DBH))^2)
-  regression$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / dataNaturalRegen$DBH))
-  regression$pearsonNaturalRegen = cor(residualsNaturalRegen, dataNaturalRegen$DBH)
-  regression$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
+  model$biasNaturalRegen = mean(residualsNaturalRegen)
+  model$maeNaturalRegen = mean(abs(residualsNaturalRegen))
+  model$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((dataNaturalRegen$DBH - mean(dataNaturalRegen$DBH))^2)
+  model$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / dataNaturalRegen$DBH))
+  model$pearsonNaturalRegen = cor(residualsNaturalRegen, dataNaturalRegen$DBH)
+  model$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
   
-  dbhPlantation = predict(regression, dataPlantation)
+  dataPlantation = data %>% filter(isPlantation)
+  dbhPlantation = predict(model, dataPlantation)
   residualsPlantation = dbhPlantation - dataPlantation$DBH
-  regression$biasPlantation = mean(residualsPlantation)
-  regression$maePlantation = mean(abs(residualsPlantation))
-  regression$nsePlantation = 1 - sum(residualsPlantation^2) / sum((dataPlantation$DBH - mean(dataPlantation$DBH))^2)
-  regression$paePlantation = 100 * mean(abs(residualsPlantation / dataPlantation$DBH))
-  regression$pearsonPlantation = cor(residualsPlantation, dataPlantation$DBH)
-  regression$rmsePlantation = sqrt(mean(residualsPlantation^2))
+  model$biasPlantation = mean(residualsPlantation)
+  model$maePlantation = mean(abs(residualsPlantation))
+  model$nsePlantation = 1 - sum(residualsPlantation^2) / sum((dataPlantation$DBH - mean(dataPlantation$DBH))^2)
+  model$paePlantation = 100 * mean(abs(residualsPlantation / dataPlantation$DBH))
+  model$pearsonPlantation = cor(residualsPlantation, dataPlantation$DBH)
+  model$rmsePlantation = sqrt(mean(residualsPlantation^2))
   
-  return(regression)
+  return(model)
 }
 
-get_height_error = function(name, regression, data, dataNaturalRegen, dataPlantation)
+get_height_error = function(name, model, data, significant = TRUE, tDegreesOfFreedom = 8, weights = data$dbhWeight)
 {
-  regression$name = name
-  regression$fitted.values = predict(regression, data)
-  if (is.null(regression$residuals))
+  model$name = name
+  model$adaptiveWeightFraction = 0
+  if (class(model)[1] == "nlrob")
   {
-    regression$residuals = data$TotalHt - regression$fitted.values
+    model$adaptiveWeightFraction = sum(model$rweights != 1) / nobs(model)
   }
-  regression$adaptiveWeightFraction = 0
-  if (class(regression)[1] == "nlrob")
+  if (is.null(model$weights))
   {
-    regression$adaptiveWeightFraction = sum(regression$rweights != 1) / regression$nobs
+    model$weights = weights
   }
+
+  dbhClassSize = 10 # cm
+  fittedValues = predict(model, data)
+  residuals = fittedValues - data$TotalHt
+  errorByDbhClass = tibble(dbhClass = dbhClassSize*floor(data$DBH/dbhClassSize) + 0.5*dbhClassSize, height = data$TotalHt, residual = residuals) %>%
+    group_by(dbhClass) %>%
+    summarize(n = n(),
+              meanBiasPerTree = sum(residual) / n,
+              meanBiasPerTreePct = 100 * sum(residual / height) / n,
+              .groups = "drop") %>%
+    filter(n >= 10)
+
+  effectiveDegreesOfFreedom = length(coef(model)) + 1
+  if (is.null(model$edf) == FALSE)
+  {
+    effectiveDegreesOfFreedom = sum(model$edf) + 1
+  }
+  standardDeviation = sqrt(1/df.residual(model) * sum(weights * residuals^2)) / sqrt(weights)
+  logLikelihoodGaussian = sum(dnorm(residuals, sd = standardDeviation, log = TRUE))
+  logLikelihoodT = sum(dt(residuals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
   
-  regression$aic = AIC(regression)
-  regression$bias = mean(regression$residuals)
-  regression$bic = BIC(regression)
-  regression$mae = mean(abs(regression$residuals))
-  regression$nse = 1 - sum(regression$residuals^2) / sum((data$TotalHt - mean(data$TotalHt))^2)
-  regression$pae = 100 * mean(abs(regression$residuals / data$TotalHt))
-  regression$pearson = cor(regression$fitted.values, data$TotalHt)
-  regression$rmse = sqrt(mean(regression$residuals^2))
-  
-  heightNaturalRegen = predict(regression, dataNaturalRegen)
+  model$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # see get_dbh_error(): same nlrob issue
+  model$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
+  model$bias = mean(residuals)
+  model$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nobs(model))
+  model$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nobs(model))
+  model$mab = sum(errorByDbhClass$n * abs(errorByDbhClass$meanBiasPerTree)) / sum(errorByDbhClass$n)
+  model$mapb = sum(errorByDbhClass$n * abs(errorByDbhClass$meanBiasPerTreePct)) / sum(errorByDbhClass$n)
+  model$mae = mean(abs(residuals))
+  model$mape = 100 * mean(abs(residuals / data$TotalHt))
+  model$nse = 1 - sum(residuals^2) / sum((data$TotalHt - mean(data$TotalHt))^2)
+  model$pearson = cor(fittedValues, data$TotalHt)
+  model$rmse = sqrt(mean(residuals^2))
+  model$rmspe = 100 * sqrt(mean((residuals / data$TotalHt)^2))
+  model$significant = significant
+                          
+  dataNaturalRegen = data %>% filter(isPlantation == FALSE)
+  heightNaturalRegen = predict(model, dataNaturalRegen)
   residualsNaturalRegen = heightNaturalRegen - dataNaturalRegen$TotalHt
-  regression$biasNaturalRegen = mean(residualsNaturalRegen)
-  regression$maeNaturalRegen = mean(abs(residualsNaturalRegen))
-  regression$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((dataNaturalRegen$TotalHt - mean(dataNaturalRegen$TotalHt))^2)
-  regression$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / dataNaturalRegen$TotalHt))
-  regression$pearsonNaturalRegen = cor(residualsNaturalRegen, dataNaturalRegen$TotalHt)
-  regression$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
+  model$biasNaturalRegen = mean(residualsNaturalRegen)
+  model$maeNaturalRegen = mean(abs(residualsNaturalRegen))
+  model$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((dataNaturalRegen$TotalHt - mean(dataNaturalRegen$TotalHt))^2)
+  model$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / dataNaturalRegen$TotalHt))
+  model$pearsonNaturalRegen = cor(residualsNaturalRegen, dataNaturalRegen$TotalHt)
+  model$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
   
-  heightPlantation = predict(regression, dataPlantation)
+  dataPlantation = data %>% filter(isPlantation)
+  heightPlantation = predict(model, dataPlantation)
   residualsPlantation = heightPlantation - dataPlantation$TotalHt
-  regression$biasPlantation = mean(residualsPlantation)
-  regression$maePlantation = mean(abs(residualsPlantation))
-  regression$nsePlantation = 1 - sum(residualsPlantation^2) / sum((dataPlantation$TotalHt - mean(dataPlantation$TotalHt))^2)
-  regression$paePlantation = 100 * mean(abs(residualsPlantation / dataPlantation$TotalHt))
-  regression$pearsonPlantation = cor(residualsPlantation, dataPlantation$TotalHt)
-  regression$rmsePlantation = sqrt(mean(residualsPlantation^2))
+  model$biasPlantation = mean(residualsPlantation)
+  model$maePlantation = mean(abs(residualsPlantation))
+  model$nsePlantation = 1 - sum(residualsPlantation^2) / sum((dataPlantation$TotalHt - mean(dataPlantation$TotalHt))^2)
+  model$paePlantation = 100 * mean(abs(residualsPlantation / dataPlantation$TotalHt))
+  model$pearsonPlantation = cor(residualsPlantation, dataPlantation$TotalHt)
+  model$rmsePlantation = sqrt(mean(residualsPlantation^2))
   
-  return(regression)
+  return(model)
 }
 
 impute_basal_area = function(Species, heightInM, isPlantation)
@@ -247,7 +393,8 @@ impute_basal_area = function(Species, heightInM, isPlantation)
                          OM = 1.3558236 * (exp(0.0001969 * (heightInM - 1.37)^(2.0561921 - 0.2726091 * isPlantation)) - 1),
                          RC = 3.445860e+02 * (exp(0.0001969 * (heightInM - 1.37)^(6.923252e-07 - 2.181920e+00 * isPlantation)) - 1),
                          .default = 1.828744e+02 * (exp(5.045842e-07 * (heightInM - 1.37)^(2.306458e+00 - 1.884820e-01 * isPlantation)) - 1))
-  return(replace_na(basalAreaInM2, 0.25 * pi * (0.01 * 2.54)^2)) # assume any tree without a height is 2.54 cm DBH
+  basalAreaInM2 = if_else(basalAreaInM2 < 0.25 * pi * (0.01 * 2.54)^2, 0.25 * pi * (0.01 * 2.54)^2, basalAreaInM2) # clamp regressions to minimum cruised basal area: blocks implied negative DBHes
+  return(replace_na(basalAreaInM2, 0.25 * pi * (0.01 * 10)^2)) # assume any tree without a height is 10 cm DBH
 }
 
 impute_height = function(Species, DBH, isPlantation)
@@ -364,56 +511,56 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
   heightColors = viridis::viridis_pal(option = "plasma", end = 0.9)(4)
   dbhColors = viridis::viridis_pal(end = 0.9)(4)
   qqPlot = ggplot() +
-      geom_qq_line(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.4) +
-      geom_qq(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.8, geom = "line") +
+      geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.4) +
+      geom_qq(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.8, geom = "line") +
       annotate("text", x = -10.5, y = 160, label = paste0("'a) ", speciesName, " height, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
       coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
       labs(x = NULL, y = "sample quantile", color = NULL) +
       scale_color_manual(values = heightColors) +
       theme(legend.key.height = unit(0.8, "line"), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
     ggplot() +
-      geom_qq_line(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.4) +
-      geom_qq(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.8, geom = "line") +
+      geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.4) +
+      geom_qq_line(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.4) +
+      geom_qq(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.8, geom = "line") +
+      geom_qq(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.8, geom = "line") +
       annotate("text", x = -10.5, y = 160, label = paste0("'b) ", speciesName, " DBH, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
       coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
       labs(x = NULL, y = NULL, color = NULL) +
       scale_color_manual(values = dbhColors) +
       theme(legend.key.height = unit(0.8, "line"),legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
     ggplot() +
-      geom_qq_line(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq_line(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq_line(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq_line(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq(aes(sample = diameterRegression1$residuals, color = diameterRegression1$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      geom_qq(aes(sample = diameterRegression2$residuals, color = diameterRegression2$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      geom_qq(aes(sample = diameterRegression3$residuals, color = diameterRegression3$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      geom_qq(aes(sample = diameterRegression4$residuals, color = diameterRegression4$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq_line(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq_line(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+      geom_qq(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+      geom_qq(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
       annotate("text", x = -10.5, y = 160, label = paste0("'c) ", speciesName, " height, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
       coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
       labs(x = "theoretical quantile", y = "sample quantile", color = NULL) +
       scale_color_manual(values = heightColors) +
       theme(legend.justification = c(1, 0), legend.position = "none") +
     ggplot() + # qst()'s omega (scale) parameter can be left as 1 as its only effect is rotation, xi (location) can be left as zero as its only effect is a translation in theoretical quantile
-      geom_qq_line(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq_line(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq_line(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq_line(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq(aes(sample = heightRegression1$residuals, color = heightRegression1$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      geom_qq(aes(sample = heightRegression2$residuals, color = heightRegression2$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      geom_qq(aes(sample = heightRegression3$residuals, color = heightRegression3$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      geom_qq(aes(sample = heightRegression4$residuals, color = heightRegression4$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq_line(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq_line(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+      geom_qq(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+      geom_qq(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
       annotate("text", x = -10.5, y = 160, label = paste0("'d) ", speciesName, " DBH, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ", '*alpha*' = ", tSkew, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
       coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
       labs(x = "theoretical quantile", y = NULL, color = NULL) +
@@ -450,7 +597,9 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          Ht2 = na_if(0.3048 * Ht2, 0),
          TotalHt = na_if(0.3048 * TotalHt, 0),
          basalArea = 0.25 * pi * (0.01*DBH)^2, # m² 
-         breastHeight = 1.37,
+         breastHeight = 1.37, # m, used for offset in lm() height regressions
+         dbhWeightDefault = DBH^-1,
+         heightWeightDefault = TotalHt^-2,
          isPlantation = standAge2020 < 75,
          SampleFactor = 2.47105 * SampleFactor, # trees per acre to trees per hectare
          standArea = 0.404686 * GrossAc,  # ac to ha
@@ -458,31 +607,30 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          treeBasalAreaPerHectare = SampleFactor * if_else(SamplingMethod == "BAF", 0.092903, basalArea), # m²/ha, conversion factor is either 2.47105 * 0.092903 = 0.229568 m²/ha / ft²/ac or 2.47105 ac/ha
          heightDiameterRatio = TotalHt / (0.01 * DBH), # (DBH conversion from cm to m)
          imputedHeight = if_else(is.na(TotalHt) == FALSE, TotalHt, if_else(is.na(DBH) == FALSE, impute_height(Species, DBH, isPlantation), NA_real_)), # where possible, perform basic height imputation
-         quasiBasalArea = SampleFactor * if_else(SamplingMethod == "BAF", 0.092903, impute_basal_area(Species, TotalHt, isPlantation))) %>% # m², stack basal area regression on height regression when possible; BAF has to be used with prism trees
+         treeBasalAreaPerHectareApprox = SampleFactor * if_else(SamplingMethod == "BAF", 0.092903, impute_basal_area(Species, TotalHt, isPlantation))) %>% # m²/ha, stack basal area regression on height regression when possible; BAF has to be used with prism trees
   select(-GrossAc) %>%
   group_by(PlotID) %>%
   mutate(plotTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * SampleFactor),
          plotTreesWithDbh = sum(if_else(is.na(DBH), 0, SampleFactor)),
          plotContributionToStandBasalArea = 0,
          plotContributionToStandBasalArea = replace(plotContributionToStandBasalArea, 1, sum(treeBasalAreaPerHectare)),
-         plotContributionToStandQuasiBasalArea = 0,
-         plotContributionToStandQuasiBasalArea = replace(plotContributionToStandQuasiBasalArea, 1, sum(quasiBasalArea))) %>%
+         plotContributionToStandApproxBasalArea = 0,
+         plotContributionToStandApproxBasalArea = replace(plotContributionToStandApproxBasalArea, 1, sum(treeBasalAreaPerHectareApprox))) %>%
   group_by(StandID) %>%
-  arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>%
+  arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>% # put largest diameter live trees first in each stand for calculating BAL (numbers sort before NA)
   mutate(plotsInStand = length(unique(PlotID)),
          standBasalAreaPerHectare = sum(plotContributionToStandBasalArea) / plotsInStand, # m²/ha
-         standQuasiBasalArea = sum(plotContributionToStandQuasiBasalArea) / plotsInStand,
+         standBasalAreaApprox = sum(plotContributionToStandApproxBasalArea) / plotsInStand, # m²/ha
          basalAreaLarger = (cumsum(isLiveUnbroken * treeBasalAreaPerHectare) - treeBasalAreaPerHectare[1]) / plotsInStand, # m²/ha
-         tphContribution = SampleFactor / plotsInStand,
-         tph = sum(tphContribution)) %>%
-  arrange(desc(isLiveUnbroken), desc(imputedHeight), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand (numbers sort before NA)
-  mutate(remainingTopHeightTph = 100 - cumsum(tphContribution), # remaining TPH contribution to H100 definition of top height, non-negative (positive or zero) values lead to a tree having a weight of 1
-         remainingTopHeightFraction = (tphContribution + remainingTopHeightTph) / remainingTopHeightTph,
-         topHeightWeight = if_else(remainingTopHeightFraction >= 1, 1, if_else(remainingTopHeightFraction > 0, remainingTopHeightFraction, 0)), # clamp remaining fraction to [0, 1] to get indiviudal trees' contributions to the top height average
-         topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight), # m, tallest 100 trees per hectare
-         topHeight = if_else(is.na(topHeight), mean(if_else(row_number() < 100 * standArea / standSampleFactor, imputedHeight, NA_real_), na.rm = TRUE), topHeight), # fall back to imputed heights if no trees in stand were measured for height
-         relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees
-         tallerQuasiBasalArea = (cumsum(isLiveUnbroken * quasiBasalArea) - quasiBasalArea[1]) / plotsInStand,
+         treeTphContribution = SampleFactor / plotsInStand, # trees per hectare
+         tph = sum(treeTphContribution)) %>% # stand trees per hectare
+  arrange(desc(isLiveUnbroken), desc(imputedHeight), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
+  mutate(remainingTopHeightTph = pmax(100 - cumsum(if_else(is.na(TotalHt), 0, treeTphContribution)), 0), # remaining TPH contribution to H100 definition of top height, trees not measured for TotalHt are skipped
+         remainingTopHeightFraction = remainingTopHeightTph / treeTphContribution,
+         topHeightWeight = if_else(remainingTopHeightFraction >= 1, 1, if_else(remainingTopHeightFraction > 0, remainingTopHeightFraction, 0)), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
+         topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum((is.na(TotalHt) == FALSE) * topHeightWeight), # m, tallest 100 trees per hectare
+         relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees (debatable if imputed heights should be included but, for now, trees not measured for height are left with NA relative height)
+         tallerApproxBasalArea = (cumsum(isLiveUnbroken * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
          tallerTph = cumsum(isLiveUnbroken * SampleFactor) / plotsInStand) %>% 
   ungroup()
 
@@ -491,11 +639,11 @@ liveUnbrokenTrees2016 = trees2016 %>% filter(isLiveUnbroken) %>%
          speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")))
 
 #print(trees2016 %>% filter(is.na(elevation)) %>% group_by(PlotID) %>% summarize(trees = n(), .groups = "drop"), n = 51)
-#ggplot(trees2016) + geom_histogram(aes(x = standQuasiBasalArea))
+#ggplot(trees2016) + geom_histogram(aes(x = standBasalAreaApprox))
 
-#print(tibble(tphContribution = rep(25.5, 30) / 5) %>% 
-#        mutate(remainingTph = 100 - cumsum(tphContribution),
-#               remainingFraction = (tphContribution + remainingTph) / tphContribution,
+#print(tibble(treeTphContribution = rep(25.5, 30) / 5) %>% 
+#        mutate(remainingTph = 100 - cumsum(treeTphContribution),
+#               remainingFraction = (treeTphContribution + remainingTph) / treeTphContribution,
 #               weight = if_else(remainingFraction >= 1, 1, if_else(remainingFraction > 0, remainingFraction, 0))),
 #      n = 40)
 
@@ -553,6 +701,36 @@ ggplot(trees2016 %>% filter(CompCode == "OS", BHAge > 0) %>% group_by(StandID) %
   scale_x_continuous(breaks = seq(1, 10)) +
   scale_y_continuous(breaks = seq(0, 100, by = 10))
 
+# ranges of predictor variables
+print(liveUnbrokenTrees2016 %>% group_by(speciesGroup) %>% 
+  summarize(quantile = c(0, 0.5, 1), 
+            dbh = quantile(DBH, quantile, na.rm = TRUE),
+            height = quantile(TotalHt, quantile, na.rm = TRUE),
+            tph = quantile(tph, quantile, na.rm = TRUE),
+            ba = quantile(standBasalAreaPerHectare, quantile, na.rm = TRUE),
+            bal = quantile(basalAreaLarger, quantile, na.rm = TRUE),
+            aa = quantile(standBasalAreaApprox, quantile, na.rm = TRUE),
+            aat = quantile(tallerApproxBasalArea, quantile, na.rm = TRUE),
+            elevation = quantile(elevation, quantile, na.rm = TRUE),
+            slope = quantile(slope, quantile, na.rm = TRUE),
+            aspect = quantile(aspect, quantile, na.rm = TRUE),
+            tsi = quantile(topographicShelterIndex, quantile, na.rm = TRUE),
+            topHt = quantile(topHeight, quantile, na.rm = TRUE),
+            relHt = quantile(relativeHeight, quantile, na.rm = TRUE),
+            .groups = "drop"),
+  n = 25)
+
+ggplot(liveUnbrokenTrees2016) + # lower violin in pair is for plantations
+  geom_violin(aes(x = relativeHeight, y = speciesGroup, color = speciesGroup), draw_quantiles = c(0.25, 0.5, 0.75), na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 3)) +
+  ggh4x::facet_nested(rows = vars(speciesGroup, factor(isPlantation, levels = c(FALSE, TRUE), labels = c("natural regen", "plantation"))), labeller = label_wrap_gen(width = 15), scales = "free_y", switch = "y") +
+  guides(color = "none") +
+  labs(x = "relative height", y = NULL, color = NULL) +
+  scale_color_manual(breaks = levels(liveUnbrokenTrees2016$speciesGroup), limits = levels(liveUnbrokenTrees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+  scale_y_discrete(labels = NULL) +
+  theme(strip.background = element_blank(), strip.placement = "outside", strip.text.y.left = element_text(angle = 0))
+
+
 ## Douglas-fir site index regression: not enough data for other species
 # site species  number of stands
 # PSME          412
@@ -576,7 +754,7 @@ psmeSiteIndexModelNonlinear = nls(Cruised_Si ~ b0 + b1*Elev_Mean^b2 + b3*SlopeMe
 c(linear = AIC(psmeSiteIndexModelLinear), nonlinear = AIC(psmeSiteIndexModelNonlinear))
 
 ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
-  geom_point(aes(x = Cruised_Si, y = psmeSiteIndexModelLinear$fitted.values, color = planted), alpha = 0.3) +
+  geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelLinear), color = planted), alpha = 0.3) +
   labs(x = "measured 50-year site index, feet", y = "linear model prediction, feet", color = NULL) +
   theme(legend.position = "none") +
 ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
@@ -586,7 +764,7 @@ ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70",
   theme(legend.justification = c(1, 0), legend.position = c(0.98, 0.02))
 
 ggplot(psmeStands2022) +
-  geom_point(aes(x = Cruised_Si, y = -psmeSiteIndexModelLinear$residuals, color = planted), alpha = 0.3, shape = 16) +
+  geom_point(aes(x = Cruised_Si, y = -residuals(psmeSiteIndexModelLinear), color = planted), alpha = 0.3, shape = 16) +
   labs(x = "measured 50-year site index, feet", y = "linear model error, feet", color = NULL) +
   theme(legend.position = "none") +
 ggplot(psmeStands2022) +

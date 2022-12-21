@@ -1,176 +1,114 @@
 # load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
 
 ## minority species height-diameter regression form sweep
-#otherHeightFromDiameterChapmanRichardsBal = nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 43.0, a1p = 13.5, a2 = 0.46, a3 = 0.082, b1 = -0.00867, b2 = 0.875), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), control = list(maxiter = 50)) # a1p not significant
-#otherHeightFromDiameterChapmanRichardsBal = nls(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), other2016, start = list(a1 = 43.0, a2 = 0.46, a3 = 0.082, b1 = -0.00867, b2 = 0.875, b2p = 0), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), control = list(maxiter = 500)) # > 500 iterations
-#otherHeightFromDiameterChapmanRichardsBal = nls(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 89.3, a2 = 1.166, a2p = 0, a3 = -0.039, a3p = 0, b1 = -0.00544, b2 = 0.873), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a2p, a3p not significant
-#otherHeightFromDiameterSharmaZhang = nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), other2016, start = list(a1 = 58.1, a1p = -47.4, a2 = 0.162, a2p = 0.032, b1 = -0.021, b1p = -0.222, b2 = -0.292, b2p = 0.036, b3 = 0.818, b3p = 0.165), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1))
-#otherHeightFromDiameterSibbesen = nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.714, a1p = 0.088, b1 = 1.172, b2 = -0.074, b2p = -0.0040), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b2p not significant
-other2016 = trees2016 %>% filter((Species %in% c("DF", "RA", "WH", "BM", "OM", "RC")) == FALSE, isLiveUnbroken, TotalHt > 0) # live western redcedars measured for height
-other2016natural = other2016 %>% filter(isPlantation == FALSE)
+#otherHeightFromDiameter$chapmanRichardsBal = gsl_nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 43.0, a1p = 13.5, a2 = 0.46, a3 = 0.082, b1 = -0.00867, b2 = 0.875), weights = dbhWeight, control = list(maxiter = 50)) # a1p not significant
+#otherHeightFromDiameter$chapmanRichardsBal = gsl_nls(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), other2016, start = list(a1 = 43.0, a2 = 0.46, a3 = 0.082, b1 = -0.00867, b2 = 0.875, b2p = 0), weights = dbhWeight, control = list(maxiter = 500)) # > 500 iterations
+#otherHeightFromDiameter$chapmanRichardsBal = gsl_nls(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 89.3, a2 = 1.166, a2p = 0, a3 = -0.039, a3p = 0, b1 = -0.00544, b2 = 0.873), weights = dbhWeight) # a2p, a3p not significant
+#otherHeightFromDiameter$sharmaZhang = gsl_nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), other2016, start = list(a1 = 58.1, a1p = -47.4, a2 = 0.162, a2p = 0.032, b1 = -0.021, b1p = -0.222, b2 = -0.292, b2p = 0.036, b3 = 0.818, b3p = 0.165), weights = dbhWeight)
+#otherHeightFromDiameter$sibbesen = gsl_nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.714, a1p = 0.088, b1 = 1.172, b2 = -0.074, b2p = -0.0040), weights = dbhWeight) # a1p, b2p not significant
+other2016 = trees2016 %>% filter((Species %in% c("DF", "RA", "WH", "BM", "OM", "RC")) == FALSE, isLiveUnbroken, TotalHt > 0) %>%
+  mutate(dbhWeight = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1),
+         heightWeight = pmin(TotalHt^-2.4, 0.5))
 other2016physio = other2016 %>% filter(is.na(elevation) == FALSE)
-other2016plantation = other2016 %>% filter(isPlantation)
-other2016plantationPhysio = other2016physio %>% filter(isPlantation)
+other2016gamConstraint = c(DBH = -1.4359/0.8154, TotalHt = 1.37, standBasalAreaPerHectare = median(other2016$standBasalAreaPerHectare), basalAreaLarger = median(other2016$basalAreaLarger), standBasalAreaApprox = median(other2016$standBasalAreaApprox), tallerApproxBasalArea = median(other2016$tallerApproxBasalArea), elevation = median(other2016physio$elevation), slope = median(other2016physio$slope), aspect = median(other2016physio$aspect), topographicShelterIndex = median(other2016physio$topographicShelterIndex), relativeHeight = median(other2016$relativeHeight)) # point constraint for mgcv::s()
+#other2016natural = other2016 %>% filter(isPlantation == FALSE)
+#other2016plantation = other2016 %>% filter(isPlantation)
+#other2016plantationPhysio = other2016physio %>% filter(isPlantation)
 #otherConifer2016 = other2016 %>% filter(Species %in% c("XX", "CX", "SS", "PC", "PY", "GF", "LP"))
 #otherHardwood2016 = other2016 %>% filter(Species %in% c("CA", "HX", "CH", "PM", "GC", "PD", "TO", "WI", "OA", "WO"))
 
-otherHeightFromDiameterChapmanRichards = nlrob(TotalHt ~ 1.37 + a1*(1 - exp((b1 + b1p * isPlantation) * DBH))^b2, other2016, start = list(a1 = 24.7, b1 = -0.033, b1p = -0.003, b2 = 1.000), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b2p not significant
-otherHeightFromDiameterChapmanRichardsBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 81.9, a2 = 1.97, a3 = -1.23, b1 = -0.006, b2 = 0.881), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), control = list(maxiter = 50)) # a1p, a2p, a2, a3p, a3, b1p, b2p not significant
-otherHeightFromDiameterChapmanRichardsBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex) * (1 - exp(b1*DBH))^b2, other2016physio, start = list(a1 = 28.5, a2 = 0.286, a4 = -0.011, a5 = -0.096, a6 = -0.602, a7 = 0.661, a8 = -0.176, b1 = -0.022, b2 = 0.908), maxit = 50, weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, a2p, a3, a5, a6, a7, a8, b1p, b2p not significant
-otherHeightFromDiameterChapmanRichardsBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), other2016, start = list(a1 = -1.16, a2 = -0.05, a3 = 0.07, a3p = 0.09, a4 = 16.6, a4p = -6.7, b1 = -0.05, b2 = 0.28, b2p = 0.131), maxit = 50, weights = pmin(DBH^if_else(isPlantation, -1.1, -1.94), 1)) # a2, a2p, a3, b1p not significant, fails to converge with natural regen weight power of -1.95 or higher
-otherHeightFromDiameterChapmanRichardsPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation) * DBH))^b2, other2016physio, start = list(a1 = 27.0, a4 = -0.015, a5 = -0.025, a6 = 0.276, a7 = -0.514, a8 = -0.122, b1 = -0.037, b1p = -0.006, b2 = 0.999), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b2p not significant
-otherHeightFromDiameterCurtis = nlrob(TotalHt ~ 1.37 + a1*DBH / (1 + DBH)^b1, other2016, start = list(a1 = 1.086, b1 = 0.190), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p not significant
-otherHeightFromDiameterGam = gam(TotalHt ~ s(DBH, by = as.factor(isPlantation)), data = other2016)
-otherHeightFromDiameterGamBal = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation)), data = other2016)
-#otherHeightFromDiameterGamBalPhysio = gam(TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation)) + s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = other2016physio) # insufficient data for single isotropic smooth (s()), tensor product (te() + te()) impractically slow (>2 h, Zen 3 @ 3.4 GHz)
-otherHeightFromDiameterGamPhysio = gam(TotalHt ~ s(DBH, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = other2016physio)
-otherHeightFromDiameterHossfeld = nlrob(TotalHt ~ 1.37 + a1 / (1 + b1*DBH^b2), other2016, start = list(a1 = 34.6, b1 = 40.2, b2 = -1.03), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p, b2p not significant
-otherHeightFromDiameterKorf = nlrob(TotalHt ~ 1.37 + a1*exp(b1*DBH^b2), other2016, start = list(a1 = 381, b1 = -6.26, b2 = -0.20), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), control = list(maxiter = 50)) # a1p, b1p, b2p not significant
-otherHeightFromDiameterLinear = lm(TotalHt ~ 0 + DBH + I(isPlantation*DBH), other2016, offset = breastHeight, weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1))
-otherHeightFromDiameterMichaelisMenten = nlrob(TotalHt ~ 1.37 + a1*DBH^b1 / (a2 + DBH^b1), other2016, start = list(a1 = 34.6, a2 = 40.2, b1 = 1.03), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, a2p, b1p not significant
-otherHeightFromDiameterParabolic = lm(TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I(isPlantation*DBH^2), other2016, offset = breastHeight, weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1))
-otherHeightFromDiameterProdan = nlrob(TotalHt ~ 1.37 + DBH^2 / (a1*DBH^2 + a2*DBH + a3), other2016, start = list(a1 = 0.028, a2 = 1.08, a3 = 0.15), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, a2p, a3p not significant
-otherHeightFromDiameterPower = nlrob(TotalHt ~ 1.37 + a1*DBH^b1, other2016, start = list(a1 = 0.99, b1 = 0.84), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p not significant
-otherHeightFromDiameterRatkowsky = nlrob(TotalHt ~ 1.37 + a1*exp(b1/(DBH + b2)), other2016, start = list(a1 = 24.9, b1 = -17.8, b2 = 4.65), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p, b2p not significant
-otherHeightFromDiameterRichards = nlrob(TotalHt ~ 1.37 + Ha * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), other2016, start = list(Ha = 12.9, d = 2.59, kU = 0.064, kUp = 0.008), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # Hap, dp not significant
-otherHeightFromDiameterSharmaParton = nlrob(TotalHt ~ 1.37 + a1*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, other2016, maxit = 20, start = list(a1 = 160, b1 = -0.45, b2 = -0.0065, b3 = -0.41, b4 = 0.87), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p, b2p, b3p, b4p not significant
-otherHeightFromDiameterSharmaPartonBal = nlrob(TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016, start = list(a1 = 90.7, b1 = -0.328, b2 = -0.027, b3 = -0.277, b4 = 0.834), maxit = 20, weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p, b2p, b3p, b4p not significant
-otherHeightFromDiameterSharmaPartonBalPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016physio, start = list(a1 = 40.5, a4 = -0.0004, a5 = 0, a6 = -0.015, a7 = -0.020, a8 = -0.0016, b1 = -0.359, b2 = -0.017, b3 = -0.330, b4 = 0.819), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), maxit = 30, control = nls.control(maxiter = 50)) # b1, a4, a5, a6, a7, a8, b2p, b3p, b4p not significant, step factor with nlrob()
-otherHeightFromDiameterSharmaPartonPhysio = nlrob(TotalHt ~ 1.37 + (a1 + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, other2016physio, start = list(a1 = 168, a4 = -0.0004, a5 = 0, a6 = -0.015, a7 = -0.016, a8 = -0.002, b1 = -0.47, b2 = -0.008, b3 = -0.406, b4 = 0.873), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), maxit = 20) # a1p, a6, a7, a8, b1p, b2p, b3p, b4p not significant
-otherHeightFromDiameterSharmaZhang = nlrob(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), other2016, start = list(a1 = 14.6, b1 = 0.19, b2 = -0.13, b3 = -0.27, b4 = 0.96, b4p = -0.09), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p, b2p, b3p not significant
-otherHeightFromDiameterSharmaZhangBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^b4, other2016, start = list(a1 = 62.2, a2 = 0.007, b1 = -0.06, b2 = -0.181, b3 = -0.333, b3p = 0.044, b4 = 0.912), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1), maxit = 50, control = list(maxiter = 50)) # a1p, a2, a2p, b1, b1p, b2p, b4p not significant
-otherHeightFromDiameterSibbesen = nlrob(TotalHt ~ 1.37 + a1*DBH^(b1*DBH^b2), other2016, start = list(a1 = 0.742, b1 = 1.207, b2 = -0.088), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b1p, b2p not significant
-otherHeightFromDiameterWeibull = nlrob(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = list(a1 = 24.7, b1 = -0.035, b2 = 0.96, b2p = 0.07), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, b2p not significant
-otherHeightFromDiameterWeibullBal = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = list(a1 = 45.5, a2 = 0.95, a3 = -0.25, b1 = -0.018, b2 = 0.772, b2p = 0.124), weights = pmin(DBH^if_else(isPlantation, -1.1, -2.0), 1)) # a1p, a2, a2p, a3, a3p, b1p not significant
-otherHeightFromDiameterWeibullBalRelHt = nlrob(TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a4 * pmin(relativeHeight, 1.25)) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = list(a1 = -13.4, a2 = -0.484, a3 = 1.36, a4 = 144, b1 = -0.02, b2 = 0.47, b2p = -0.08), weights = pmin(DBH^if_else(isPlantation, -1.6, -1.9), 1), maxit = 50, control = list(maxiter = 50)) # a2, a3p, a4p, b2p not significant, a4 evaporates for plantation weight powers smaller than 1.6
-confint_nlrob(otherHeightFromDiameterSharmaPartonBalPhysio, level = -0.99, weights = pmin(other2016physio$DBH^if_else(other2016physio$isPlantation, -1.0, -1.9), 1))
+otherHeightFromDiameter = list(chapmanRichards = fit_nlrob("Chapman-Richards", TotalHt ~ 1.37 + a1*(1 - exp((b1 + b1p * isPlantation) * DBH))^b2, other2016, start = list(a1 = 24.7, b1 = -0.033, b1p = -0.003, b2 = 1.000))) # a1p, b2p not significant
+otherHeightFromDiameter$chapmanRichardsBal = fit_nlrob("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 81.9, a2 = 1.97, a3 = -1.23, b1 = -0.006, b2 = 0.881), control = list(maxiter = 50)) # a1p, a2p, a2, a3p, a3, b1p, b2p not significant
+otherHeightFromDiameter$chapmanRichardsBalPhysio = fit_nlrob("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation + a8 * topographicShelterIndex) * (1 - exp(b1*DBH))^b2, other2016physio, start = list(a1 = 28.5, a2 = 0.286, a4 = -0.011, a8 = -0.176, b1 = -0.022, b2 = 0.908), maxit = 50) # a1p, a2p, a3, a5, a6, a7, b1p, b2p not significant
+otherHeightFromDiameter$chapmanRichardsBalRelHt = fit_nlrob("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), other2016, start = list(a1 = -1.16, a2 = -0.05, a3 = 0.07, a3p = 0.09, a4 = 16.6, a4p = -6.7, b1 = -0.05, b2 = 0.28, b2p = 0.131)) # a2, a2p, a3, b1p not significant
+otherHeightFromDiameter$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a4 * elevation) * (1 - exp((b1 + b1p * isPlantation) * DBH))^b2, other2016physio, start = list(a1 = 27.0, a4 = -0.015, b1 = -0.037, b1p = -0.006, b2 = 0.999)) # a1p, a4p, a5, a6, a7, a8, b2p not significant
+otherHeightFromDiameter$curtis = fit_nlrob("Curtis", TotalHt ~ 1.37 + a1*DBH / (1 + DBH)^b1, other2016, start = list(a1 = 1.086, b1 = 0.190)) # a1p, b1p not significant
+otherHeightFromDiameter$gam = fit_gam("REML GAM", TotalHt ~ s(DBH, by = as.factor(isPlantation), k = 5, pc = other2016gamConstraint), data = other2016)
+otherHeightFromDiameter$gamBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, by = as.factor(isPlantation), k = 13, pc = other2016gamConstraint), data = other2016) # slow with unrestricted k
+otherHeightFromDiameter$gamBalPhysio = fit_gam("REML GAM BA+L physio", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, topographicShelterIndex, by = as.factor(isPlantation), k = 19, pc = other2016gamConstraint), data = other2016physio) # unrestricted k tensor product (te() + te()) impractically slow (>2 h, Zen 3 @ 3.4 GHz)
+otherHeightFromDiameter$gamPhysio = fit_gam("REML GAM physio", TotalHt ~ s(DBH, elevation, topographicShelterIndex, by = as.factor(isPlantation), k = 14, pc = other2016gamConstraint), data = other2016physio)
+otherHeightFromDiameter$hossfeld = fit_nlrob("Hossfeld IV", TotalHt ~ 1.37 + a1 / (1 + b1*DBH^b2), other2016, start = list(a1 = 34.6, b1 = 40.2, b2 = -1.03)) # a1p, b1p, b2p not significant
+otherHeightFromDiameter$korf = fit_nlrob("Korf", TotalHt ~ 1.37 + a1*exp(b1*DBH^b2), other2016, start = list(a1 = 381, b1 = -6.26, b2 = -0.20), control = list(maxiter = 50)) # a1p, b1p, b2p not significant
+otherHeightFromDiameter$linear = fit_lm("linear", TotalHt ~ 0 + DBH + I(isPlantation*DBH), other2016)
+otherHeightFromDiameter$michaelisMenten = fit_nlrob("Michaelis-Menten", TotalHt ~ 1.37 + a1*DBH^b1 / (a2 + DBH^b1), other2016, start = list(a1 = 34.6, a2 = 40.2, b1 = 1.03)) # a1p, a2p, b1p not significant
+otherHeightFromDiameter$parabolic = fit_lm("parabolic", TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I(isPlantation*DBH^2), other2016)
+otherHeightFromDiameter$prodan = fit_nlrob("Prodan", TotalHt ~ 1.37 + DBH^2 / (a1*DBH^2 + a2*DBH + a3), other2016, start = list(a1 = 0.028, a2 = 1.08, a3 = 0.15)) # a1p, a2p, a3p not significant
+otherHeightFromDiameter$power = fit_nlrob("power", TotalHt ~ 1.37 + a1*DBH^b1, other2016, start = list(a1 = 0.99, b1 = 0.84)) # a1p, b1p not significant
+otherHeightFromDiameter$ratkowsky = fit_nlrob("Ratkowsky", TotalHt ~ 1.37 + a1*exp(b1/(DBH + b2)), other2016, start = list(a1 = 24.9, b1 = -17.8, b2 = 4.65)) # a1p, b1p, b2p not significant
+otherHeightFromDiameter$richards = fit_nlrob("unified Richards", TotalHt ~ 1.37 + Ha * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), other2016, start = list(Ha = 12.9, d = 2.59, kU = 0.064, kUp = 0.008)) # Hap, dp not significant
+otherHeightFromDiameter$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, other2016, maxit = 20, start = list(a1 = 160, b1 = -0.45, b2 = -0.0065, b3 = -0.41, b4 = 0.87)) # a1p, b1p, b2p, b3p, b4p not significant
+otherHeightFromDiameter$sharmaPartonBal = fit_nlrob("Sharma-Parton BA+L", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016, start = list(a1 = 90.7, b1 = -0.328, b2 = -0.027, b3 = -0.277, b4 = 0.834), maxit = 20) # a1p, b1p, b2p, b3p, b4p not significant
+otherHeightFromDiameter$sharmaPartonBalPhysio = fit_nlrob("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016physio, start = list(a1 = 108, a4 = -0.05, b1 = -0.40, b2 = -0.08, b3 = -0.40, b4 = 0.83), maxit = 30, control = nls.control(maxiter = 50)) # a4, a5, a6, a7, a8, b1, b2p, b3p, b4p not significant, step factor with fit_nlrob()
+otherHeightFromDiameter$sharmaPartonPhysio = fit_nlrob("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, other2016physio, start = list(a1 = 108, a4 = -0.05, b1 = -0.40, b2 = -0.08, b3 = -0.40, b4 = 0.83), maxit = 20) # a1p, a4, a5, a6, a7, a8, b1p, b2p, b3p, b4p not significant but a4 significant if non-significant a8 is present, step factor with a4p
+otherHeightFromDiameter$sharmaZhang = fit_nlrob("Sharma-Zhang", TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), other2016, start = list(a1 = 14.6, b1 = 0.19, b2 = -0.13, b3 = -0.27, b4 = 0.96, b4p = -0.09)) # a1p, b1p, b2p, b3p not significant
+otherHeightFromDiameter$sharmaZhangBal = fit_nlrob("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^b4, other2016, start = list(a1 = 62.2, a2 = 0.007, b1 = -0.06, b2 = -0.181, b3 = -0.333, b3p = 0.044, b4 = 0.912), maxit = 50, control = list(maxiter = 50)) # a1p, a2, a2p, b1, b1p, b2p, b4p not significant
+otherHeightFromDiameter$sibbesen = fit_nlrob("Sibbesen", TotalHt ~ 1.37 + a1*DBH^(b1*DBH^b2), other2016, start = list(a1 = 0.742, b1 = 1.207, b2 = -0.088)) # a1p, b1p, b2p not significant
+otherHeightFromDiameter$weibull = fit_nlrob("Weibull", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = list(a1 = 24.7, b1 = -0.035, b2 = 0.96, b2p = 0.07)) # a1p, b2p not significant
+otherHeightFromDiameter$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = list(a1 = 42.3, a2 = 0.89, a3 = -0.25, b1 = -0.019, b2 = 0.774, b2p = 0.130)) # a1p, a2, a2p, a3, a3p, b1p not significant
+otherHeightFromDiameter$weibullBalRelHt = fit_nlrob("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a4 * pmin(relativeHeight, 1.25)) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = list(a1 = -1.1, a2 = 0.04, a3 = 0.19, a4 = 25.2, b1 = -0.02, b2 = 0.67, b2p = 0.01), control = list(maxiter = 50)) # a2, a3p, a4p, b2p not significant, a4 evaporates for plantation weight powers smaller than 1.6
+#confint_nlrob(otherHeightFromDiameter$sharmaPartonBalPhysio, level = 0.99, weights = pmin(other2016physio$DBH^if_else(other2016physio$isPlantation, -1.0, -1.9), 1))
 
-otherHeightFromDiameterChapmanRichards = get_height_error("Chapman-Richards", otherHeightFromDiameterChapmanRichards, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterChapmanRichardsBal = get_height_error("Chapman-Richards BA+L", otherHeightFromDiameterChapmanRichardsBal, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterChapmanRichardsBalPhysio = get_height_error("Chapman-Richards BA+L physio", otherHeightFromDiameterChapmanRichardsBalPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherHeightFromDiameterChapmanRichardsBalRelHt = get_height_error("Chapman-Richards BA+L RelHt", otherHeightFromDiameterChapmanRichardsBalRelHt, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterChapmanRichardsPhysio = get_height_error("Chapman-Richards physio", otherHeightFromDiameterChapmanRichardsPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherHeightFromDiameterCurtis = get_height_error("Curtis", otherHeightFromDiameterCurtis, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterGam = get_height_error("GCV GAM", otherHeightFromDiameterGam, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterGamBal = get_height_error("GCV GAM BA+L", otherHeightFromDiameterGamBal, other2016, other2016natural, other2016plantation)
-#otherHeightFromDiameterGamBalPhysio = get_height_error("GCV GAM BA+L physio", otherHeightFromDiameterGamBalPhysio, other2016physio, other2016natural, other2016plantation) # slow
-otherHeightFromDiameterGamPhysio = get_height_error("GCV GAM physio", otherHeightFromDiameterGamPhysio, other2016physio, other2016natural, other2016plantation)
-#save(otherHeightFromDiameterGamBalPhysio, otherHeightFromDiameterGamPhysio, file = "trees/height-diameter/HtDia other spline height.rdata")
-#load("trees/height-diameter/HtDia other spline height.rdata")
-otherHeightFromDiameterHossfeld = get_height_error("Hossfeld IV", otherHeightFromDiameterHossfeld, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterKorf = get_height_error("Korf", otherHeightFromDiameterKorf, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterLinear = get_height_error("linear", otherHeightFromDiameterLinear, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterMichaelisMenten = get_height_error("Michaelis-Menten", otherHeightFromDiameterMichaelisMenten, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterParabolic = get_height_error("parabolic", otherHeightFromDiameterParabolic, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterProdan = get_height_error("Prodan", otherHeightFromDiameterProdan, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterPower = get_height_error("power", otherHeightFromDiameterPower, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterRatkowsky = get_height_error("Ratkowsky", otherHeightFromDiameterRatkowsky, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterRichards = get_height_error("unified Richards", otherHeightFromDiameterRichards, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaParton = get_height_error("Sharma-Parton", otherHeightFromDiameterSharmaParton, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaPartonBal = get_height_error("Sharma-Parton BA+L", otherHeightFromDiameterSharmaPartonBal, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaPartonBalPhysio = get_height_error("Sharma-Parton BA+L physio", otherHeightFromDiameterSharmaPartonBalPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherHeightFromDiameterSharmaPartonPhysio = get_height_error("Sharma-Parton physio", otherHeightFromDiameterSharmaPartonPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherHeightFromDiameterSharmaZhang = get_height_error("Sharma-Zhang", otherHeightFromDiameterSharmaZhang, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaZhangBal = get_height_error("Sharma-Zhang BA+L", otherHeightFromDiameterSharmaZhangBal, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSibbesen = get_height_error("Sibbesen", otherHeightFromDiameterSibbesen, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterWeibull = get_height_error("Weibull", otherHeightFromDiameterWeibull, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterWeibullBal = get_height_error("Weibull BA+L", otherHeightFromDiameterWeibullBal, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterWeibullBalRelHt = get_height_error("Weibull BA+L RelHt", otherHeightFromDiameterWeibullBalRelHt, other2016, other2016natural, other2016plantation)
-
-otherHeightFromDiameterResults = bind_rows(as_row(otherHeightFromDiameterChapmanRichards),
-                                           as_row(otherHeightFromDiameterChapmanRichardsBal, significant = FALSE),
-                                           as_row(otherHeightFromDiameterChapmanRichardsBalPhysio, significant = FALSE),
-                                           as_row(otherHeightFromDiameterChapmanRichardsBalRelHt),
-                                           as_row(otherHeightFromDiameterChapmanRichardsPhysio),
-                                           as_row(otherHeightFromDiameterCurtis),
-                                           as_row(otherHeightFromDiameterGam),
-                                           as_row(otherHeightFromDiameterGamBal),
-                                           #as_row(otherHeightFromDiameterGamBalPhysio),
-                                           as_row(otherHeightFromDiameterGamPhysio),
-                                           as_row(otherHeightFromDiameterHossfeld),
-                                           as_row(otherHeightFromDiameterKorf),
-                                           as_row(otherHeightFromDiameterLinear),
-                                           as_row(otherHeightFromDiameterMichaelisMenten),
-                                           as_row(otherHeightFromDiameterParabolic),
-                                           as_row(otherHeightFromDiameterPower),
-                                           as_row(otherHeightFromDiameterProdan),
-                                           as_row(otherHeightFromDiameterRatkowsky),
-                                           as_row(otherHeightFromDiameterRichards),
-                                           as_row(otherHeightFromDiameterSharmaParton),
-                                           as_row(otherHeightFromDiameterSharmaPartonBal, significant = FALSE),
-                                           as_row(otherHeightFromDiameterSharmaPartonBalPhysio, significant = FALSE),
-                                           as_row(otherHeightFromDiameterSharmaPartonPhysio),
-                                           as_row(otherHeightFromDiameterSharmaZhang),
-                                           as_row(otherHeightFromDiameterSharmaZhangBal, significant = FALSE),
-                                           as_row(otherHeightFromDiameterSibbesen),
-                                           as_row(otherHeightFromDiameterWeibull),
-                                           as_row(otherHeightFromDiameterWeibullBal, significant = FALSE),
-                                           as_row(otherHeightFromDiameterWeibullBalRelHt)) %>%
+otherHeightFromDiameterResults = bind_rows(lapply(otherHeightFromDiameter, as_row)) %>%
   mutate(responseVariable = "height", species = "other", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
-print(otherHeightFromDiameterResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
+print(otherHeightFromDiameter$results %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
 
 ggplot() +
   geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterSharmaZhang$fitted.values, color = "Sharma-Zhang", group = other2016$isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterSharmaParton$fitted.values, color = "Sharma-Parton", group = other2016$isPlantation), alpha = 0.5) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterChapmanRichards$fitted.values, color = "Chapman-Richards", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterCurtis$fitted.values, color = "Curtis", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterKorf$fitted.values, color = "Korf", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterLinear$fitted.values, color = "linear", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterMichaelisMenten$fitted.values, color = "Michaelis-Menten", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterParabolic$fitted.values, color = "parabolic", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterPower$fitted.values, color = "power", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterProdan$fitted.values, color = "Prodan", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterRatkowsky$fitted.values, color = "Ratkowsky", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterRichards$fitted.values, color = "unified Richards", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterSibbesen$fitted.values, color = "Sibbesen", group = other2016$isPlantation)) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterWeibull$fitted.values, color = "Weibull", group = other2016$isPlantation)) +
+  #geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$sharmaZhang), color = "Sharma-Zhang", group = other2016$isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$sharmaParton), color = "Sharma-Parton", group = other2016$isPlantation), alpha = 0.5) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$chapmanRichards), color = "Chapman-Richards", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$curtis), color = "Curtis", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$korf), color = "Korf", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$linear), color = "linear", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$michaelisMenten), color = "Michaelis-Menten", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$parabolic), color = "parabolic", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$power), color = "power", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$prodan), color = "Prodan", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$ratkowsky), color = "Ratkowsky", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$richards), color = "unified Richards", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$sibbesen), color = "Sibbesen", group = other2016$isPlantation)) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$weibull), color = "Weibull", group = other2016$isPlantation)) +
   annotate("text", x = 0, y = 70, label = "merged minority species, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(ylim = c(0, 70)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03))
 
 ## other height-diameter GNLS regressions
-#otherHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameterChapmanRichards$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
-#otherHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameterChapmanRichardsBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
-#otherHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + a3*basalAreaLarger) * (1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^b3, other2016, start = otherHeightFromDiameterSharmaZhangBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
-#otherHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = otherHeightFromDiameterWeibullBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
-#otherHeightFromDiameterChapmanRichardsGnls = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameterChapmanRichards$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot level correlation, logLik() NaN without
-#otherHeightFromDiameterChapmanRichardsBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameterChapmanRichardsBal$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE))
-#otherHeightFromDiameterSharmaPartonGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/standBasalAreaPerHectare)^b2*DBH))^b3, other2016, start = otherHeightFromDiameterSharmaParton$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-5, tolerance = 1E-4, msVerbose = FALSE, returnObject = FALSE))
-#otherHeightFromDiameterSharmaPartonBalGnls = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b2*DBH))^b3, other2016, start = otherHeightFromDiameterSharmaPartonBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.002, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.001
-#otherHeightFromDiameterSharmaZhangGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2*(1 - exp(b1*tph^b2*DBH))^(b3 + b3p * isPlantation), other2016, start = otherHeightFromDiameterSharmaZhang$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.002, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.001
-##otherHeightFromDiameterSharmaZhangBalGnls = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + a3*basalAreaLarger) * (1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^b3, other2016, start = otherHeightFromDiameterSharmaZhangBal$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot level correlation, logLik() NaN without
-#otherHeightFromDiameterWeibullGnls = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = otherHeightFromDiameterWeibull$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-5, tolerance = 1E-4, msVerbose = FALSE, returnObject = FALSE))
-#otherHeightFromDiameterWeibullBalGnls = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = otherHeightFromDiameterWeibullBal$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.002, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot level correlation, with nlsTol = 0.001 without plot level correlation
-#save(otherHeightFromDiameterChapmanRichardsGnls, otherHeightFromDiameterChapmanRichardsBalGnls, otherHeightFromDiameterSharmaPartonGnls, otherHeightFromDiameterSharmaPartonBalGnls, otherHeightFromDiameterSharmaZhangGnls, otherHeightFromDiameterWeibullGnls, otherHeightFromDiameterWeibullBalGnls, file = "trees/height-diameter/HtDia other GNLS.rdata")
+#otherHeightFromDiameterGnls$chapmanRichards = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameter$chapmanRichards$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
+#otherHeightFromDiameterGnls$chapmanRichardsBal = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameter$chapmanRichardsBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
+#otherHeightFromDiameterGnls$sharmaZhangBal = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + a3*basalAreaLarger) * (1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^b3, other2016, start = otherHeightFromDiameter$sharmaZhangBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
+#otherHeightFromDiameterGnls$weibullBal = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = otherHeightFromDiameter$weibullBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 1, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 1
+#otherHeightFromDiameterGnls$chapmanRichards = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameter$chapmanRichards$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot level correlation, logLik() NaN without
+#otherHeightFromDiameterGnls$chapmanRichardsBal = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = otherHeightFromDiameter$chapmanRichardsBal$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE))
+#otherHeightFromDiameterGnls$sharmaParton = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/standBasalAreaPerHectare)^b2*DBH))^b3, other2016, start = otherHeightFromDiameter$sharmaParton$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-5, tolerance = 1E-4, msVerbose = FALSE, returnObject = FALSE))
+#otherHeightFromDiameterGnls$sharmaPartonBal = gnls(TotalHt ~ 1.37 + a1*topHeight^a2 * (1 - exp(b1*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b2*DBH))^b3, other2016, start = otherHeightFromDiameter$sharmaPartonBal$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.002, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.001
+#otherHeightFromDiameterGnls$sharmaZhang = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2*(1 - exp(b1*tph^b2*DBH))^(b3 + b3p * isPlantation), other2016, start = otherHeightFromDiameter$sharmaZhang$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.002, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50, msVerbose = FALSE, returnObject = FALSE)) # step halving at nlsTol = 0.001
+##otherHeightFromDiameterGnls$sharmaZhangBal = gnls(TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^a2 * (1 + a3*basalAreaLarger) * (1 - exp(b1*tph^(b2 + b2p * isPlantation)*DBH))^b3, other2016, start = otherHeightFromDiameter$sharmaZhangBal$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot level correlation, logLik() NaN without
+#otherHeightFromDiameterGnls$weibull = gnls(TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = otherHeightFromDiameter$weibull$m$getPars(), correlation = corSymm(value = numeric(0.1), form = ~ 0 | PlotID), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-5, tolerance = 1E-4, msVerbose = FALSE, returnObject = FALSE))
+#otherHeightFromDiameterGnls$weibullBal = gnls(TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp(b1*DBH^(b2 + b2p * isPlantation))), other2016, start = otherHeightFromDiameter$weibullBal$m$getPars(), weights = varPower(0.60, ~DBH | isPlantation), control = gnlsControl(nlsTol = 0.002, msVerbose = FALSE, returnObject = FALSE)) # step halving with plot level correlation, with nlsTol = 0.001 without plot level correlation
+#save(otherHeightFromDiameter, file = "trees/height-diameter/HtDia other GNLS.rdata")
 
 load("trees/height-diameter/HtDia other GNLS.rdata")
-#otherHeightFromDiameterChapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", otherHeightFromDiameterChapmanRichardsGnls, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterChapmanRichardsBalGnls = get_height_error("Chapman-Richards BA+L GNLS", otherHeightFromDiameterChapmanRichardsBalGnls, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaPartonGnls = get_height_error("Sharma-Parton GNLS", otherHeightFromDiameterSharmaPartonGnls, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaPartonBalGnls = get_height_error("Sharma-Parton BA+L GNLS", otherHeightFromDiameterSharmaPartonBalGnls, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterSharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", otherHeightFromDiameterSharmaZhangGnls, other2016, other2016natural, other2016plantation)
-#otherHeightFromDiameterSharmaZhangBalGnls = get_height_error("Sharma-Zhang BA+L GNLS", otherHeightFromDiameterSharmaZhangBalGnls, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterWeibullGnls = get_height_error("Weibull GNLS", otherHeightFromDiameterWeibullGnls, other2016, other2016natural, other2016plantation)
-otherHeightFromDiameterWeibullBalGnls = get_height_error("Weibull BA+L GNLS", otherHeightFromDiameterWeibullBalGnls, other2016, other2016natural, other2016plantation)
+#otherHeightFromDiameterGnls$chapmanRichardsGnls = get_height_error("Chapman-Richards GNLS", otherHeightFromDiameterGnls$chapmanRichards, other2016)
+otherHeightFromDiameterGnls$chapmanRichardsBalGnls = get_height_error("Chapman-Richards BA+L GNLS", otherHeightFromDiameterGnls$chapmanRichardsBal, other2016)
+otherHeightFromDiameterGnls$sharmaPartonGnls = get_height_error("Sharma-Parton GNLS", otherHeightFromDiameterGnls$sharmaParton, other2016)
+otherHeightFromDiameterGnls$sharmaPartonBalGnls = get_height_error("Sharma-Parton BA+L GNLS", otherHeightFromDiameterGnls$sharmaPartonBal, other2016)
+otherHeightFromDiameterGnls$sharmaZhangGnls = get_height_error("Sharma-Zhang GNLS", otherHeightFromDiameterGnls$sharmaZhang, other2016)
+#otherHeightFromDiameterGnls$sharmaZhangBalGnls = get_height_error("Sharma-Zhang BA+L GNLS", otherHeightFromDiameterGnls$sharmaZhangBal, other2016)
+otherHeightFromDiameterGnls$weibullGnls = get_height_error("Weibull GNLS", otherHeightFromDiameterGnls$weibull, other2016)
+otherHeightFromDiameterGnls$weibullBalGnls = get_height_error("Weibull BA+L GNLS", otherHeightFromDiameterGnls$weibullBal, other2016)
 
-otherHeightFromDiameterResultsGnls = bind_rows(as_row(name = "Chapman-Richards GNLS"),
-                                               as_row(otherHeightFromDiameterChapmanRichardsBalGnls),
-                                               as_row(otherHeightFromDiameterSharmaPartonGnls),
-                                               as_row(otherHeightFromDiameterSharmaPartonBalGnls),
-                                               as_row(otherHeightFromDiameterSharmaZhangGnls),
-                                               as_row(name = "Sharma-Zhang BA+L GNLS"),
-                                               as_row(otherHeightFromDiameterWeibullGnls),
-                                               as_row(otherHeightFromDiameterWeibullBalGnls)) %>%
+otherHeightFromDiameterResultsGnls = bind_rows(lapply(otherHeightFromDiameterGnls, as_row),
+                                               as_row(name = "Chapman-Richards GNLS"),
+                                               as_row(name = "Sharma-Zhang BA+L GNLS")) %>%
   mutate(responseVariable = "height", species = "other", deltaAic = aic - min(aic)) %>%
   relocate(responseVariable, species) %>%
   arrange(desc(deltaAic))
-otherHeightFromDiameterResultsGnls %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic) %>% arrange(method)
+otherHeightFromDiameter$resultsGnls %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic) %>% arrange(method)
 
-#bind_cols(parameter = c("a1", "a2", "a3", "b1", "b2"), bal = confint2(otherHeightFromDiameterWeibullBAL, level = 0.99), balN = confint2(otherHeightFromDiameterWeibullBalNatural, level = 0.99), balP = confint2(otherHeightFromDiameterWeibullBalPlantation, level = 0.99)) %>%
+#bind_cols(parameter = c("a1", "a2", "a3", "b1", "b2"), bal = confint2(otherHeightFromDiameter$weibullBAL, level = 0.99), balN = confint2(otherHeightFromDiameter$weibullBalNatural, level = 0.99), balP = confint2(otherHeightFromDiameter$weibullBalPlantation, level = 0.99)) %>%
 #  mutate(bal005 = bal[, 1], bal995 = bal[, 2], balN005 = balN[, 1], balN995 = balN[, 2], balP005 = balP[, 1], balP995 = balP[, 2]) %>%
 #  select(-bal, -balN, -balP)
 
@@ -187,11 +125,11 @@ ggplot() +
 
 ggplot() +
   geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.15, color = "black", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterWeibullBAL$fitted.values, color = "ElliottBAL"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = other2016natural$DBH, y = otherHeightFromDiameterWeibullBALnatural$fitted.values, color = "ElliottBALn"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = other2016plantation$DBH, y = otherHeightFromDiameterWeibullBALplantation$fitted.values, color = "ElliottBALp"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterBase$fitted.values, color = "base")) +
-  geom_line(aes(x = other2016$DBH, y = otherHeightFromDiameterWeibull$fitted.values, color = "ElliottWeibull")) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$weibullBAL), color = "ElliottBAL"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = other2016natural$DBH, y = predict(otherHeightFromDiameter$weibullBALnatural), color = "ElliottBALn"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = other2016plantation$DBH, y = predict(otherHeightFromDiameter$weibullBALplantation), color = "ElliottBALp"), alpha = 0.5) + # Temesgen et al. 2007, Eq. 5
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$Base), color = "base")) +
+  geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameter$weibull), color = "ElliottWeibull")) +
   annotate("text", x = 0, y = 85, label = "a) minority species, height from diameter", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
@@ -213,132 +151,72 @@ ggplot(otherHardwood2016) +
   theme(legend.position = "none")
 
 ## other species diameter-height regressions
-#otherDiameterFromHeightChapmanForm = nls_multstart(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, iter = 1000,
+#otherDiameterFromHeight$chapmanForm = nls_multstart(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, iter = 1000,
 #                                              start_lower = list(a1 = 0.1, b1 = -1, b2 = -0.5), 
 #                                              start_upper = list(a1 = 150, b1 = 1, b2 = 0.5), modelweights = pmin(TotalHt^-3.0, 0.5))
-#otherDiameterFromHeightChapmanRichardsPhysio = nls_multstart(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), other2016, iter = 100,
+#otherDiameterFromHeight$chapmanRichardsPhysio = nls_multstart(DBH ~ (a1 + a1p * isPlantation + a2 * elevation + a3 * sin(3.14159/180 * slope) + a4 * cos(3.14159/180 * aspect) + a5 * sin(3.14159/180 * aspect) + a6 * topographicShelterIndex)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), other2016, iter = 100,
 #                                                             start_lower = list(a1 = 1, a1p = -100, a2 = -0.1, a3 = -100, a4 = -1, a5 = -1, a6 = -1, b1 = -0.1, b2 = -2), 
 #                                                             start_upper = list(a1 = 200, a1p = 100, a2 = 0.1, a3 = 100, a4 = 10, a5 = 1, a6 = 1, b1 = 0.1, b2 = 2), modelweights = pmin(TotalHt^-3.0, 0.5))
-#otherDiameterFromHeightPowerAat = gsl_nls(DBH ~ (a1 + a1p * isPlantation + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 2.0, a1p = -0.38, a2 = -0.013, b1 = 1.06), weights = pmin(TotalHt^-3.0, 0.5)) # a2p, b2p not significant, nlrob() failure to converge >500 steps
-#otherDiameterFromHeightRuark = gsl_nls(DBH ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = list(a1 = 1.56, a1p = 0.90, b1 = 1.05, b1p = -0.57, b2 = 0.0057, b2p = 0.053), weights = pmin(TotalHt^-3.0, 0.5)) # step factor with nlrob()
-#otherDiameterFromHeightSharmaParton = nlrob(DBH ~ a1*(TotalHt - 1.37)^a2*(exp(b1*(tph/topHeight)^b2*(TotalHt - 1.37)) - 1)^b3, other2016, start = list(a1 = 5, a2 = 0.5, b1 = 0.01, b2 = 0.26, b3 = 0.5), weights = pmin(TotalHt^-3.0, 0.5), control = nls.control(maxiter = 50)) # step factor
-#otherDiameterFromHeightWeibull = gsl_nls(DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = list(a1 = -138, b1 = 0.0116, b2 = 1.00), weights = pmin(TotalHt^-3.0, 0.5)) # nlrob() > 20 steps
-otherDiameterFromHeightChapmanForm = nlrob(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = list(a1 = 3.4, b1 = 0.476, b2 = 0.224), weights = pmin(TotalHt^-2.4, 0.5), maxit = 50, control = nls.control(maxiter = 50)) # a1p, b1p, b2p not significant, NaN-inf with nls(), no convergence from nls_multstart()
-otherDiameterFromHeightChapmanFormAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = list(a1 = 6.85, a2 = 0.019, b1 = 0.13, b2 = 0.52), maxit = 50, weights = pmin(TotalHt^-2.4, 0.5)) # NaN-inf
-otherDiameterFromHeightChapmanFormBal = nlrob(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = list(a1 = 0.490, a2 = -0.022, a3 = 0.018, b1 = 1.72, b2 = 0.27), maxit = 30, weights = pmin(TotalHt^-2.4, 0.5), control = nls.control(maxiter = 500)) # NaN-inf with nls()
-otherDiameterFromHeightChapmanFormBalRelHt = gsl_nls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = list(a1 = 0.65, a2 = -0.03, a3 = 0.03, a9 = 0.1, b1 = 1.5, b2 = 0.27), weights = pmin(TotalHt^-2.4, 0.5), control = nls.control(maxiter = 50)) # step factor with nls(), step factor or singular gradient with nlrob()
-otherDiameterFromHeightChapmanFormRelHt = gsl_nls(DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = list(a1 = 1.09, a9 = -0.098, b1 = 1.14, b2 = 0.38), weights = pmin(TotalHt^-2.4, 0.5), control = nls.control(maxiter = 1500)) # step factor with nls()
-otherDiameterFromHeightChapmanRichards = nlrob(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -7.17, b1 = 0.319, b2 = 0.415, b2p = -0.0044), weights = pmin(TotalHt^-2.4, 0.5), maxit = 20, control = list(maxiter = 50)) # a1p not significant
-otherDiameterFromHeightChapmanRichardsAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -8.91, a2 = -0.0010, b1 = 0.254, b2 = 0.466, b2p = -0.032), maxit = 150, weights = pmin(TotalHt^-2.4, 0.5), control = nls.control(maxiter = 500)) # a1p, a2p not significant
-otherDiameterFromHeightChapmanRichardsPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), other2016physio, start = list(a1 = -6.4, a1p = 0.88, a4 = 0.001, a5 = 0.658, a6 = -0.216, a7 = -0.199, a8 = 0.012, b1 = 0.439, b2 = 0.300), weights = pmin(TotalHt^-2.4, 0.5), maxit = 500, control = list(maxiter = 500)) # no physiographic effect significant, convergence fails with b1p, unreliable nlrob() convergence
-otherDiameterFromHeightChapmanRichards = nlrob(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -7.17, b1 = 0.319, b2 = 0.415, b2p = -0.0044), weights = pmin(TotalHt^-2.4, 0.5), maxit = 20, control = list(maxiter = 50)) # a1p not significant
-otherDiameterFromHeightChapmanRichardsRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -21.3, a9 = 1.5, b1 = 0.11, b2 = 0.60, b2p = 0.006), maxit = 20, weights = pmin(TotalHt^-2.4, 0.5)) # a1p, a2p not significant, nlrob() fails to converge from closer positions
-otherDiameterFromHeightGam = gam(DBH ~ s(TotalHt, by = as.factor(isPlantation)), data = other2016)
-otherDiameterFromHeightGamAat = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, by = as.factor(isPlantation)), data = other2016)
-#otherDiameterFromHeightGamAatPhysio = gam(DBH ~ s(TotalHt, tallerQuasiBasalArea, standQuasiBasalArea, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = other2016physio) # insufficient data
-otherDiameterFromHeightGamPhysio = gam(DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, by = as.factor(isPlantation)), data = other2016physio)
-otherDiameterFromHeightLinear = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), other2016, weights = pmin(TotalHt^-2.4, 0.5))
-otherDiameterFromHeightMichaelisMentenForm = nlrob(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016, start = list(a1 = 28.7, a2 = 13.0, b1 = 0.60), weights = pmin(TotalHt^-2.4, 0.5), maxit = 30, control = nls.control(maxiter = 50)) # a1p, a2p, b1p not significant
-otherDiameterFromHeightNaslund = nlrob(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 0.37, a1p = -0.27, a2 = -0.14, a2p = -0.038), weights = pmin(TotalHt^-2.4, 0.5)) # converges poorly, yields negative values
-otherDiameterFromHeightParabolic = lm(DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2), other2016, weights = pmin(TotalHt^-2.4, 0.5)) # isPlantation*(TotalHt - 1.37)^2 not significant
-otherDiameterFromHeightPower = nlrob(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = list(a1 = 1.36, a1p = -0.48, b1 = 1.15, b1p = 0.11), weights = pmin(TotalHt^-2.4, 0.5))
-otherDiameterFromHeightPowerAat = nlrob(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 2.08, a2 = -0.0004, b1 = 0.81), weights = pmin(TotalHt^-2.4, 0.5), maxit = 500) # a2p, b2p not significant, nlrob() failure to converge >500 steps with a1p
-otherDiameterFromHeightPowerPhysio = nlrob(DBH ~ (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^b1, other2016physio, start = list(a1 = 1.81, a4 = -0.0007, a5 = -1.05, a6 = 0.034, a7 = -0.024, a8 = 0.00049, b1 = 1.21), weights = pmin(TotalHt^-2.4, 0.5)) # a1p, a6, a7, a8 not significant
-otherDiameterFromHeightPowerRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = list(a1 = 1.32, a9 = 0.40, b1 = 1.11, b1p = -0.055), maxit = 50, weights = pmin(TotalHt^-2.4, 0.5))
-otherDiameterFromHeightRuark = nlrob(DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = list(a1 = 2.72, b1 = 0.20, b1p = -0.04, b2 = 0.09, b2p = 0.009), maxit = 40, weights = pmin(TotalHt^-2.4, 0.5)) # step factor with a1p
-otherDiameterFromHeightSchnute = gsl_nls(DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), other2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.20, Ha = 187), weights = pmin(TotalHt^-2.4, 0.5)) # NaN-inf with nlrob()
-otherDiameterFromHeightSharmaParton = gsl_nls(DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, other2016, start = list(a1 = 8500, b1 = -1.2, b2 = 0.02, b3 = -0.05, b4 = 2.0), weights = pmin(TotalHt^-2.4, 0.5), control = nls.control(maxiter = 50)) # step size or singular gradient with nls(), NaN-inf with nlrob()
-otherDiameterFromHeightSibbesenForm = nlrob(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.67, a1p = 1.84, b1 = 1.70, b1p = -1.26, b2 = -0.063, b2p = 0.30), maxit = 50, weights = pmin(TotalHt^-2.4, 0.5))
-otherDiameterFromHeightSibbesenFormAat = nlrob(DBH ~ (a1 + a1p * isPlantation + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.58, a1p = 1.93, a2 = -0.0005, b1 = 1.93, b1p = -1.49, b2 = -0.085, b2p = 0.32), maxit = 50, weights = pmin(TotalHt^-2.4, 0.5)) # a2 not significant
-otherDiameterFromHeightSibbesenFormPhysio = nlrob(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016physio, start = list(a1 = 3.47, a1p = -0.43, a4 = -0.0004, a5 = -0.53, a6 = 0.003, a7 = 0.106, a8 = -0.001, b1 = 0.34, b2 = 0.28, b2p = 0.019), maxit = 50, weights = pmin(TotalHt^-2.4, 0.5)) # a6, a7, a8 not significant
-otherDiameterFromHeightSibbesenFormRelHt = nlrob(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 2.84, a9 = -0.007, b1 = 0.407, b1p = -0.121, b2 = 0.260, b2p = 0.122), maxit = 50, weights = pmin(TotalHt^-2.4, 0.5)) # a1p, a2p not significant
-otherDiameterFromHeightWeibull = nlrob(DBH ~ ((a1 + a1p*isPlantation)*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = list(a1 = -153, a1p = 37.0, b1 = 0.09, b2 = 0.42), weights = pmin(TotalHt^-2.4, 0.5), control = nls.control(maxiter = 50)) # NaN-inf with b1p
-#confint2(otherDiameterFromHeightWeibull, level = 0.99)
+#otherDiameterFromHeight$powerAat = gsl_nls(DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 2.0, a1p = -0.38, a2 = -0.013, b1 = 1.06), weights = pmin(TotalHt^-3.0, 0.5)) # a2p, b2p not significant, fit_nlrob() failure to converge >500 steps
+#otherDiameterFromHeight$ruark = gsl_nls(DBH ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = list(a1 = 1.56, a1p = 0.90, b1 = 1.05, b1p = -0.57, b2 = 0.0057, b2p = 0.053), weights = pmin(TotalHt^-3.0, 0.5)) # step factor with fit_nlrob()
+#otherDiameterFromHeight$sharmaParton = fit_nlrob(DBH ~ a1*(TotalHt - 1.37)^a2*(exp(b1*(tph/topHeight)^b2*(TotalHt - 1.37)) - 1)^b3, other2016, start = list(a1 = 5, a2 = 0.5, b1 = 0.01, b2 = 0.26, b3 = 0.5), weights = pmin(TotalHt^-3.0, 0.5), control = nls.control(maxiter = 50)) # step factor
+#otherDiameterFromHeight$weibull = gsl_nls(DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = list(a1 = -138, b1 = 0.0116, b2 = 1.00), weights = pmin(TotalHt^-3.0, 0.5)) # fit_nlrob() > 20 steps
+otherDiameterFromHeight = list(chapmanForm = fit_nlrob("Chapman-Richards form", DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = list(a1 = 3.4, b1 = 0.476, b2 = 0.224), maxit = 50, control = nls.control(maxiter = 50))) # a1p, b1p, b2p not significant, NaN-inf with nls(), no convergence from nls_multstart()
+otherDiameterFromHeight$chapmanFormAat = fit_nlrob("Chapman-Richards form AA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = list(a1 = 6.85, a2 = 0.019, b1 = 0.13, b2 = 0.52), maxit = 50) # NaN-inf
+otherDiameterFromHeight$chapmanFormBal = fit_nlrob("Chapman-Richards form BA+L", DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = list(a1 = 0.490, a2 = -0.022, a3 = 0.018, b1 = 1.72, b2 = 0.27), maxit = 30, control = nls.control(maxiter = 500)) # NaN-inf with nls()
+otherDiameterFromHeight$chapmanFormBalRelHt = fit_gsl_nls("Chapman-Richards form BA+L RelHt", DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = list(a1 = 0.65, a2 = -0.03, a3 = 0.03, a9 = 0.1, b1 = 1.5, b2 = 0.27), control = nls.control(maxiter = 50)) # step factor with nls(), step factor or singular gradient with fit_nlrob()
+otherDiameterFromHeight$chapmanFormRelHt = fit_gsl_nls("Chapman-Richards form RelHt", DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = list(a1 = 1.09, a9 = -0.098, b1 = 1.14, b2 = 0.38), control = nls.control(maxiter = 1500)) # step factor with nls()
+otherDiameterFromHeight$chapmanRichards = fit_nlrob("Chapman-Richards", DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -7.17, b1 = 0.319, b2 = 0.415, b2p = -0.0044), maxit = 20, control = list(maxiter = 50)) # a1p not significant
+otherDiameterFromHeight$chapmanRichardsAat = fit_nlrob("Chapman-Richards AA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -8.91, a2 = -0.0010, b1 = 0.254, b2 = 0.466, b2p = -0.032), maxit = 150, control = nls.control(maxiter = 500)) # a1p, a2p not significant
+otherDiameterFromHeight$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), other2016physio, start = list(a1 = -6.4, a1p = 0.88, a8 = 0.012, b1 = 0.439, b2 = 0.300), maxit = 500, control = list(maxiter = 500), significant = FALSE) # no physiographic effect significant, convergence fails with b1p, unreliable fit_nlrob() convergence
+otherDiameterFromHeight$chapmanRichardsRelHt = fit_nlrob("Chapman-Richards RelHt", DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = list(a1 = -21.3, a9 = 1.5, b1 = 0.11, b2 = 0.60, b2p = 0.006), maxit = 20) # a1p, a2p not significant, fit_nlrob() fails to converge from closer positions
+otherDiameterFromHeight$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, by = as.factor(isPlantation), k = 7, pc = other2016gamConstraint), data = other2016)
+otherDiameterFromHeight$gamAat = fit_gam("REML GAM AA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, by = as.factor(isPlantation), k = 13, pc = other2016gamConstraint), data = other2016)
+otherDiameterFromHeight$gamAatPhysio = fit_gam("REML GAM AA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, topographicShelterIndex, by = as.factor(isPlantation), k = 22, pc = other2016gamConstraint), data = other2016physio)
+otherDiameterFromHeight$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, slope, topographicShelterIndex, by = as.factor(isPlantation), k = 18, pc = other2016gamConstraint), data = other2016physio)
+otherDiameterFromHeight$linear = fit_lm("linear", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), other2016)
+otherDiameterFromHeight$michaelisMentenForm = fit_nlrob("Michaelis-Menten", DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016, start = list(a1 = 28.7, a2 = 13.0, b1 = 0.60), maxit = 30, control = nls.control(maxiter = 50)) # a1p, a2p, b1p not significant
+otherDiameterFromHeight$naslund = fit_nlrob("Näslund", DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 0.37, a1p = -0.27, a2 = -0.14, a2p = -0.038)) # converges poorly, yields negative values
+otherDiameterFromHeight$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2), other2016) # isPlantation*(TotalHt - 1.37)^2 not significant
+otherDiameterFromHeight$power = fit_nlrob("power", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = list(a1 = 1.36, a1p = -0.48, b1 = 1.15, b1p = 0.11))
+otherDiameterFromHeight$powerAat = fit_nlrob("power AA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 2.08, a2 = -0.0004, b1 = 0.81), maxit = 500) # a2p, b2p not significant, fit_nlrob() failure to converge >500 steps with a1p
+otherDiameterFromHeight$powerPhysio = fit_nlrob("power physio", DBH ~ (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^b1, other2016physio, start = list(a1 = 1.81, a4 = -0.0007, a5 = -1.05, a6 = 0.034, a7 = -0.024, a8 = 0.00049, b1 = 1.21)) # a1p, a6, a7, a8 not significant
+otherDiameterFromHeight$powerRelHt = fit_nlrob("power RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = list(a1 = 1.32, a9 = 0.40, b1 = 1.11, b1p = -0.055), maxit = 50)
+otherDiameterFromHeight$ruark = fit_nlrob("Ruark", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = list(a1 = 2.72, b1 = 0.20, b1p = -0.04, b2 = 0.09, b2p = 0.009), maxit = 40) # step factor with a1p
+otherDiameterFromHeight$schnute = fit_gsl_nls("Schnute", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), other2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.20, Ha = 187)) # NaN-inf with fit_nlrob()
+#otherDiameterFromHeight$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, other2016, start = list(a1 = 8500, b1 = -1.2, b2 = 0.02, b3 = -0.05, b4 = 2.0), control = nls.control(maxiter = 1000)) # step size or singular gradient with nls(), NaN-inf with fit_nlrob(), parameter evaporation with gsl_nls()
+otherDiameterFromHeight$sibbesenForm = fit_nlrob("Sibbesen form", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.67, a1p = 1.84, b1 = 1.70, b1p = -1.26, b2 = -0.063, b2p = 0.30), maxit = 50)
+otherDiameterFromHeight$sibbesenFormAat = fit_nlrob("Sibbesen form AA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.58, a1p = 1.93, a2 = -0.0005, b1 = 1.93, b1p = -1.49, b2 = -0.085, b2p = 0.32), maxit = 50, significant = FALSE) # a2, a3 not significant
+otherDiameterFromHeight$sibbesenFormPhysio = fit_nlrob("Sibbesen form physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016physio, start = list(a1 = 3.47, a1p = -0.43, a8 = -0.001, b1 = 0.34, b2 = 0.28, b2p = 0.019), maxit = 50, significant = FALSE) # no physiographic predictor significant
+otherDiameterFromHeight$sibbesenFormRelHt = fit_nlrob("Sibbesen form RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 2.84, a9 = -0.007, b1 = 0.407, b1p = -0.121, b2 = 0.260, b2p = 0.122), maxit = 50, significant = FALSE) # a1p, a2p, a9 not significant
+otherDiameterFromHeight$weibull = fit_nlrob("Weibull", DBH ~ ((a1 + a1p*isPlantation)*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = list(a1 = -153, a1p = 37.0, b1 = 0.09, b2 = 0.42), control = nls.control(maxiter = 50)) # NaN-inf with b1p
+#confint_nlrob(otherDiameterFromHeight$weibull, level = 0.99, weights = other2016$dbhWeight)
 
-otherDiameterFromHeightChapmanForm = get_dbh_error("Chapman-Richards form", otherDiameterFromHeightChapmanForm, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormAat = get_dbh_error("Chapman-Richards form AA+T", otherDiameterFromHeightChapmanFormAat, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormBal = get_dbh_error("Chapman-Richards form BA+L", otherDiameterFromHeightChapmanFormBal, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormBalRelHt = get_dbh_error("Chapman-Richards form BA+L RelHt", otherDiameterFromHeightChapmanFormBalRelHt, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormRelHt = get_dbh_error("Chapman-Richards form RelHt", otherDiameterFromHeightChapmanFormRelHt, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanRichards = get_dbh_error("Chapman-Richards", otherDiameterFromHeightChapmanRichards, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanRichardsAat = get_dbh_error("Chapman-Richards AA+T", otherDiameterFromHeightChapmanRichardsAat, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanRichardsPhysio = get_dbh_error("Chapman-Richards physio", otherDiameterFromHeightChapmanRichardsPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherDiameterFromHeightChapmanRichardsRelHt = get_dbh_error("Chapman-Richards RelHt", otherDiameterFromHeightChapmanRichardsRelHt, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightGam = get_dbh_error("GCV GAM", otherDiameterFromHeightGam, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightGamAat = get_dbh_error("GCV GAM AA+T", otherDiameterFromHeightGamAat, other2016, other2016natural, other2016plantation)
-#otherDiameterFromHeightGamAatPhysio = get_dbh_error("GCV GAM AA+T physio", otherDiameterFromHeightGamAatPhysio, other2016physio, other2016natural, other2016plantation)
-otherDiameterFromHeightGamPhysio = get_dbh_error("GCV GAM physio", otherDiameterFromHeightGamPhysio, other2016physio, other2016natural, other2016plantation)
-#save(otherDiameterFromHeightGamAatPhysio, otherDiameterFromHeightGamPhysio, file = "trees/height-diameter/HtDia other spline DBH.rdata")
-#load("trees/height-diameter/HtDia other spline DBH.rdata")
-otherDiameterFromHeightLinear = get_dbh_error("linear", otherDiameterFromHeightLinear, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightMichaelisMentenForm = get_dbh_error("Michaelis-Menten form", otherDiameterFromHeightMichaelisMentenForm, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightNaslund = get_dbh_error("Näslund", otherDiameterFromHeightNaslund, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightParabolic = get_dbh_error("parabolic", otherDiameterFromHeightParabolic, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightPower = get_dbh_error("power", otherDiameterFromHeightPower, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightPowerAat = get_dbh_error("power AA+T", otherDiameterFromHeightPowerAat, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightPowerPhysio = get_dbh_error("power physio", otherDiameterFromHeightPowerPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherDiameterFromHeightPowerRelHt = get_dbh_error("power RelHt", otherDiameterFromHeightPowerRelHt, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightRuark = get_dbh_error("Ruark", otherDiameterFromHeightRuark, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSchnute = get_dbh_error("Schnute", otherDiameterFromHeightSchnute, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSharmaParton = get_dbh_error("modified Sharma-Parton", otherDiameterFromHeightSharmaParton, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSibbesenForm = get_dbh_error("Sibbesen form", otherDiameterFromHeightSibbesenForm, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSibbesenFormAat = get_dbh_error("Sibbesen form AA+T", otherDiameterFromHeightSibbesenFormAat, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSibbesenFormPhysio = get_dbh_error("Sibbesen form physio", otherDiameterFromHeightSibbesenFormPhysio, other2016physio, other2016natural, other2016plantationPhysio)
-otherDiameterFromHeightSibbesenFormRelHt = get_dbh_error("Sibbesen form RelHt", otherDiameterFromHeightSibbesenFormRelHt, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightWeibull = get_dbh_error("Weibull", otherDiameterFromHeightWeibull, other2016, other2016natural, other2016plantation)
-
-otherDiameterFromHeightResults = bind_rows(as_row(otherDiameterFromHeightChapmanRichards),
-                                           as_row(otherDiameterFromHeightChapmanRichardsAat),
-                                           as_row(otherDiameterFromHeightChapmanRichardsPhysio),
-                                           as_row(otherDiameterFromHeightChapmanRichardsRelHt),
-                                           as_row(otherDiameterFromHeightChapmanForm),
-                                           as_row(otherDiameterFromHeightChapmanFormAat),
-                                           as_row(otherDiameterFromHeightChapmanFormBal),
-                                           as_row(otherDiameterFromHeightChapmanFormBalRelHt),
-                                           as_row(otherDiameterFromHeightChapmanFormRelHt),
-                                           as_row(otherDiameterFromHeightGam),
-                                           as_row(otherDiameterFromHeightGamAat),
-                                           #as_row(otherDiameterFromHeightGamAatPhysio),
-                                           as_row(otherDiameterFromHeightGamPhysio),
-                                           as_row(otherDiameterFromHeightLinear),
-                                           as_row(otherDiameterFromHeightMichaelisMentenForm),
-                                           as_row(otherDiameterFromHeightNaslund),
-                                           as_row(otherDiameterFromHeightParabolic),
-                                           as_row(otherDiameterFromHeightPower),
-                                           as_row(otherDiameterFromHeightPowerAat),
-                                           as_row(otherDiameterFromHeightPowerPhysio),
-                                           as_row(otherDiameterFromHeightPowerRelHt),
-                                           as_row(otherDiameterFromHeightRuark),
-                                           as_row(otherDiameterFromHeightSchnute),
-                                           as_row(otherDiameterFromHeightSharmaParton),
-                                           as_row(otherDiameterFromHeightSibbesenForm),
-                                           as_row(otherDiameterFromHeightSibbesenFormAat),
-                                           as_row(otherDiameterFromHeightSibbesenFormPhysio),
-                                           as_row(otherDiameterFromHeightSibbesenFormRelHt),
-                                           as_row(otherDiameterFromHeightWeibull)) %>%
+otherDiameterFromHeightResults = bind_rows(bind_rows(lapply(otherDiameterFromHeight, as_row)),
+                                           as_row(name = "modified Sharma-Parton")) %>%
   mutate(responseVariable = "DBH", species = "other", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
   arrange(desc(deltaAic))
-print(otherDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
+print(otherDiameterFromHeight$results %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
 
 ggplot(other2016) +
   geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
-  #geom_line(aes(x = otherDiameterFromHeightSharmaParton$fitted.values, y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = otherDiameterFromHeightChapmanForm$fitted.values, y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightChapmanFormAat$fitted.values, y = TotalHt, color = "Chapman-Richards form approximate BA+L", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = otherDiameterFromHeightChapmanFormBal$fitted.values, y = TotalHt, color = "Chapman-Richards form BA+L", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = otherDiameterFromHeightChapmanRichards$fitted.values, y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
-  geom_line(aes(x = otherDiameterFromHeightMichaelisMentenForm$fitted.values, y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightNaslund$fitted.values, y = TotalHt, color = "Näslund", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightPower$fitted.values, y = TotalHt, color = "power", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightRuark$fitted.values, y = TotalHt, color = "Ruark", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightSchnute$fitted.values, y = TotalHt, color = "Schnute", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightSibbesenForm$fitted.values, y = TotalHt, color = "Sibbesen form", group = isPlantation)) +
-  #geom_line(aes(x = otherDiameterFromHeightWeibull$fitted.values, y = TotalHt, color = "Weibull", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$sharmaParton), y = TotalHt, color = "adapted Sharma-Parton", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$chapmanForm), y = TotalHt, color = "Chapman-Richards form", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$chapmanFormAat), y = TotalHt, color = "Chapman-Richards form approximate BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$chapmanFormBal), y = TotalHt, color = "Chapman-Richards form BA+L", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$chapmanRichards), y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
+  geom_line(aes(x = predict(otherDiameterFromHeight$michaelisMentenForm), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$naslund), y = TotalHt, color = "Näslund", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$power), y = TotalHt, color = "power", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$ruark), y = TotalHt, color = "Ruark", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$schnute), y = TotalHt, color = "Schnute", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$sibbesenForm), y = TotalHt, color = "Sibbesen form", group = isPlantation)) +
+  #geom_line(aes(x = predict(otherDiameterFromHeight$weibull), y = TotalHt, color = "Weibull", group = isPlantation)) +
   #geom_line(aes(x = 1*topHeight^1*(1 - exp(-0.01 * (tph/standBasalAreaPerHectare)^1*(TotalHt - 1.37)))^1, y = TotalHt, color = "Sharma-Parton"), alpha = 0.5) +
   #geom_line(aes(x = 5*standBasalAreaPerHectare^0.5 * exp(0.0005*tph^0.5*(TotalHt - 1.37))^1, y = TotalHt, color = "Sharma-Zhang"), alpha = 0.5) +
   #geom_line(aes(x = -70 * log(1 - pmin(0.01*(TotalHt - 1.37)^1.1, 0.999)), y = TotalHt, color = "Chapman-Richards inversion"), na.rm = TRUE) +
   #geom_line(aes(x = 15 * (exp(0.12*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "Chapman-Richards form", group = isPlantation), alpha = 0.5) +
-  #geom_line(aes(x = (1.75 + 0.000001 * tallerQuasiBasalArea + -0.000001 * standQuasiBasalArea) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form aBAL", group = isPlantation), alpha = 0.5) +
+  #geom_line(aes(x = (1.75 + 0.000001 * tallerApproxBasalArea + -0.000001 * standBasalAreaApprox) * exp(1.46*(TotalHt - 1.37)^0.280), y = TotalHt, color = "Chapman-Richards form aBAL", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 0.03*topHeight*exp(1.6*(TotalHt - 1.37)^0.26), y = TotalHt, color = "Chapman-Richards form top height", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 5*(TotalHt - 1.37)^0.5*(exp(0.01*(tph/topHeight)^0.26*(TotalHt - 1.37)) - 1)^0.5, y = TotalHt, color = "modified Sharma-Parton", group = isPlantation), alpha = 0.5) +
   #geom_line(aes(x = 200*(TotalHt - 1.37)^0.9/(100 - (TotalHt - 1.37)^0.9), y = TotalHt, color = "Michaelis-Menten form", group = isPlantation), alpha = 0.5) +
@@ -351,182 +229,84 @@ ggplot(other2016) +
   theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
 
 #ggplot(other2016) +
-#  geom_point(aes(x = TotalHt, y = abs(residuals(otherDiameterFromHeightMichaelisMentenForm)), color = "Michaelis-Menten form", group = isPlantation), alpha = 0.1, color = "grey25", shape= 16)
+#  geom_point(aes(x = TotalHt, y = abs(residuals(otherDiameterFromHeight$michaelisMentenForm)), color = "Michaelis-Menten form", group = isPlantation), alpha = 0.1, color = "grey25", shape= 16)
 
 ## other diameter-height GNLS regressions
-#otherDiameterFromHeightNaslundGnls = gnls(DBH ~ a1* sqrt(TotalHt - 1.37) / (1 + a2 * sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 2.36, a2 = -0.13), weights = varPower(1.4, ~TotalHt | isPlantation))
-otherDiameterFromHeightChapmanFormGnls = gnls(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = otherDiameterFromHeightChapmanForm$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl()) 
-otherDiameterFromHeightChapmanFormAatGnls = gnls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = otherDiameterFromHeightChapmanFormAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightChapmanFormBalGnls = gnls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = otherDiameterFromHeightChapmanFormBal$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanFormBalRelHtGnls = gnls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = otherDiameterFromHeightChapmanFormBalRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanFormRelHtGnls = gnls(DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = otherDiameterFromHeightChapmanFormRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanRichardsGnls = gnls(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeightChapmanRichards$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanRichardsAatGnls = gnls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeightChapmanRichardsAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanRichardsPhysioGnls = gnls(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), other2016physio, start = otherDiameterFromHeightChapmanRichardsPhysio$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanRichardsGnls = gnls(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeightChapmanRichards$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightChapmanRichardsRelHtGnls = gnls(DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeightChapmanRichardsRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightMichaelisMentenFormGnls = gnls(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016, start = otherDiameterFromHeightMichaelisMentenForm$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
-otherDiameterFromHeightNaslundGnls = gnls(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 2.28, a1p = 0, a2 = -0.13, a2p = 0), weights = varPower(1.4, ~TotalHt | isPlantation)) # step halving with or without isPlantation
-otherDiameterFromHeightPowerGnls = gnls(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = otherDiameterFromHeightPower$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightPowerAatGnls = gnls(DBH ~ (a1 + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^b1, other2016, start = otherDiameterFromHeightPowerAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightPowerPhysioGnls = gnls(DBH ~ (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^b1, other2016physio, start = otherDiameterFromHeightPowerPhysio$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightPowerRelHtGnls = gnls(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = otherDiameterFromHeightPowerRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightRuarkGnls = gnls(DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = otherDiameterFromHeightRuark$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-#otherDiameterFromHeightSchnuteGnls = gnls(DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), other2016, start = otherDiameterFromHeightSchnute$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation)) # step halving
-#otherDiameterFromHeightSharmaPartonGnls = gnls(DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, other2016, start = otherDiameterFromHeightSharmaParton$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl()) # NaN
-otherDiameterFromHeightSibbesenFormGnls = gnls(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = otherDiameterFromHeightSibbesenForm$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightSibbesenFormAatGnls = gnls(DBH ~ (a1 + a1p * isPlantation + a2 * tallerQuasiBasalArea)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = otherDiameterFromHeightSibbesenFormAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightSibbesenFormPhysioGnls = gnls(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016physio, start = otherDiameterFromHeightSibbesenFormPhysio$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightSibbesenFormRelHtGnls = gnls(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = otherDiameterFromHeightSibbesenFormRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
-otherDiameterFromHeightWeibullGnls = gnls(DBH ~ ((a1 + a1p*isPlantation)*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = otherDiameterFromHeightWeibull$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+#otherDiameterFromHeightGnls$naslundGnls = gnls(DBH ~ a1* sqrt(TotalHt - 1.37) / (1 + a2 * sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 2.36, a2 = -0.13), weights = varPower(1.4, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$chapmanForm = gnls(DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = otherDiameterFromHeightGnls$chapmanForm$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl()) 
+otherDiameterFromHeightGnls$chapmanFormAat = gnls(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016, start = otherDiameterFromHeight$chapmanFormAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$chapmanFormBal = gnls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = otherDiameterFromHeight$chapmanFormBal$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanFormBalRelHt = gnls(DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = otherDiameterFromHeight$chapmanFormBalRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanFormRelHt = gnls(DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, start = otherDiameterFromHeight$chapmanFormRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanRichards = gnls(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeight$chapmanRichards$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanRichardsAat = gnls(DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeight$chapmanRichardsAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanRichardsPhysio = gnls(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), other2016physio, start = otherDiameterFromHeight$chapmanRichardsPhysio$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanRichards = gnls(DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeight$chapmanRichards$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$chapmanRichardsRelHt = gnls(DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, start = otherDiameterFromHeight$chapmanRichardsRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$michaelisMentenForm = gnls(DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016, start = otherDiameterFromHeight$michaelisMentenForm$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
+otherDiameterFromHeightGnls$naslund = gnls(DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 2.28, a1p = 0, a2 = -0.13, a2p = 0), weights = varPower(1.4, ~TotalHt | isPlantation)) # step halving with or without isPlantation
+otherDiameterFromHeightGnls$power = gnls(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = otherDiameterFromHeight$power$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$powerAat = gnls(DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1, other2016, start = otherDiameterFromHeight$powerAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$powerPhysio = gnls(DBH ~ (a1 + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^b1, other2016physio, start = otherDiameterFromHeight$powerPhysio$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$powerRelHt = gnls(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), other2016, start = otherDiameterFromHeight$powerRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$ruark = gnls(DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = otherDiameterFromHeight$ruark$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+#otherDiameterFromHeightGnls$schnute = gnls(DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), other2016, start = otherDiameterFromHeight$schnute$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation)) # step halving
+#otherDiameterFromHeightGnls$sharmaParton = gnls(DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, other2016, start = otherDiameterFromHeight$sharmaParton$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl()) # NaN
+otherDiameterFromHeightGnls$sibbesenForm = gnls(DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = otherDiameterFromHeight$sibbesenForm$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$sibbesenFormAat = gnls(DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = otherDiameterFromHeight$sibbesenFormAat$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$sibbesenFormPhysio = gnls(DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016physio, start = otherDiameterFromHeight$sibbesenFormPhysio$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$sibbesenFormRelHt = gnls(DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = otherDiameterFromHeight$sibbesenFormRelHt$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation))
+otherDiameterFromHeightGnls$weibull = gnls(DBH ~ ((a1 + a1p*isPlantation)*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = otherDiameterFromHeight$weibull$m$getPars(), weights = varPower(1.0, ~TotalHt | isPlantation), control = gnlsControl())
 
-otherDiameterFromHeightChapmanFormGnls = get_dbh_error("Chapman-Richards form GNLS", otherDiameterFromHeightChapmanFormGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormAatGnls = get_dbh_error("Chapman-Richards form AA+T GNLS", otherDiameterFromHeightChapmanFormAatGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormBalGnls = get_dbh_error("Chapman-Richards form BA+L GNLS", otherDiameterFromHeightChapmanFormBalGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormBalRelHtGnls = get_dbh_error("Chapman-Richards form BA+L RelHt GNLS", otherDiameterFromHeightChapmanFormBalRelHtGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanFormRelHtGnls = get_dbh_error("Chapman-Richards form RelHt GNLS", otherDiameterFromHeightChapmanFormRelHtGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanRichardsGnls = get_dbh_error("Chapman-Richards GNLS", otherDiameterFromHeightChapmanRichardsGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanRichardsAatGnls = get_dbh_error("Chapman-Richards AA+T GNLS", otherDiameterFromHeightChapmanRichardsAatGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightChapmanRichardsPhysioGnls = get_dbh_error("Chapman-Richards physio GNLS", otherDiameterFromHeightChapmanRichardsPhysioGnls, other2016physio, other2016natural, other2016plantationPhysio)
-otherDiameterFromHeightChapmanRichardsRelHtGnls = get_dbh_error("Chapman-Richards RelHt GNLS", otherDiameterFromHeightChapmanRichardsRelHtGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightMichaelisMentenFormGnls = get_dbh_error("Michaelis-Menten form GNLS", otherDiameterFromHeightMichaelisMentenFormGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightNaslundGnls = get_dbh_error("Näslund GNLS", otherDiameterFromHeightNaslundGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightPowerGnls = get_dbh_error("power GNLS", otherDiameterFromHeightPowerGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightPowerAatGnls = get_dbh_error("power AA+T GNLS", otherDiameterFromHeightPowerAatGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightPowerPhysioGnls = get_dbh_error("power physio GNLS", otherDiameterFromHeightPowerPhysioGnls, other2016physio, other2016natural, other2016plantationPhysio)
-otherDiameterFromHeightPowerRelHtGnls = get_dbh_error("power RelHt GNLS", otherDiameterFromHeightPowerRelHtGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightRuarkGnls = get_dbh_error("Ruark GNLS", otherDiameterFromHeightRuarkGnls, other2016, other2016natural, other2016plantation)
-#otherDiameterFromHeightSchnuteGnls = get_dbh_error("Schnute GNLS", otherDiameterFromHeightSchnuteGnls, other2016, other2016natural, other2016plantation)
-#otherDiameterFromHeightSharmaPartonGnls = get_dbh_error("modified Sharma-Parton GNLS", otherDiameterFromHeightSharmaPartonGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSibbesenFormGnls = get_dbh_error("Sibbesen form GNLS", otherDiameterFromHeightSibbesenFormGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSibbesenFormAatGnls = get_dbh_error("Sibbesen form AA+T GNLS", otherDiameterFromHeightSibbesenFormAatGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightSibbesenFormPhysioGnls = get_dbh_error("Sibbesen form physio GNLS", otherDiameterFromHeightSibbesenFormPhysioGnls, other2016physio, other2016natural, other2016plantationPhysio)
-otherDiameterFromHeightSibbesenFormRelHtGnls = get_dbh_error("Sibbesen form RelHt GNLS", otherDiameterFromHeightSibbesenFormRelHtGnls, other2016, other2016natural, other2016plantation)
-otherDiameterFromHeightWeibullGnls = get_dbh_error("Weibull GNLS", otherDiameterFromHeightWeibullGnls, other2016, other2016natural, other2016plantation)
+otherDiameterFromHeightGnls$chapmanForm = get_dbh_error("Chapman-Richards form GNLS", otherDiameterFromHeightGnls$chapmanFormGnls, other2016)
+otherDiameterFromHeightGnls$chapmanFormAat = get_dbh_error("Chapman-Richards form AA+T GNLS", otherDiameterFromHeightGnls$chapmanFormAatGnls, other2016)
+otherDiameterFromHeightGnls$chapmanFormBal = get_dbh_error("Chapman-Richards form BA+L GNLS", otherDiameterFromHeightGnls$chapmanFormBalGnls, other2016)
+otherDiameterFromHeightGnls$chapmanFormBalRelHt = get_dbh_error("Chapman-Richards form BA+L RelHt GNLS", otherDiameterFromHeightGnls$chapmanFormBalRelHtGnls, other2016)
+otherDiameterFromHeightGnls$chapmanFormRelHt = get_dbh_error("Chapman-Richards form RelHt GNLS", otherDiameterFromHeightGnls$chapmanFormRelHtGnls, other2016)
+otherDiameterFromHeightGnls$chapmanRichards = get_dbh_error("Chapman-Richards GNLS", otherDiameterFromHeightGnls$chapmanRichardsGnls, other2016)
+otherDiameterFromHeightGnls$chapmanRichardsAat = get_dbh_error("Chapman-Richards AA+T GNLS", otherDiameterFromHeightGnls$chapmanRichardsAatGnls, other2016)
+otherDiameterFromHeightGnls$chapmanRichardsPhysio = get_dbh_error("Chapman-Richards physio GNLS", otherDiameterFromHeightGnls$chapmanRichardsPhysioGnls, other2016physioPhysio)
+otherDiameterFromHeightGnls$chapmanRichardsRelHt = get_dbh_error("Chapman-Richards RelHt GNLS", otherDiameterFromHeightGnls$chapmanRichardsRelHtGnls, other2016)
+otherDiameterFromHeightGnls$michaelisMentenForm = get_dbh_error("Michaelis-Menten form GNLS", otherDiameterFromHeightGnls$michaelisMentenFormGnls, other2016)
+otherDiameterFromHeightGnls$naslund = get_dbh_error("Näslund GNLS", otherDiameterFromHeightGnls$naslundGnls, other2016)
+otherDiameterFromHeightGnls$power = get_dbh_error("power GNLS", otherDiameterFromHeightGnls$powerGnls, other2016)
+otherDiameterFromHeightGnls$powerAat = get_dbh_error("power AA+T GNLS", otherDiameterFromHeightGnls$powerAatGnls, other2016)
+otherDiameterFromHeightGnls$powerPhysio = get_dbh_error("power physio GNLS", otherDiameterFromHeightGnls$powerPhysioGnls, other2016physioPhysio)
+otherDiameterFromHeightGnls$powerRelHt = get_dbh_error("power RelHt GNLS", otherDiameterFromHeightGnls$powerRelHtGnls, other2016)
+otherDiameterFromHeightGnls$ruark = get_dbh_error("Ruark GNLS", otherDiameterFromHeightGnls$ruarkGnls, other2016)
+#otherDiameterFromHeightGnls$schnute = get_dbh_error("Schnute GNLS", otherDiameterFromHeightGnls$schnuteGnls, other2016)
+#otherDiameterFromHeightGnls$sharmaParton = get_dbh_error("modified Sharma-Parton GNLS", otherDiameterFromHeightGnls$sharmaPartonGnls, other2016)
+otherDiameterFromHeightGnls$sibbesenForm = get_dbh_error("Sibbesen form GNLS", otherDiameterFromHeightGnls$sibbesenFormGnls, other2016)
+otherDiameterFromHeightGnls$sibbesenFormAat = get_dbh_error("Sibbesen form AA+T GNLS", otherDiameterFromHeightGnls$sibbesenFormAatGnls, other2016)
+otherDiameterFromHeightGnls$sibbesenFormPhysio = get_dbh_error("Sibbesen form physio GNLS", otherDiameterFromHeightGnls$sibbesenFormPhysioGnls, other2016physioPhysio)
+otherDiameterFromHeightGnls$sibbesenFormRelHt = get_dbh_error("Sibbesen form RelHt GNLS", otherDiameterFromHeightGnls$sibbesenFormRelHtGnls, other2016)
+otherDiameterFromHeightGnls$weibull = get_dbh_error("Weibull GNLS", otherDiameterFromHeightGnls$weibullGnls, other2016)
 
-otherDiameterFromHeightResultsGnls = bind_rows(as_row(otherDiameterFromHeightChapmanFormGnls),
-                                               as_row(otherDiameterFromHeightChapmanFormAatGnls),
-                                               as_row(otherDiameterFromHeightChapmanFormBalGnls),
-                                               as_row(otherDiameterFromHeightChapmanFormRelHtGnls),
-                                               as_row(otherDiameterFromHeightChapmanRichardsGnls),
-                                               as_row(otherDiameterFromHeightChapmanRichardsAatGnls),
-                                               as_row(otherDiameterFromHeightChapmanRichardsPhysioGnls),
-                                               as_row(otherDiameterFromHeightChapmanRichardsRelHtGnls),
-                                               as_row(otherDiameterFromHeightMichaelisMentenFormGnls),
-                                               as_row(otherDiameterFromHeightNaslundGnls),
-                                               as_row(otherDiameterFromHeightPowerGnls),
-                                               as_row(otherDiameterFromHeightPowerAatGnls),
-                                               as_row(otherDiameterFromHeightPowerPhysioGnls),
-                                               as_row(otherDiameterFromHeightPowerRelHtGnls),                                           as_row(otherDiameterFromHeightRuarkGnls),
-                                               as_row(otherDiameterFromHeightRuarkGnls),
-                                               #as_row(otherDiameterFromHeightSchnuteGnls),
-                                               #as_row(otherDiameterFromHeightSharmaPartonGnls),
-                                               as_row(otherDiameterFromHeightSibbesenFormGnls),
-                                               as_row(otherDiameterFromHeightSibbesenFormAatGnls),
-                                               as_row(otherDiameterFromHeightSibbesenFormPhysioGnls),
-                                               as_row(otherDiameterFromHeightSibbesenFormRelHtGnls),
-                                               as_row(otherDiameterFromHeightWeibullGnls)) %>%
+otherDiameterFromHeightResultsGnls = bind_rows(lapply(otherDiameterFromHeight, as_row)) %>%
+                                               #as_row(otherDiameterFromHeight$schnuteGnls),
+                                               #as_row(otherDiameterFromHeight$sharmaPartonGnls),
   mutate(responseVariable = "DBH", species = "other", deltaAic = aic - min(aic, na.rm = TRUE)) %>%
   arrange(desc(deltaAic))
 
 ggplot() +
-  geom_histogram(aes(x = power), otherDiameterFromHeightResultsGnls, binwidth = 0.1) +
-  geom_segment(aes(x = mean(otherDiameterFromHeightResultsGnls$power), xend = mean(otherDiameterFromHeightResultsGnls$power), y = 0, yend = 10), color = "grey70", linetype = "longdash") +
-  geom_segment(aes(x = median(otherDiameterFromHeightResultsGnls$power), xend = median(otherDiameterFromHeightResultsGnls$power), y = 0, yend = 10), color = "grey70", linetype = "longdash")
+  geom_histogram(aes(x = power), otherDiameterFromHeight$resultsGnls, binwidth = 0.1) +
+  geom_segment(aes(x = mean(otherDiameterFromHeight$resultsGnls$power), xend = mean(otherDiameterFromHeight$resultsGnls$power), y = 0, yend = 10), color = "grey70", linetype = "longdash") +
+  geom_segment(aes(x = median(otherDiameterFromHeight$resultsGnls$power), xend = median(otherDiameterFromHeight$resultsGnls$power), y = 0, yend = 10), color = "grey70", linetype = "longdash")
   
-otherDiameterFromHeightResultsGnls %>% summarize(power = mean(power), powerPlantation = mean(powerPlantation))
+otherDiameterFromHeight$resultsGnls %>% summarize(power = mean(power), powerPlantation = mean(powerPlantation))
 
 ## collect model parameters
-otherParameters = bind_rows(bind_rows(get_coefficients(otherHeightFromDiameterChapmanRichards),
-                                      get_coefficients(otherHeightFromDiameterChapmanRichardsBal),
-                                      get_coefficients(otherHeightFromDiameterChapmanRichardsBalPhysio),
-                                      get_coefficients(otherHeightFromDiameterChapmanRichardsBalRelHt),
-                                      get_coefficients(otherHeightFromDiameterChapmanRichardsPhysio),
-                                      get_coefficients(otherHeightFromDiameterCurtis),
-                                      get_coefficients(otherHeightFromDiameterGam),
-                                      get_coefficients(otherHeightFromDiameterGamBal),
-                                      #get_coefficients(otherHeightFromDiameterGamBalPhysio),
-                                      get_coefficients(otherHeightFromDiameterGamPhysio),
-                                      get_coefficients(otherHeightFromDiameterHossfeld),
-                                      get_coefficients(otherHeightFromDiameterKorf),
-                                      get_coefficients(otherHeightFromDiameterLinear),
-                                      get_coefficients(otherHeightFromDiameterMichaelisMenten),
-                                      get_coefficients(otherHeightFromDiameterParabolic),
-                                      get_coefficients(otherHeightFromDiameterPower),
-                                      get_coefficients(otherHeightFromDiameterProdan),
-                                      get_coefficients(otherHeightFromDiameterRatkowsky),
-                                      get_coefficients(otherHeightFromDiameterRichards),
-                                      get_coefficients(otherHeightFromDiameterSharmaParton),
-                                      get_coefficients(otherHeightFromDiameterSharmaPartonBal),
-                                      get_coefficients(otherHeightFromDiameterSharmaPartonBalPhysio),
-                                      get_coefficients(otherHeightFromDiameterSharmaPartonPhysio),
-                                      get_coefficients(otherHeightFromDiameterSharmaZhang),
-                                      get_coefficients(otherHeightFromDiameterSharmaZhangBal),
-                                      get_coefficients(otherHeightFromDiameterSibbesen),
-                                      get_coefficients(otherHeightFromDiameterWeibull),
-                                      get_coefficients(otherHeightFromDiameterWeibullBal),
-                                      get_coefficients(otherHeightFromDiameterWeibullBalRelHt),
-                                      #get_coefficients(otherHeightFromDiameterChapmanRichardsGnls),
-                                      get_coefficients(otherHeightFromDiameterChapmanRichardsBalGnls),
-                                      get_coefficients(otherHeightFromDiameterSharmaPartonGnls),
-                                      get_coefficients(otherHeightFromDiameterSharmaPartonBalGnls),
-                                      get_coefficients(otherHeightFromDiameterSharmaZhangGnls),
-                                      #get_coefficients(otherHeightFromDiameterSharmaZhangBalGnls),
-                                      get_coefficients(otherHeightFromDiameterWeibullGnls),
-                                      get_coefficients(otherHeightFromDiameterWeibullBalGnls)) %>%
+otherParameters = bind_rows(bind_rows(lapply(otherHeightFromDiameter, get_coefficients),
+                                      #get_coefficients(otherHeightFromDiameter$gamBalPhysio),
+                                      lapply(otherHeightFromDiameterGnls, get_coefficients)) %>%
+                                      #get_coefficients(otherHeightFromDiameter$chapmanRichardsGnls),
+                                      #get_coefficients(otherHeightFromDiameter$sharmaZhangBalGnls),
                               mutate(responseVariable = "height"),
-                            bind_rows(get_coefficients(otherDiameterFromHeightChapmanRichards),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsAat),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsPhysio),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsRelHt),
-                                      get_coefficients(otherDiameterFromHeightChapmanForm),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormAat),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormBal),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormBalRelHt),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormRelHt),
-                                      get_coefficients(otherDiameterFromHeightGam),
-                                      get_coefficients(otherDiameterFromHeightGamAat),
-                                      #get_coefficients(otherDiameterFromHeightGamAatPhysio),
-                                      get_coefficients(otherDiameterFromHeightGamPhysio),
-                                      get_coefficients(otherDiameterFromHeightLinear),
-                                      get_coefficients(otherDiameterFromHeightMichaelisMentenForm),
-                                      get_coefficients(otherDiameterFromHeightNaslund),
-                                      get_coefficients(otherDiameterFromHeightParabolic),
-                                      get_coefficients(otherDiameterFromHeightPower),
-                                      get_coefficients(otherDiameterFromHeightPowerAat),
-                                      get_coefficients(otherDiameterFromHeightPowerPhysio),
-                                      get_coefficients(otherDiameterFromHeightPowerRelHt),
-                                      get_coefficients(otherDiameterFromHeightRuark),
-                                      get_coefficients(otherDiameterFromHeightSchnute),
-                                      get_coefficients(otherDiameterFromHeightSharmaParton),
-                                      get_coefficients(otherDiameterFromHeightSibbesenForm),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormAat),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormPhysio),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormRelHt),
-                                      get_coefficients(otherDiameterFromHeightWeibull),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsAatGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsPhysioGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanRichardsRelHtGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormAatGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormBalGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormBalRelHtGnls),
-                                      get_coefficients(otherDiameterFromHeightChapmanFormRelHtGnls),
-                                      get_coefficients(otherDiameterFromHeightMichaelisMentenFormGnls),
-                                      get_coefficients(otherDiameterFromHeightNaslundGnls),
-                                      get_coefficients(otherDiameterFromHeightPowerGnls),
-                                      get_coefficients(otherDiameterFromHeightPowerAatGnls),
-                                      get_coefficients(otherDiameterFromHeightPowerPhysioGnls),
-                                      get_coefficients(otherDiameterFromHeightPowerRelHtGnls),
-                                      get_coefficients(otherDiameterFromHeightRuarkGnls),
-                                      #get_coefficients(otherDiameterFromHeightSchnuteGnls),
-                                      #get_coefficients(otherDiameterFromHeightSharmaPartonGnls),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormGnls),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormAatGnls),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormPhysioGnls),
-                                      get_coefficients(otherDiameterFromHeightSibbesenFormRelHtGnls),
-                                      get_coefficients(otherDiameterFromHeightWeibullGnls)) %>%
+                            bind_rows(lapply(otherDiameterFromHeight, get_coefficients),
+                                      #get_coefficients(otherDiameterFromHeight$gamAatPhysio),
+                                      lapply(otherDiameterFromHeightGnls, get_coefficients)) %>%
+                                      #get_coefficients(otherDiameterFromHeight$schnuteGnls),
+                                      #get_coefficients(otherDiameterFromHeight$sharmaPartonGnls),
                               mutate(responseVariable = "DBH")) %>%
   mutate(species = "other",
          a1 = as.numeric(a1), a1p = as.numeric(a1p), a2 = as.numeric(a2), a2p = as.numeric(a2p), a3 = as.numeric(a3), a3p = as.numeric(a3p),
@@ -536,26 +316,21 @@ otherParameters = bind_rows(bind_rows(get_coefficients(otherHeightFromDiameterCh
 
 
 ## basal area from height
-otherBasalAreaFromHeightKorf = gsl_nls(basalArea ~ a1*(exp(b1*(imputedHeight - 1.37)^(b2 + b2p*isPlantation)) - 1), other2016, start = list(a1 = 1.36, b1 = 0.0002, b2 = 2.06, b2p = -0.27), weights = pmin(1/basalArea, 1E4), control = nls.control(maxiter = 50)) # a1p, b1p not significant, step factor with nlrob()
-otherBasalAreaFromHeightPower = nlrob(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^(b1 + b1p*isPlantation), other2016, start = list(a1 = 4/7 * 0.25 * pi * 0.01^2, a1p = -0.00001, b1 = 2.53, b1p = -0.435), maxit = 70, weights = pmin(1/basalArea, 1E4), control = nls.control(maxiter = 50))
+otherBasalAreaFromHeightKorf = gsl_nls(basalArea ~ a1*(exp(b1*(imputedHeight - 1.37)^(b2 + b2p*isPlantation)) - 1), other2016, start = list(a1 = 1.36, b1 = 0.0002, b2 = 2.06, b2p = -0.27), weights = pmin(1/basalArea, 1E4), control = nls.control(maxiter = 50)) # a1p, b1p not significant, step factor with fit_nlrob()
+otherBasalAreaFromHeightPower = fit_nlrob(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^(b1 + b1p*isPlantation), other2016, start = list(a1 = 4/7 * 0.25 * pi * 0.01^2, a1p = -0.00001, b1 = 2.53, b1p = -0.435), maxit = 70, weights = pmin(1/basalArea, 1E4), control = nls.control(maxiter = 50))
 #confint2(otherBasalAreaFromHeightKorf, level = 0.99)
 #confint_nlrob(otherBasalAreaFromHeightPower, level = 0.99, weights = pmin(1/other2016$basalArea, 1E4))
 
-otherBasalAreaFromHeightKorf$fitted.values = predict(otherBasalAreaFromHeightKorf, other2016)
-otherBasalAreaFromHeightKorf$residuals = otherBasalAreaFromHeightKorf$fitted.values - other2016$basalArea
-otherBasalAreaFromHeightPower$fitted.values = predict(otherBasalAreaFromHeightPower, other2016)
-otherBasalAreaFromHeightPower$residuals = otherBasalAreaFromHeightPower$fitted.values - other2016$basalArea
-
 tribble(~method, ~aic, ~biasCm2, ~maeM2, ~nse,
-        "Korf", AIC(otherBasalAreaFromHeightKorf), 100^2 * mean(otherBasalAreaFromHeightKorf$residuals), mean(abs(otherBasalAreaFromHeightKorf$residuals)), 1 - sum(otherBasalAreaFromHeightKorf$residuals^2) / sum((other2016$basalArea - mean(other2016$basalArea)^2)),
-        "power", AIC(otherBasalAreaFromHeightPower), 100^2 * mean(otherBasalAreaFromHeightPower$residuals), mean(abs(otherBasalAreaFromHeightPower$residuals)), 1 - sum(otherBasalAreaFromHeightPower$residuals^2) / sum((other2016$basalArea - mean(other2016$basalArea)^2))) %>%
+        "Korf", AIC(otherBasalAreaFromHeightKorf), 100^2 * mean(residuals(otherBasalAreaFromHeightKorf)), mean(abs(residuals(otherBasalAreaFromHeightKorf))), 1 - sum(residuals(otherBasalAreaFromHeightKorf)^2) / sum((other2016$basalArea - mean(other2016$basalArea)^2)),
+        "power", AIC(otherBasalAreaFromHeightPower), 100^2 * mean(residuals(otherBasalAreaFromHeightPower)), mean(abs(residuals(otherBasalAreaFromHeightPower))), 1 - sum(residuals(otherBasalAreaFromHeightPower)^2) / sum((other2016$basalArea - mean(other2016$basalArea)^2))) %>%
   mutate(deltaAIC = aic - min(aic)) %>%
   arrange(desc(deltaAIC))
 
 ggplot(other2016) +
   geom_point(aes(x = imputedHeight, y = 0.25*pi*(0.01*DBH)^2), alpha = 0.1, color = "grey25", shape = 16) +
-  geom_line(aes(x = imputedHeight, y = otherBasalAreaFromHeightKorf$fitted.values, color = "Korf", group = isPlantation)) +
-  geom_line(aes(x = imputedHeight, y = otherBasalAreaFromHeightPower$fitted.values, color = "power", group = isPlantation)) +
+  geom_line(aes(x = imputedHeight, y = predict(otherBasalAreaFromHeightKorf), color = "Korf", group = isPlantation)) +
+  geom_line(aes(x = imputedHeight, y = predict(otherBasalAreaFromHeightPower), color = "power", group = isPlantation)) +
   #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
   labs(x = "minority species height, m", y = "basal area, m²", color = NULL) +
   theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))
