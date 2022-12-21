@@ -1,14 +1,23 @@
+# documentation
+**/*.pdf
+
 # GIS and other data files
 **/*.csv
 **/*.xlsx
+**/*.atx
+**/*.dbf.xml
 **/*.fgb
 **/*.qmd
 **/*.gpkg
 **/*.mdb
 **/*.cpg
 **/*.dbf
+**/*.lyr
 **/*.prj
+**/*.sbn
+**/*.sbx
 **/*.shp
+**/*.shp.xml
 **/*.shx
 **/*.tif
 
