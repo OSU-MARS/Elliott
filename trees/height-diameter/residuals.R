@@ -40,7 +40,7 @@ heightIqr = bind_rows(tibble(species = "PSME", name = "Michaelis-Menten", fittin
   mutate(species = factor(species, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"),  levels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other")),
          iqr = q75 - q25)
 
-# Figure S4 in HtDia figures.R
+# Figure S4 in results.R
 
 ggplot() +
   geom_point(aes(x = DBH, y = TotalHt), psme2016, alpha = 0.1, color = "grey25", shape = 16) +
@@ -95,7 +95,7 @@ diameterIqr = bind_rows(tibble(species = "PSME", name = "Ruark", fitting = "nlrq
   mutate(species = factor(species, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"),  levels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other")),
          iqr = q75 - q25)
 
-# Figure S5 in HtDia figures.R
+# Figure S5 in results.R
 
 ggplot() +
   geom_point(aes(x = DBH, y = TotalHt), psme2016, alpha = 0.1, color = "grey25", shape = 16) +
@@ -226,7 +226,7 @@ psmeDiameterResidualLm0.5 = lm(residual ~ I(sqrt(TotalHt - 1.37)), tibble(TotalH
 psmeDiameterResidualLm1 = lm(residual ~ I(TotalHt - 1.37), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))))
 psmeDiameterResidualLm2 = lm(residual ~ I(TotalHt - 1.37) + I((TotalHt - 1.37)^2), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))))
 psmeDiameterResidualLm3 = lm(residual ~ I(TotalHt - 1.37) + I((TotalHt - 1.37)^2) + I((TotalHt - 1.37)^3), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))))
-psmeDiameterRuarkResidualConstPower = gsl_nls(residual ~ a0 + a1*(TotalHt - 1.37)^b1, tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))), start = list(a0 = 0, a1 = 1, b1 = 1), control = nls.control(maxiter = 250)) # parameter evaporation
+psmeDiameterRuarkResidualConstPower = gsl_nls(residual ~ a0 + a1*(TotalHt - 1.37)^b1, tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))), start = list(a0 = 0, a1 = 1, b1 = 1), control = gsl_nls_control(maxiter = 250)) # parameter evaporation
 psmeDiameterRuarkResidualPower = nlrob(residual ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = psme2016$TotalHt, isPlantation = psme2016$isPlantation, residual = abs(residuals(psmeDiameterFromHeightRuark))), start = list(a1 = 1, b1 = 1, b1p = 0)) # NaN-inf with a1p
 psmeDiameterRuarkResidualPower$confint = confint_nlrob(psmeDiameterRuarkResidualPower, level = 0.99, weights = rep(1, psmeDiameterRuarkResidualPower$nobs))
 
@@ -265,7 +265,7 @@ alruDiameterResidualLm0.5 = lm(residual ~ I(sqrt(TotalHt - 1.37)), tibble(TotalH
 alruDiameterResidualLm1 = lm(residual ~ I(TotalHt - 1.37), tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))))
 alruDiameterResidualLm2 = lm(residual ~ I(TotalHt - 1.37) + I((TotalHt - 1.37)^2), tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))))
 alruDiameterResidualLm3 = lm(residual ~ I(TotalHt - 1.37) + I((TotalHt - 1.37)^2) + I((TotalHt - 1.37)^3), tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))))
-alruDiameterRuarkResidualConstPower = gsl_nls(residual ~ a0 + a1*(TotalHt - 1.37)^b1, tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))), start = list(a0 = 0, a1 = 1, b1 = 1), control = nls.control(maxiter = 250)) # parameter evaporation
+alruDiameterRuarkResidualConstPower = gsl_nls(residual ~ a0 + a1*(TotalHt - 1.37)^b1, tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))), start = list(a0 = 0, a1 = 1, b1 = 1), control = gsl_nls_control(maxiter = 250)) # parameter evaporation
 alruDiameterRuarkResidualPower = nlrob(residual ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation), tibble(TotalHt = alru2016$TotalHt, isPlantation = alru2016$isPlantation, residual = abs(residuals(alruDiameterFromHeightRuark))), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0))
 alruDiameterRuarkResidualPower$confint = confint_nlrob(alruDiameterRuarkResidualPower, level = 0.99, weights = rep(1, alruDiameterRuarkResidualPower$nobs))
 
@@ -403,4 +403,4 @@ residualPower %>% select(species, ht_b1, ht_b1p, dia_b1, dia_b1p) %>%
             dia_b1 = round(2 * mean(dia_b1), 1), dia_b1p = round(2 * mean(dia_b1p), 1))
 residualPower %>% summarize(ht_b1 = mean(ht_b1), ht_b1p = mean(ht_b1 + if_else(is.na(ht_b1p), 0, ht_b1p)), dia_b1 = mean(dia_b1), dia_b1p = mean(dia_b1 + dia_b1p))
 
-# Figure S6 in HtDia figures.R
+# Figure S6 in results.R

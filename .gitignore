@@ -3,28 +3,51 @@
 
 # GIS and other data files
 **/*.csv
-**/*.xlsx
-**/*.atx
-**/*.dbf.xml
-**/*.fgb
-**/*.qmd
-**/*.gpkg
 **/*.mdb
-**/*.cpg
-**/*.dbf
-**/*.lyr
-**/*.prj
-**/*.sbn
-**/*.sbx
-**/*.shp
-**/*.shp.xml
-**/*.shx
-**/*.tif
+**/*.xlsx
+GIS/**/*.adf
+GIS/**/*.asc
+GIS/**/*.atx
+GIS/**/*.aux
+GIS/**/*.aux.xml
+GIS/**/*.bin
+GIS/**/*.dbf.xml
+GIS/**/*.docx
+GIS/**/*.fgb
+GIS/**/*.gdb
+GIS/**/*.hdf
+GIS/**/*.qmd
+GIS/**/*.gpkg
+GIS/**/*.cpg
+GIS/**/*.dbf
+GIS/**/*.html
+GIS/**/*.ini
+GIS/**/*.laz
+GIS/**/*.lyr
+GIS/**/*.mxd
+GIS/**/*.ovr
+GIS/**/*.prj
+GIS/**/*.rrd
+GIS/**/*.sbn
+GIS/**/*.sbx
+GIS/**/*.shp
+GIS/**/*.shp.xml
+GIS/**/*.shx
+GIS/**/*.spx
+GIS/**/*.tfw
+GIS/**/*.tif
+GIS/**/*.tif.ovr
+GIS/**/*.tiff
+GIS/**/*.txt
+GIS/**/*.vrt
+GIS/**/*.xml
+GIS/GRASS
 
 # offline directories
 doc/
 iLand/
 presentation/
+Woodstock/
 
 # QGIS and RStudio user data
 Elliott.qgz
