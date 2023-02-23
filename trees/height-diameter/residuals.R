@@ -1,6 +1,136 @@
-library(quantreg)
+## GAM-based variance estimation
+# Using by = interaction(speciesGroup, isPlantation) takes ~61 seconds for height and 160 for DBH (Zen 3, 4.8 GHz).
+# furring by species group takes ~1 s but means seven models to analyze.
+plan(multisession, workers = 7)
+liveUnbrokenHeightTrees2016 = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE)
+
+#baseFormsForHeight = liveUnbrokenHeightTrees2016 %>% split(liveUnbrokenHeightTrees2016$speciesGroup) %>%
+#  future_map(~gam(TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 15, pc = c(DBH = -2)), data = ., method = "REML", select = TRUE, nthreads = 4))
+#baseFormsForDbh = liveUnbrokenHeightTrees2016 %>% split(liveUnbrokenHeightTrees2016$speciesGroup) %>%
+#  future_map(~gam(DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 15, pc = c(TotalHt = 1.37)), data = liveUnbrokenHeightTrees2016, method = "REML", select = TRUE, nthreads = 8))
+baseFormForHeight = gam(TotalHt ~ s(DBH, bs = "ts", by = interaction(speciesGroup, as.factor(isPlantation)), k = 16, pc = c(DBH = -2)), data = liveUnbrokenHeightTrees2016, method = "REML", select = TRUE, weights = pmin(1/(1.2*DBH^0.8), 5), nthreads = 8)
+baseFormForDbh = gam(DBH ~ s(TotalHt, bs = "ts", by = interaction(speciesGroup, as.factor(isPlantation)), k = 12, pc = c(TotalHt = 1.37)), data = liveUnbrokenHeightTrees2016, method = "REML", select = TRUE, weights = pmin(1/(7.2*(TotalHt - 1.3)^1.3), 5), nthreads = 8)
+#summary(baseFormForHeight)
+#summary(baseFormForDbh)
+
+predictionError = tibble(speciesGroup = liveUnbrokenHeightTrees2016$speciesGroup,
+                         TotalHt = liveUnbrokenHeightTrees2016$TotalHt, 
+                         DBH = liveUnbrokenHeightTrees2016$DBH, 
+                         isPlantation = liveUnbrokenHeightTrees2016$isPlantation,
+                         predictedHeight = predict(baseFormForHeight, liveUnbrokenHeightTrees2016), # a couple seconds
+                         predictedDbh = predict(baseFormForDbh, liveUnbrokenHeightTrees2016)) %>%
+  mutate(speciesGroup = recode_factor(speciesGroup, "DF" = "Psme", "RA" = "Alru", "WH" = "Tshe", "BM" = "Acma", "OM" = "Umca", "RC" = "Thpl"),
+         heightResidual = predictedHeight - TotalHt, dbhResidual = predictedDbh - DBH,
+         heightResidualSquared = heightResidual^2, dbhResidualSquared = dbhResidual^2)
+
+empiricalHeightVariance = predictionError %>% 
+  mutate(dbhClass = if_else(DBH < 100, 5 * floor(DBH / 5) + 0.5 * 5, 25 * floor(DBH / 25) + 0.5 * 25)) %>%
+  group_by(speciesGroup, isPlantation, dbhClass) %>%
+  summarize(n = n(),
+            variance = if_else(n() > 1, sum(heightResidualSquared) / (n() - 1), NA_real_), .groups = "drop") %>%
+  mutate(varianceQ025 = (n - 1) * variance / qchisq(0.975, n - 1),
+         varianceQ975 = (n - 1) * variance / qchisq(0.025, n - 1)) %>%
+  relocate(speciesGroup, isPlantation, dbhClass, n, varianceQ025, variance, varianceQ975)
+empiricalDbhVariance = predictionError %>% 
+  mutate(heightClass = if_else(TotalHt < 70, floor(TotalHt) + 0.5 * 1, 2.5 * floor(TotalHt / 2.5) + 0.5 * 2.5)) %>%
+  group_by(speciesGroup, isPlantation, heightClass) %>%
+  summarize(n = n(),
+            variance = if_else(n() > 1, sum(dbhResidualSquared) / (n() - 1), NA_real_), .groups = "drop") %>%
+  mutate(varianceQ025 = (n - 1) * variance / qchisq(0.975, n - 1),
+         varianceQ975 = (n - 1) * variance / qchisq(0.025, n - 1)) %>%
+  relocate(speciesGroup, isPlantation, heightClass, n, varianceQ025, variance, varianceQ975)
+
+varianceForHeightWeightMultiplier = list(psme = 1.8, alru = 1.6, tshe = 1.3, acma = 1.3, umca = 1.3, thpl = 0.2, other = 1.1)
+varianceForHeightWeightPower = list(psme = 0.7, alru = 0.8, tshe = 0.8, acma = 0.8, umca = 0.7, thpl = 1.2, other = 0.9)
+varianceForHeight = list(psme = gsl_nls(heightResidualSquared ~ a1*DBH^(b1 + b1p*isPlantation), predictionError %>% filter(speciesGroup == "Psme"), start = list(a1 = 1, b1 = 1, b1p = 0), weight = pmin(1/(varianceForHeightWeightMultiplier$psme*DBH^varianceForHeightWeightPower$psme), 5))) # a1p statistically significant but fit is implausible on a1-b1 divergence and cancellation
+varianceForHeight$alru = gsl_nls(heightResidualSquared ~ a1*DBH^(b1 + b1p*isPlantation), predictionError %>% filter(speciesGroup == "Alru"), start = list(a1 = 1, b1 = 1, b1p = 0), weight = pmin(1/(varianceForHeightWeightMultiplier$alru*DBH^varianceForHeightWeightPower$alru), 5))
+varianceForHeight$tshe = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "Tshe"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForHeightWeightMultiplier$tshe*DBH^varianceForHeightWeightPower$tshe), 5))
+varianceForHeight$acma = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "Acma"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForHeightWeightMultiplier$acma*DBH^varianceForHeightWeightPower$acma), 5))
+varianceForHeight$umca = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "Umca"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForHeightWeightMultiplier$umca*DBH^varianceForHeightWeightPower$umca), 5))
+varianceForHeight$thpl = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "Thpl"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForHeightWeightMultiplier$thpl*DBH^varianceForHeightWeightPower$thpl), 5))
+varianceForHeight$other = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "other"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForHeightWeightMultiplier$other*DBH^varianceForHeightWeightPower$other), 5))
+#bind_rows(imap(varianceForHeight, function(model, name) { return(c(responseVariable = "height", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% summarize(a1 = mean(as.numeric(a1)), b1 = mean(as.numeric(b1)))
+#lapply(varianceForHeight, confint2, level = 0.99)
+
+varianceForDbhWeightMultiplier = list(psme = 5.7, alru = 27, tshe = 1.1, acma = 9.7, umca = 3.5, thpl = 2.4, other = 1.3)
+varianceForDbhWeightPower = list(psme = 1.1, alru = 0.6, tshe = 1.5, acma = 1.2, umca = 1.6, thpl = 1.4, other = 1.8)
+varianceForDbh = list(psme = gsl_nls(dbhResidualSquared ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), predictionError %>% filter(speciesGroup == "Psme"), start = list(a1 = 1, a1p = 0, b1 = 1, b1p = 0), weight = pmin(1/(varianceForDbhWeightMultiplier$psme*(TotalHt - 1.37)^varianceForDbhWeightPower$psme), 5)))
+varianceForDbh$alru = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^(b1 + b1p*isPlantation), predictionError %>% filter(speciesGroup == "Alru"), start = list(a1 = 1, b1 = 1, b1p = 0), weight = pmin(1/(varianceForDbhWeightMultiplier$alru*(TotalHt - 1.37)^varianceForDbhWeightPower$alru), 5))
+varianceForDbh$tshe = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "Tshe"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForDbhWeightMultiplier$tshe*(TotalHt - 1.37)^varianceForDbhWeightPower$tshe), 5)) # b1p makes a1 not significant
+varianceForDbh$acma = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "Acma"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForDbhWeightMultiplier$acma*(TotalHt - 1.37)^varianceForDbhWeightPower$acma), 5))
+varianceForDbh$umca = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "Umca"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForDbhWeightMultiplier$umca*(TotalHt - 1.37)^varianceForDbhWeightPower$umca), 5))
+varianceForDbh$thpl = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "Thpl"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForDbhWeightMultiplier$thpl*(TotalHt - 1.37)^varianceForDbhWeightPower$thpl), 5))
+varianceForDbh$other = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "other"), start = list(a1 = 1, b1 = 1), weight = pmin(1/(varianceForDbhWeightMultiplier$other*(TotalHt - 1.37)^varianceForDbhWeightPower$other), 5))
+#bind_rows(imap(varianceForDbh, function(model, name) { return(c(responseVariable = "DBH", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% summarize(a1 = mean(as.numeric(a1)), b1 = mean(as.numeric(b1)))
+#lapply(varianceForDbh, confint2, level = 0.99)
+
+predict_gsl_nls = function(model, newData, weights, level = 0.95)
+{
+  # modification of gslnls::predict.gsl_nls() to include weights (https://github.com/JorisChau/gslnls/blob/master/R/nls_methods.R)
+  fit = model$m$predict(newData)
+  Fdot = diag(pmin(weights, 1)) %*% model$m$gradient1(newData)
+  Rmat = qr.R(qr(Fdot))
+  scale = sigma(model)
+  a = c((1 - level) / 2, (1 + level) / 2)
+  ses = scale * sqrt(1 + rowSums(Fdot %*% chol2inv(Rmat) * Fdot))
+  ci = fit + ses %o% qt(a, df.residual(model))
+  return(cbind(fit = fit, lwr = ci[, 1], upr = ci[, 2]))
+}
+
+modeledVariance = crossing(tibble(DBH = seq(0, 250), TotalHt = seq(1.37, 85, length.out = 251)),
+                           tibble(isPlantation = c(TRUE, FALSE))) %>%
+  mutate(estHeightVarPsme = predict_gsl_nls(varianceForHeight$psme, ., pmin(1/(varianceForHeightWeightMultiplier$psme*.$DBH^varianceForHeightWeightPower$psme), 5)), # column order is fit, lower, upper
+         estHeightVarAlru = predict_gsl_nls(varianceForHeight$alru, ., pmin(1/(varianceForHeightWeightMultiplier$alru*.$DBH^varianceForHeightWeightPower$alru), 5)),
+         estHeightVarTshe = predict_gsl_nls(varianceForHeight$tshe, ., pmin(1/(varianceForHeightWeightMultiplier$tshe*.$DBH^varianceForHeightWeightPower$tshe), 5)),
+         estHeightVarAcma = predict_gsl_nls(varianceForHeight$acma, ., pmin(1/(varianceForHeightWeightMultiplier$acma*.$DBH^varianceForHeightWeightPower$acma), 5)),
+         estHeightVarUmca = predict_gsl_nls(varianceForHeight$umca, ., pmin(1/(varianceForHeightWeightMultiplier$umca*.$DBH^varianceForHeightWeightPower$umca), 5)),
+         estHeightVarThpl = predict_gsl_nls(varianceForHeight$thpl, ., pmin(1/(varianceForHeightWeightMultiplier$thpl*.$DBH^varianceForHeightWeightPower$thpl), 5)),
+         estHeightVarOther = predict_gsl_nls(varianceForHeight$other, ., pmin(1/(varianceForHeightWeightMultiplier$other*.$DBH^varianceForHeightWeightPower$other), 5)),
+         estDbhVarPsme = predict_gsl_nls(varianceForDbh$psme, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$psme), 5)),
+         estDbhVarAlru = predict_gsl_nls(varianceForDbh$alru, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$alru), 5)),
+         estDbhVarTshe = predict_gsl_nls(varianceForDbh$tshe, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$tshe), 5)),
+         estDbhVarAcma = predict_gsl_nls(varianceForDbh$acma, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$acma), 5)),
+         estDbhVarUmca = predict_gsl_nls(varianceForDbh$umca, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$umca), 5)),
+         estDbhVarThpl = predict_gsl_nls(varianceForDbh$thpl, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$thpl), 5)),
+         estDbhVarOther = predict_gsl_nls(varianceForDbh$other, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$other), 5))) %>%
+  pivot_longer(cols = c(starts_with("estHeightVar"), starts_with("estDbhVar")), names_to = c("estimate", "speciesGroup"), names_pattern = "(estHeightVar|estDbhVar)(\\w{4,5})") %>%
+  pivot_wider(id_cols = c("DBH", "TotalHt", "speciesGroup", "isPlantation"), names_from = "estimate", values_from = "value") %>%
+  mutate(speciesGroup = factor(if_else(speciesGroup != "Other", speciesGroup, "other"), levels = levels(predictionError$speciesGroup)))
+#print(modeledVariance, n = 100)
+
+speciesGroupColors = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")
+speciesGroupNames = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")
+ggplot() +
+  geom_errorbar(aes(x = dbhClass, ymin = varianceQ025, ymax = varianceQ975, alpha = n), empiricalHeightVariance, color = "grey50", linewidth = 0.3, na.rm = TRUE) +
+  geom_point(aes(x = dbhClass, y = variance, alpha = n, shape = isPlantation, size = isPlantation), empiricalHeightVariance, color = "grey40", na.rm = TRUE) +
+  geom_ribbon(aes(x = DBH, ymin = pmax(estHeightVar[,2], 0), ymax = estHeightVar[,3], fill = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, alpha = 0.1) +
+  geom_path(aes(x = DBH, y = estHeightVar[,1], color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance) +
+  coord_cartesian(xlim = c(0, 250), ylim = c(0, 125)) +
+  facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
+  labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL) +
+ggplot() +
+  geom_errorbar(aes(xmin = varianceQ025, xmax = varianceQ975, y = heightClass, alpha = n), empiricalDbhVariance, color = "grey50", linewidth = 0.3, na.rm = TRUE, orientation = "y") +
+  geom_point(aes(x = variance, y = heightClass, alpha = n, shape = isPlantation, size = isPlantation), empiricalDbhVariance, color = "grey40", na.rm = TRUE) +
+  geom_ribbon(aes(xmin = pmax(estDbhVar[,2], 0), xmax = estDbhVar[,3], y = TotalHt, fill = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, alpha = 0.1) +
+  geom_path(aes(x = estDbhVar[,1], y = TotalHt, color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance) +
+  coord_cartesian(xlim = c(0, 1500), ylim = c(0, 83)) +
+  facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
+  labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL) +
+plot_annotation(theme = theme(plot.margin = margin())) +
+plot_layout(guides = "collect") &
+  guides(alpha = guide_legend(order = 3, reverse = TRUE), color = guide_legend(order = 1), fill = guide_legend(order = 1), linetype = guide_legend(order = 2), shape = guide_legend(order = 2), size = guide_legend(order = 2)) &
+  scale_alpha_continuous(breaks = c(2, 10, 100, 1000), labels = c("nᵢ = 2", "nᵢ = 10", "nᵢ = 100", "nᵢ = 1000"), limits = c(2, 1000), range = c(0.1, 1.0), trans = "log10") &
+  scale_color_manual(breaks = levels(modeledVariance$speciesGroup), labels = speciesGroupNames, limits = levels(modeledVariance$speciesGroup), values = speciesGroupColors) &
+  scale_fill_manual(breaks = levels(modeledVariance$speciesGroup), labels = speciesGroupNames, limits = levels(modeledVariance$speciesGroup), values = speciesGroupColors) &
+  scale_linetype_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c("solid", "longdash")) &
+  scale_shape_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(16, 18)) &
+  scale_size_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(1.5, 1.9)) &
+  theme(legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"))
+ggsave("trees/height-diameter/figures/error model gsl_nls.png", height = 15, width = 22, units = "cm", dpi = 200)
+
 
 ## height interquartile ranges
+library(quantreg)
 psmeHeightFromDiameterMichaelisMentenQ25 = nlrq(TotalHt ~ 1.37 + (a1 + a1p*isPlantation)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), psme2016, start = list(a1 = 70.4, a1p = -25.3, a2 = 660, a2p = -348, b1 = 1.61), tau = 0.25)
 psmeHeightFromDiameterMichaelisMentenQ75 = nlrq(TotalHt ~ 1.37 + (a1 + a1p*isPlantation)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), psme2016, start = list(a1 = 93.9, a1p = -10.3, a2 = 108, a2p = 4.8, b1 = 1.13), tau = 0.75)
 #psmeHeightFromDiameterSharmaPartonQ75 = nlrq(TotalHt ~ 1.37 + a1*topHeight^a2*(1 - exp(b1*(tph/standBasalAreaPerHectare)^b2*DBH))^b3, psme2016, start = list(a1 = 52.41, a2 = 0.135, b1 = -0.017, b2 = -0.071, b3 = 1.02), tau = 0.75)

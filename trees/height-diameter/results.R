@@ -11,9 +11,9 @@ if (exists("umcaResults") == FALSE) { load("trees/height-diameter/data/UMCA resu
 if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other results.Rdata") }
 
 # form regression summary
-# TODO: update to coefficient naming once results files are rebuilt
-heightDiameterCoefficients = bind_rows(psmeParameters, alruParameters, tsheParameters, acmaParameters,
-                                       umcaParameters, thplParameters, otherParameters)
+heightDiameterCoefficients = bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients,
+                                       umcaCoefficients, thplCoefficients, otherCoefficients) %>% 
+  relocate(responseVariable, species, fitSet, fixedWeight, name, fitting, repetition, fold, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
 #write_xlsx(heightDiameterCoefficients, "trees/height-diameter/HtDia coefficients.xlsx")
 
 heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
@@ -41,6 +41,7 @@ primaryResults = heightDiameterResults %>%
   mutate(deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
   ungroup()
 #print(primaryResults %>% group_by(fitSet, responseVariable) %>% summarize(n = n(), names = unique(name)), n = 60)
+#primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na(deltaAicN)), mab = sum(is.na(mab)), mae = sum(is.na(mae)), pearson = sum(is.na(pearson)), nse = sum(is.na(nse)), rmse = sum(is.na(rmse)))
 
 # rank model forms by estimated prediction ability (using AUC) for form selection
 # This is somewhat computationally intensive, hence the progress bar, but still only takes a minute or so single threaded.
@@ -51,7 +52,7 @@ with_progress({
   heightDiameterModelAucs = primaryResults %>% 
     group_by(responseVariable, species, name) %>% # for now, look across fit set and weighting as GAMs are only in the primary set with estimated weights
     group_modify(~{
-      if (nrow(.x) == 1)
+      if ((nrow(.x) == 1) | all(is.na(.x$nse)))
       {
         # no distribution to compare to since this model has only a no fit result or wasn't cross validated
         progressBar(str_pad(paste(.y$responseVariable, .y$species, .y$name), 60, "right"))
@@ -67,7 +68,7 @@ with_progress({
         {
           otherModelResults = matchingResults %>% filter(responseVariable == .y$responseVariable, species == .y$species, name == otherModelName)
           
-          if (nrow(otherModelResults) == 1)
+          if ((nrow(otherModelResults) == 1) | all(is.na(otherModelResults$nse)))
           {
             # also no distribution to compare to if the other model has only a no fit result or wasn't cross validated
             return(tibble(otherModelName = otherModelName, fitting = .x$fitting[1], isBaseForm = .x$isBaseForm[1], hasPhysio = .x$hasPhysio[1], hasStand = .x$hasStand[1],
@@ -90,7 +91,13 @@ with_progress({
           {
             aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
           }
-          
+
+          #print(paste0(.y$species[1], " ", .y$responseVariable[1], " ", .y$name[1], " (", nrow(.x), ") x ", otherModelName, " (", nrow(otherModelResults), "):",
+          #             " mab ", sum(is.na(.x$mab)), " ", sum(is.na(otherModelResults$mab)),
+          #             " mae ", sum(is.na(.x$mae)), " ", sum(is.na(otherModelResults$mae)),
+          #             " pearson ", sum(is.na(.x$pearson)), " ", sum(is.na(otherModelResults$pearson)),
+          #             " nse ", sum(is.na(.x$nse)), " ", sum(is.na(otherModelResults$nse)),
+          #             " rmse ", sum(is.na(.x$rmse)), " ", sum(is.na(otherModelResults$rmse))), quote = FALSE)
           return(tibble(otherModelName = otherModelName, fitting = .x$fitting[1], isBaseForm = .x$isBaseForm[1],
                         hasPhysio = .x$hasPhysio[1], hasStand = .x$hasStand[1],
                         aucDeltaAicN = WeightedAUC(WeightedROC(guess = c(.x$deltaAicN, otherModelResults$deltaAicN), label = lowerIsBetter)),
@@ -220,10 +227,10 @@ heightDiameterModelAucs %>% filter(isBaseForm == FALSE, fitting %in% c("nlrob", 
          generalizedBetterPct = 100 * generalizedBetter / n) %>%
   arrange(desc(responseVariable))
 
-# parameter counts
-#heightDiameterParameterCounts = heightDiameterParameters %>% rowwise() %>% mutate(parameters = ncol(heightDiameterParameters) - sum(is.na(c_across(is.numeric)))) %>%
-#  select(responseVariable, species, name, fitting, parameters) # slow
-#print(heightDiameterParameterCounts %>% filter(fitting == "gam"), n = 50)
+# coefficient counts
+#heightDiameterCoefficientCounts = heightDiameterCoefficients %>% rowwise() %>% mutate(coefficients = ncol(heightDiameterCoefficients) - sum(is.na(c_across(is.numeric)))) %>%
+#  select(responseVariable, species, name, coefficients, coefficients) # slow
+#print(heightDiameterCoefficientCounts %>% filter(fitting == "gam"), n = 50)
 
 # summarize fitting success for Section S1
 # Show results for all fit sets here, whether or not primary.
@@ -249,7 +256,7 @@ heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>%
   mutate(nlrobPct = 100 * nlrob / uniqueNonlinear, gslNlsPct = nlrobPct + 100 * gslNls / uniqueNonlinear, totalFailPct = 100 * fail / uniqueNonlinear) %>%
   arrange(desc(fitSet))
 # fittings which failed
-heightDiameterResults %>% filter(is.na(fitting)) %>% select(fitSet, responseVariable, species, name)
+heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable, species, name)
 
 
 ## Figure 1: overall dataset summary
@@ -279,14 +286,13 @@ heightFromDiameterResults = primaryResults %>%
   filter(responseVariable == "height", str_detect(name, "GNLS") == FALSE, str_detect(name, "RelHt") == FALSE) %>%
   mutate(name = factor(name, levels = heightFromDiameterAccuracyLevels$name)) %>%
   group_by(species, name) %>%
-  summarize(quantiles = c(0.025, 0.5, 0.975),
-            mapb = quantile(mapb, probs = quantiles, na.rm = TRUE), 
-            mape = quantile(mape, probs = quantiles, na.rm = TRUE), 
-            rmse = quantile(rmse, probs = quantiles, na.rm = TRUE), 
-            deltaAicN = quantile(deltaAicN, probs = quantiles, na.rm = TRUE), 
-            nse = quantile(nse, probs = quantiles, na.rm = TRUE), 
-            sizeShapeAlpha = sizeShapeAlpha[1],
-            .groups = "drop") %>%
+  reframe(quantiles = c(0.025, 0.5, 0.975),
+          mapb = quantile(mapb, probs = quantiles, na.rm = TRUE), 
+          mape = quantile(mape, probs = quantiles, na.rm = TRUE), 
+          rmse = quantile(rmse, probs = quantiles, na.rm = TRUE), 
+          deltaAicN = quantile(deltaAicN, probs = quantiles, na.rm = TRUE), 
+          nse = quantile(nse, probs = quantiles, na.rm = TRUE), 
+          sizeShapeAlpha = sizeShapeAlpha[1]) %>%
   pivot_wider(names_from = quantiles, names_sep = "_q", values_from = c("mapb", "mape", "rmse", "deltaAicN", "nse")) %>%
   mutate(verticalDodge = recode(species, "Douglas-fir" = 0.3, "red alder" = 0.2, "western hemlock" = 0.1, "bigleaf maple" = 0.0, "Oregon myrtle" = -0.1, "western redcedar" = -0.2, "other species" = -0.3))
 
@@ -368,7 +374,7 @@ ggplot(heightFromDiameterModelComparison) +
 plot_annotation(theme = theme(plot.margin =  margin())) +
 plot_layout(nrow = 1, guides = "collect") &
   scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
-  scale_x_discrete(labels = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
+  scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), title = element_text(size = 8))
 #ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC.png", height = 12, width = 20, units = "cm", dpi = 150)
 
@@ -390,14 +396,13 @@ diameterFromHeightResults = primaryResults %>%
   filter(responseVariable == "DBH", str_detect(name, "BA\\+L") == FALSE, str_detect(name, "GNLS") == FALSE, name != "REML GAM ABA+T physio") %>%
   mutate(name = factor(name, levels = diameterFromHeightAccuracyLevels$name)) %>%
   group_by(species, name) %>%
-  summarize(quantiles = c(0.025, 0.5, 0.975),
-            mapb = quantile(mapb, probs = quantiles, na.rm = TRUE), 
-            mape = quantile(mape, probs = quantiles, na.rm = TRUE), 
-            rmse = quantile(rmse, probs = quantiles, na.rm = TRUE), 
-            deltaAicN = quantile(deltaAicN, probs = quantiles, na.rm = TRUE), 
-            nse = quantile(nse, probs = quantiles, na.rm = TRUE), 
-            sizeShapeAlpha = sizeShapeAlpha[1],
-            .groups = "drop") %>%
+  reframe(quantiles = c(0.025, 0.5, 0.975),
+          mapb = quantile(mapb, probs = quantiles, na.rm = TRUE), 
+          mape = quantile(mape, probs = quantiles, na.rm = TRUE), 
+          rmse = quantile(rmse, probs = quantiles, na.rm = TRUE), 
+          deltaAicN = quantile(deltaAicN, probs = quantiles, na.rm = TRUE), 
+          nse = quantile(nse, probs = quantiles, na.rm = TRUE), 
+          sizeShapeAlpha = sizeShapeAlpha[1]) %>%
   pivot_wider(names_from = quantiles, names_sep = "_q", values_from = c("mapb", "mape", "rmse", "deltaAicN", "nse")) %>%
   mutate(verticalDodge = recode(species, "Douglas-fir" = 0.3, "red alder" = 0.2, "western hemlock" = 0.1, "bigleaf maple" = 0.0, "Oregon myrtle" = -0.1, "western redcedar" = -0.2, "other species" = -0.3))
 
@@ -419,7 +424,7 @@ ggplot(diameterFromHeightResults) +
   labs(x = "RMSE, cm", y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
   scale_y_discrete(labels = NULL) +
 ggplot(diameterFromHeightResults) +
-  #geom_segment(x = 0.255, xend = 0.275, y = "Schnute", yend = "Schnute", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
+  #geom_segment(x = 0.255, xend = 0.275, y = "Schnute inverse", yend = "Schnute inverse", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   #geom_segment(x = 0.255, xend = 0.275, y = "linear", yend = "linear", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   #geom_segment(x = 0.255, xend = 0.275, y = "parabolic", yend = "parabolic", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   #geom_segment(x = 0.255, xend = 0.275, y = "REML GAM", yend = "REML GAM", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +

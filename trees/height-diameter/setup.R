@@ -1,5 +1,5 @@
 #.libPaths(.libPaths()[2])
-#install.packages(c("cmocean", "dplyr", "furrr", "ggplot2", "gslnls", "magrittr", "mgcv", "nlme", "nls.multstart", "nlstools", "patchwork", "progressr", "readxl", "robustbase", "rsample", "sn", "stringr", "tibble", "tidyr", "writexl"))
+#install.packages(c("dplyr", "furrr", "ggplot2", "gslnls", "magrittr", "mgcv", "nlme", "nls.multstart", "nlstools", "patchwork", "progressr", "readxl", "robustbase", "rsample", "scico", "sn", "stringr", "tibble", "tidyr", "writexl"))
 library(dplyr)
 library(forcats)
 library(furrr)
@@ -33,20 +33,14 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
                              panel.border = element_blank()))
 htDiaOptions = list(folds = 10,
                     repetitions = 10,
-                    fitSlowGnls = FALSE, # default to loading slow gnls() fits from .Rdata files already assumed to be created
-                    includeInvestigatory = FALSE) # default to excluding plotting and other add ons in species scripts
-
-append_model_coefficients = function(loadedCoefficients, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
-{
-  return(bind_rows(loadedCoefficients,
-                   bind_rows(lapply(modelList, get_list_coefficients, fitSet = fitSet, fixedWeight = fixedWeight)) %>%
-                     mutate(responseVariable = responseVariable)))
-}
+                    fitGnls = FALSE, # default to skipping gnls() due to low reliability in convergence
+                    includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
+                    retainModelThreshold = 25) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold
 
 append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
 {
   return(bind_rows(loadedResults,
-                   bind_rows(lapply(modelList, get_list_results, fitSet = fitSet, fixedWeight = fixedWeight)) %>%
+                   bind_rows(lapply(modelList, get_list_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>%
                      mutate(responseVariable = responseVariable)))
 }
 
@@ -73,7 +67,7 @@ confint_nlrob = function(regression, level = 0.99, df = df.residual(regression),
 # wrap calls to fitting functions for consistency of arguments and use of get_*_error()
 # This is a little fragile from a code maintenance perspective as the weights need to be column in data for R to flow them
 # correctly but the risk appears low and worth the simplification elsewhere.
-fit_gam = function(name, formula, data, start, control = gsl_nls_control(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, bam = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
+fit_gam = function(name, formula, data, start, control = gsl_nls_control(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, bam = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
 {
   responseVariable = formula[2] # displays as TotalHt or DBH but compares at TotalHt() or DBH()
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using ", if_else(bam, "bam", "gam"), "()..."))
@@ -87,20 +81,20 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       {
         startFit = Sys.time()
         allFit = bam(formula = formula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
-        allFit = get_height_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        allFit$fitTimeInS = get_elapsed_time(startFit)
+        allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(allFit)
+        return(get_fit_return_value(allFit, allFitStats, returnModel))
       }
       
       fitFunction = function(dataFold)
       {
         startFit = Sys.time()
         model = bam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
-        model = get_height_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        model$fitTimeInS = get_elapsed_time(startFit)
+        modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(model)
+        return(get_fit_return_value(model, modelStats, returnModel))
       }
     }
     else
@@ -109,20 +103,20 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       {
         startFit = Sys.time()
         allFit = gam(formula = formula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
-        allFit = get_height_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        allFit$fitTimeInS = get_elapsed_time(startFit)
+        allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(allFit)
+        return(get_fit_return_value(allFit, allFitStats, returnModel))
       }
       
       fitFunction = function(dataFold)
       {
         startFit = Sys.time()
         model = gam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
-        model = get_height_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        model$fitTimeInS = get_elapsed_time(startFit)
+        modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(model)
+        return(get_fit_return_value(model, modelStats, returnModel))
       }
     }
   }
@@ -139,20 +133,20 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       {
         startFit = Sys.time()
         allFit = bam(formula = formula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
-        allFit = get_dbh_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        allFit$fitTimeInS = get_elapsed_time(startFit)
+        allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(allFit)
+        return(get_fit_return_value(allFit, allFitStats, returnModel))
       }
       
       fitFunction = function(dataFold)
       {
         startFit = Sys.time()
         model = bam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
-        model = get_dbh_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        model$fitTimeInS = get_elapsed_time(startFit)
+        modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(model)
+        return(get_fit_return_value(model, modelStats, returnModel))
       }
     }
     else
@@ -161,20 +155,20 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       {
         startFit = Sys.time()
         allFit = gam(formula = formula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
-        allFit = get_dbh_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        allFit$fitTimeInS = get_elapsed_time(startFit)
+        allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(allFit)
+        return(get_fit_return_value(allFit, allFitStats, returnModel))
       }
       
       fitFunction = function(dataFold)
       {
         startFit = Sys.time()
         model = gam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
-        model = get_dbh_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-        model$fitTimeInS = get_elapsed_time(startFit)
+        modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+        modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
-        return(model)
+        return(get_fit_return_value(model, modelStats, returnModel))
       }
     }
   }
@@ -184,7 +178,77 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
   return(fits)
 }
 
-fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(maxiter = 100), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, significant = TRUE, tDegreesOfFreedom = 8)
+# gnls() does something internally which manages to modify variables within fit_gnls() if one of its arguments is named formula
+# It's unclear how R scoping is bypassed but the workaround is straightforward---change the argument's name. However,
+# predict.gnls() remains unreliable and is often unable to retrieve the formula internally within nlme. Since gnls()
+# convergence also lacks the reliability needed for cross validation efforts towards gnls() fitting are dropped.
+fit_gnls = function(name, modelFormula, data, start, control = gnlsControl(maxIter = 100), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
+{
+  responseVariable = modelFormula[2]
+  message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using gnls()..."))
+  progressBar = progressor(steps = folds * repetitions)
+
+  if (responseVariable == "TotalHt()")
+  {
+    startFit = Sys.time()
+    allFit = gnls(model = modelFormula, data = data, start = start, weights = varPower(0.50, ~DBH | isPlantation), control = control)
+    if ((folds == 1) & (repetitions == 1))
+    {
+      allFit$weights = varWeights(allFit$modelStruct$varStruct)
+      allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
+      progressBar()
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
+    }
+    
+    allFitParameters = allFit$coefficients
+    fitFunction = function(dataFold)
+    {
+      startFit = Sys.time()
+      model = gnls(model = modelFormula, data = analysis(dataFold), start = allFitParameters, weights = varPower(0.50, ~DBH | isPlantation), control = control)
+      model$weights = varWeights(model$modelStruct$varStruct)
+      modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
+      progressBar()
+      return(get_fit_return_value(model, modelStats, returnModel))
+    }
+  }
+  else
+  {
+    if (responseVariable != "DBH()")
+    {
+      stop("Expected response variable to be DBH.")
+    }
+    
+    startFit = Sys.time()
+    allFit = model = gnls(model = modelFormula, data = data, start = start, weights = varPower(0.50, ~TotalHt | isPlantation), control = control)
+    if ((folds == 1) & (repetitions == 1))
+    {
+      allFit$weights = varWeights(allFit$modelStruct$varStruct)
+      allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
+      progressBar()
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
+    }
+    
+    allFitParameters = allFit$coefficients
+    fitFunction = function(dataFold)
+    {
+      startFit = Sys.time()
+      model = gnls(model = modelFormula, data = analysis(dataFold), start = allFitParameters, weights = varPower(0.50, ~TotalHt | isPlantation), control = control)
+      model$weights = varWeights(model$modelStruct$varStruct)
+      modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
+      progressBar()
+      return(get_fit_return_value(model, modelStats, returnModel))
+    }
+  }
+  
+  fits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
+  return(fits)
+}
+
+fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(maxiter = 100), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
 {
   responseVariable = formula[2]
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using gsl_nls()..."))
@@ -196,10 +260,10 @@ fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(max
     allFit = gsl_nls(fn = formula, data = data, start = start, weights = dbhWeight, control = control)
     if ((folds == 1) & (repetitions == 1))
     {
-      allFit = get_height_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      allFit$fitTimeInS = get_elapsed_time(startFit)
+      allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(allFit)
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
     }
     
     allFitParameters = allFit$m$getPars()
@@ -207,10 +271,10 @@ fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(max
     {
       startFit = Sys.time()
       model = gsl_nls(fn = formula, data = analysis(dataFold), start = allFitParameters, weights = dbhWeight, control = control)
-      model = get_height_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      model$fitTimeInS = get_elapsed_time(startFit)
+      modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(model)
+      return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
   else
@@ -224,10 +288,10 @@ fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(max
     allFit = model = gsl_nls(fn = formula, data = data, start = start, weights = heightWeight, control = control)
     if ((folds == 1) & (repetitions == 1))
     {
-      allFit = get_dbh_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      allFit$fitTimeInS = get_elapsed_time(startFit)
+      allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(allFit)
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
     }
     
     allFitParameters = allFit$m$getPars()
@@ -235,10 +299,10 @@ fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(max
     {
       startFit = Sys.time()
       model = gsl_nls(fn = formula, data = analysis(dataFold), start = allFitParameters, weights = heightWeight, control = control)
-      model = get_dbh_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      model$fitTimeInS = get_elapsed_time(startFit)
+      modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(model)
+      return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
   
@@ -246,7 +310,7 @@ fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(max
   return(fits)
 }
 
-fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, significant = TRUE, tDegreesOfFreedom = 8)
+fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
 {
   responseVariable = formula[2]
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using lm()..."))
@@ -257,21 +321,21 @@ fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions =
     if ((folds == 1) & (repetitions == 1))
     {
       startFit = Sys.time()
-      allFit = lm(formula = formula, data = dataFold, weights = dbhWeight)
-      allFit = get_height_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      allFit$fitTimeInS = get_elapsed_time(startFit)
+      allFit = lm(formula = formula, data = data, weights = dbhWeight)
+      allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(allFit)
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
     }
     
     fitFunction = function(dataFold)
     {
       startFit = Sys.time()
       model = lm(formula = formula, data = analysis(dataFold), offset = breastHeight, weights = dbhWeight)
-      model = get_height_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      model$fitTimeInS = get_elapsed_time(startFit)
+      modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(model)
+      return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
   else
@@ -285,20 +349,20 @@ fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions =
     {
       startFit = Sys.time()
       allFit = lm(formula = formula, data = data, weights = heightWeight)
-      allFit = get_dbh_error(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      allFit$fitTimeInS = get_elapsed_time(startFit)
+      allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(allFit)
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
     }
     
     fitFunction = function(dataFold)
     {
       startFit = Sys.time()
       model = lm(formula = formula, data = analysis(dataFold), weights = heightWeight)
-      model = get_dbh_error(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      model$fitTimeInS = get_elapsed_time(startFit)
+      modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(model)
+      return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
   
@@ -306,7 +370,7 @@ fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions =
   return(fits)
 }
 
-fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter = 100), maxit = 50, folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, significant = TRUE, tDegreesOfFreedom = 8)
+fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter = 100), maxit = 50, folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
 {
   responseVariable = formula[2]
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using nlrob()..."))
@@ -318,10 +382,11 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
     allFit = nlrob(formula = formula, data = data, maxit = maxit, start = start, weights = dbhWeight, control = control)
     if ((folds == 1) & (repetitions == 1))
     {
-      allFit = get_height_error(name = name, model = allFit, validationData = data, trainingWeights = data$dbhWeight, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      allFit$fitTimeInS = get_elapsed_time(startFit)
+      allFit$weights = data$dbhWeight
+      allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(allFit)
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
     }
     
     allFitParameters = allFit$m$getPars()
@@ -330,10 +395,11 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
       startFit = Sys.time()
       trainingData = analysis(dataFold)
       model = nlrob(formula = formula, data = trainingData, maxit = maxit, start = allFitParameters, weights = dbhWeight, control = control)
-      model = get_height_error(name = name, model = model, validationData = assessment(dataFold), trainingWeights = trainingData$dbhWeight, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      model$fitTimeInS = get_elapsed_time(startFit)
+      model$weights = trainingData$dbhWeight
+      modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(model)
+      return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
   else
@@ -347,10 +413,11 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
     allFit = nlrob(formula = formula, data = data, maxit = maxit, start = start, weights = heightWeight, control = control)
     if ((folds == 1) & (repetitions == 1))
     {
-      allFit = get_dbh_error(name = name, model = allFit, validationData = data, trainingWeights = data$heightWeight, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      allFit$fitTimeInS = get_elapsed_time(startFit)
+      allFit$weights = data$heightWeight
+      allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(allFit)
+      return(get_fit_return_value(allFit, allFitStats, returnModel))
     }
     
     allFitParameters = allFit$m$getPars()
@@ -359,10 +426,11 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
       startFit = Sys.time()
       trainingData = analysis(dataFold)
       model = nlrob(formula = formula, data = trainingData, maxit = maxit, start = allFitParameters, weights = heightWeight, control = control)
-      model = get_dbh_error(name = name, model = model, validationData = assessment(dataFold), trainingWeights = trainingData$heightWeight, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
-      model$fitTimeInS = get_elapsed_time(startFit)
+      model$weights = trainingData$heightWeight
+      modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
+      modelStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
-      return(model)
+      return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
 
@@ -370,40 +438,45 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
   return(fits)
 }
 
-get_dbh_error = function(name, model, validationData, trainingWeights = NULL, validationWeights = validationData$heightWeight, significant = TRUE, tDegreesOfFreedom = 8)
+get_adaptive_weighting = function(model)
 {
-  switch (class(model)[1],
-          "gnls" = { model$adaptiveWeightFraction = 1 }, # for now, assume a varStruct was used
-          "nlrob" = { model$adaptiveWeightFraction = sum(model$rweights != 1) / nobs(model) },
-          { model$adaptiveWeightFraction = 0 }
-  )
-  
-  model$name = name
-  
-  if (is.null(model$weights))
+  switch(class(model)[1],
+         "gnls" = 
+           { 
+             # for now, assume a varStruct was used
+             if (is.null(model$modelStruct) | is.null(model$modelStruct$varStruct) | (length(model$modelStruct$varStruct) < 1))
+             {
+               stop("gnls() model does not have a varStruct.")
+             }
+             adaptiveWeightFraction = 1 
+           },
+         "nlrob" = 
+           { 
+             adaptiveWeightFraction = sum(model$rweights != 1) / nobs(model) 
+           },
+         { 
+           adaptiveWeightFraction = 0 
+         })
+  return(adaptiveWeightFraction)
+}
+
+get_dbh_stats = function(name, model, validationData, validationWeights = validationData$heightWeight, significant = TRUE, tDegreesOfFreedom = 8)
+{
+  dbhModelStats = list(name = name, 
+                       fitting = class(model)[1], 
+                       coefficients = get_model_coefficients(model), 
+                       isConverged = is_model_converged(model),
+                       adaptiveWeightFraction = get_adaptive_weighting(model))
+  if (dbhModelStats$isConverged == FALSE)
   {
-    if (is.null(trainingWeights))
-    {
-      if (is.null(model$modelStruct) | is.null(model$modelStruct$varStruct)) # GNLS
-      {
-        stop(paste0("Model ", name, " did not automatically set its weights and trainingWeights is NULL."))
-      } else {
-        model$weights = varWeights(model$modelStruct$varStruct)
-      }
-    } else {
-      model$weights = trainingWeights
-    }
+    warning(paste0(dbhModelStats$fitting, " ", formula(model)[2], " model using ", name, " is not converged."))
   }
-  if (nobs(model) != length(model$weights))
-  {
-    stop(paste0("Model ", name, " was trained on ", nobs(model), " observations but has ", length(model$weights), " weights."))
-  }
-  
+
   predictedDbh = predict(model, validationData)
-  residuals = predictedDbh - validationData$DBH
+  valiationResiduals = predictedDbh - validationData$DBH
   dbhByHeightClass = tibble(heightClass = 1*floor(validationData$TotalHt/1) + 0.5*1, 
                               dbh = validationData$DBH,
-                              residual = residuals,
+                              residual = valiationResiduals,
                               isPlantation = validationData$isPlantation) %>%
     group_by(heightClass) %>%
     summarize(n = n(),
@@ -425,55 +498,56 @@ get_dbh_error = function(name, model, validationData, trainingWeights = NULL, va
     effectiveDegreesOfFreedom = sum(model$edf) + 1 # for GAMs use indicated effective degrees of freedom
   }
 
-  standardDeviation = sqrt(1/df.residual(model) * sum(validationWeights* residuals^2)) / sqrt(validationWeights)
-  logLikelihoodGaussian = sum(dnorm(residuals, sd = standardDeviation, log = TRUE))
-  logLikelihoodT = sum(dt(residuals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
+  standardDeviation = sqrt(1/df.residual(model) * sum(validationWeights* valiationResiduals^2)) / sqrt(validationWeights)
+  logLikelihoodGaussian = sum(dnorm(valiationResiduals, sd = standardDeviation, log = TRUE))
+  logLikelihoodT = sum(dt(valiationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
   
   # logLik.lm() (https://github.com/wch/r-source/blob/trunk/src/library/stats/R/logLik.R)
   #  log likelihood = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(w*res^2))))
   # logLik.nls() (https://github.com/wch/r-source/blob/trunk/src/library/stats/R/nls.R)
   #  log likelihood = -N/2 * (log(2 * pi) + 1 - log(N) - sum(log(w + zw))/N + log(sum(regression$m$resid()^2)))
   #                 = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(regression$m$resid()^2)))) if no weights are zero
-  model$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # calculate AIC and BIC manually because nlrob objects implement weighting differently from nls and gslnls
-  model$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
-  model$bias = mean(residuals)
-  model$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nobs(model))
-  model$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nobs(model))
-  model$mae = mean(abs(residuals))
-  model$mab = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTree)) / sum(dbhByHeightClass$n)
-  model$mapb = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTreePct)) / sum(dbhByHeightClass$n)
-  model$mape = 100 * mean(abs(residuals / validationData$DBH))
-  model$meanAbsolutePlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffect), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
-  model$meanAbsolutePercentPlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffectPct), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
-  model$nse = 1 - sum(residuals^2) / sum((validationData$DBH - mean(validationData$DBH))^2)
-  model$pearson = cor(predictedDbh, validationData$DBH)
-  model$rmse = sqrt(mean(residuals^2))
-  model$rmspe = 100 * sqrt(mean((residuals / validationData$DBH)^2))
-  model$significant = significant
+  dbhModelStats$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # calculate AIC and BIC manually because nlrob objects implement weighting differently from nls and gslnls
+  dbhModelStats$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
+  dbhModelStats$bias = mean(valiationResiduals)
+  dbhModelStats$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nobs(model))
+  dbhModelStats$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nobs(model))
+  dbhModelStats$mae = mean(abs(valiationResiduals))
+  dbhModelStats$mab = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTree)) / sum(dbhByHeightClass$n)
+  dbhModelStats$mapb = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTreePct)) / sum(dbhByHeightClass$n)
+  dbhModelStats$mape = 100 * mean(abs(valiationResiduals / validationData$DBH))
+  dbhModelStats$meanAbsolutePlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffect), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
+  dbhModelStats$meanAbsolutePercentPlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffectPct), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
+  dbhModelStats$n = nobs(model)
+  dbhModelStats$nse = 1 - sum(valiationResiduals^2) / sum((validationData$DBH - mean(validationData$DBH))^2)
+  dbhModelStats$pearson = cor(predictedDbh, validationData$DBH)
+  dbhModelStats$rmse = sqrt(mean(valiationResiduals^2))
+  dbhModelStats$rmspe = 100 * sqrt(mean((valiationResiduals / validationData$DBH)^2))
+  dbhModelStats$significant = significant
   
   naturalRegenIndices = which(validationData$isPlantation == FALSE)
   dbhNaturalRegen = validationData$DBH[naturalRegenIndices]
   predictedDbhNaturalRegen = predictedDbh[naturalRegenIndices]
   residualsNaturalRegen = predictedDbhNaturalRegen - dbhNaturalRegen
-  model$biasNaturalRegen = mean(residualsNaturalRegen)
-  model$maeNaturalRegen = mean(abs(residualsNaturalRegen))
-  model$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((dbhNaturalRegen - mean(dbhNaturalRegen))^2)
-  model$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / dbhNaturalRegen))
-  model$pearsonNaturalRegen = cor(predictedDbhNaturalRegen, dbhNaturalRegen)
-  model$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
+  dbhModelStats$biasNaturalRegen = mean(residualsNaturalRegen)
+  dbhModelStats$maeNaturalRegen = mean(abs(residualsNaturalRegen))
+  dbhModelStats$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((dbhNaturalRegen - mean(dbhNaturalRegen))^2)
+  dbhModelStats$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / dbhNaturalRegen))
+  dbhModelStats$pearsonNaturalRegen = cor(predictedDbhNaturalRegen, dbhNaturalRegen)
+  dbhModelStats$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
   
   plantationIndices = which(validationData$isPlantation)
   dbhPlantation = validationData$DBH[plantationIndices]
   predictedDbhPlantation = predictedDbh[plantationIndices]
   residualsPlantation = predictedDbhPlantation - dbhPlantation
-  model$biasPlantation = mean(residualsPlantation)
-  model$maePlantation = mean(abs(residualsPlantation))
-  model$nsePlantation = 1 - sum(residualsPlantation^2) / sum((dbhPlantation - mean(dbhPlantation))^2)
-  model$paePlantation = 100 * mean(abs(residualsPlantation / dbhPlantation))
-  model$pearsonPlantation = cor(predictedDbhPlantation, dbhPlantation)
-  model$rmsePlantation = sqrt(mean(residualsPlantation^2))
-  
-  return(model)
+  dbhModelStats$biasPlantation = mean(residualsPlantation)
+  dbhModelStats$maePlantation = mean(abs(residualsPlantation))
+  dbhModelStats$nsePlantation = 1 - sum(residualsPlantation^2) / sum((dbhPlantation - mean(dbhPlantation))^2)
+  dbhModelStats$paePlantation = 100 * mean(abs(residualsPlantation / dbhPlantation))
+  dbhModelStats$pearsonPlantation = cor(predictedDbhPlantation, dbhPlantation)
+  dbhModelStats$rmsePlantation = sqrt(mean(residualsPlantation^2))
+
+  return(dbhModelStats)
 }
 
 get_elapsed_time = function(start)
@@ -481,41 +555,35 @@ get_elapsed_time = function(start)
   return(as.numeric(difftime(Sys.time(), start, units = "secs")))
 }
 
-get_height_error = function(name, model, validationData, trainingWeights = NULL, validationWeights = validationData$dbhWeight, significant = TRUE, tDegreesOfFreedom = 8)
+get_fit_return_value = function(model, modelStats, returnModel)
 {
-  switch (class(model)[1],
-    "gnls" = { model$adaptiveWeightFraction = 1 }, # for now, assume a varStruct was used
-    "nlrob" = { model$adaptiveWeightFraction = sum(model$rweights != 1) / nobs(model) },
-    { model$adaptiveWeightFraction = 0 }
-  )
-
-  model$name = name
-  
-  if (is.null(model$weights))
+  if (returnModel)
   {
-    if (is.null(trainingWeights))
-    {
-      if (is.null(model$modelStruct) | is.null(model$modelStruct$varStruct)) # GNLS
-      {
-        stop(paste0("Model ", name, " did not automatically set its weights and trainingWeights is NULL."))
-      } else {
-        model$weights = varWeights(model$modelStruct$varStruct)
-      }
-    } else {
-      model$weights = trainingWeights
-    }
+    model$stats = modelStats
+    return(model)
+  } else {
+    return(modelStats)
   }
-  if (nobs(model) != length(model$weights))
+}
+
+get_height_stats = function(name, model, validationData, validationWeights = validationData$dbhWeight, significant = TRUE, tDegreesOfFreedom = 8)
+{
+  heightModelStats = list(name = name, 
+                          fitting = class(model)[1], 
+                          coefficients = get_model_coefficients(model), 
+                          isConverged = is_model_converged(model),
+                          adaptiveWeightFraction = get_adaptive_weighting(model))
+  if (heightModelStats$isConverged == FALSE)
   {
-    stop(paste0("Model ", name, " was trained on ", nobs(model), " observations but has ", length(model$weights), " weights."))
+    warning(paste0(heightModelStats$fitting, " ", formula(model)[2], " model using ", name, " is not converged."))
   }
 
   dbhClassSize = 10 # cm
   predictedHeight = predict(model, validationData)
-  residuals = predictedHeight - validationData$TotalHt
+  validationResiduals = predictedHeight - validationData$TotalHt
   heightByDbhClass = tibble(dbhClass = dbhClassSize*floor(validationData$DBH/dbhClassSize) + 0.5*dbhClassSize, 
                             height = validationData$TotalHt, 
-                            residual = residuals,
+                            residual = validationResiduals,
                             isPlantation = validationData$isPlantation) %>%
     group_by(dbhClass) %>%
     summarize(n = n(),
@@ -536,50 +604,51 @@ get_height_error = function(name, model, validationData, trainingWeights = NULL,
   {
     effectiveDegreesOfFreedom = sum(model$edf) + 1
   }
-  standardDeviation = sqrt(1/df.residual(model) * sum(validationWeights * residuals^2)) / sqrt(validationWeights)
-  logLikelihoodGaussian = sum(dnorm(residuals, sd = standardDeviation, log = TRUE))
-  logLikelihoodT = sum(dt(residuals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
+  standardDeviation = sqrt(1/df.residual(model) * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
+  logLikelihoodGaussian = sum(dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
+  logLikelihoodT = sum(dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
   
-  model$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # see get_dbh_error(): same nlrob issue
-  model$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
-  model$bias = mean(residuals)
-  model$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nobs(model))
-  model$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nobs(model))
-  model$mab = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTree)) / sum(heightByDbhClass$n)
-  model$mapb = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTreePct)) / sum(heightByDbhClass$n)
-  model$mae = mean(abs(residuals))
-  model$mape = 100 * mean(abs(residuals / validationData$TotalHt))
-  model$meanAbsolutePlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffect), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
-  model$meanAbsolutePercentPlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffectPct), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
-  model$nse = 1 - sum(residuals^2) / sum((validationData$TotalHt - mean(validationData$TotalHt))^2)
-  model$pearson = cor(predictedHeight, validationData$TotalHt)
-  model$rmse = sqrt(mean(residuals^2))
-  model$rmspe = 100 * sqrt(mean((residuals / validationData$TotalHt)^2))
-  model$significant = significant
+  heightModelStats$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # see get_dbh_stats(): same nlrob issue
+  heightModelStats$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
+  heightModelStats$bias = mean(validationResiduals)
+  heightModelStats$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nobs(model))
+  heightModelStats$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nobs(model))
+  heightModelStats$mab = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTree)) / sum(heightByDbhClass$n)
+  heightModelStats$mapb = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTreePct)) / sum(heightByDbhClass$n)
+  heightModelStats$mae = mean(abs(validationResiduals))
+  heightModelStats$mape = 100 * mean(abs(validationResiduals / validationData$TotalHt))
+  heightModelStats$meanAbsolutePlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffect), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
+  heightModelStats$meanAbsolutePercentPlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffectPct), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
+  heightModelStats$n = nobs(model)
+  heightModelStats$nse = 1 - sum(validationResiduals^2) / sum((validationData$TotalHt - mean(validationData$TotalHt))^2)
+  heightModelStats$pearson = cor(predictedHeight, validationData$TotalHt)
+  heightModelStats$rmse = sqrt(mean(validationResiduals^2))
+  heightModelStats$rmspe = 100 * sqrt(mean((validationResiduals / validationData$TotalHt)^2))
+  heightModelStats$significant = significant
 
   naturalRegenIndices = which(validationData$isPlantation == FALSE)
   heightNaturalRegen = validationData$TotalHt[naturalRegenIndices]
   predictedHeightNaturalRegen = predictedHeight[naturalRegenIndices]
   residualsNaturalRegen = predictedHeightNaturalRegen - heightNaturalRegen
-  model$biasNaturalRegen = mean(residualsNaturalRegen)
-  model$maeNaturalRegen = mean(abs(residualsNaturalRegen))
-  model$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((heightNaturalRegen - mean(heightNaturalRegen))^2)
-  model$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / heightNaturalRegen))
-  model$pearsonNaturalRegen = cor(predictedHeightNaturalRegen, heightNaturalRegen)
-  model$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
+  heightModelStats$biasNaturalRegen = mean(residualsNaturalRegen)
+  heightModelStats$maeNaturalRegen = mean(abs(residualsNaturalRegen))
+  heightModelStats$nseNaturalRegen = 1 - sum(residualsNaturalRegen^2) / sum((heightNaturalRegen - mean(heightNaturalRegen))^2)
+  heightModelStats$paeNaturalRegen = 100 * mean(abs(residualsNaturalRegen / heightNaturalRegen))
+  heightModelStats$pearsonNaturalRegen = cor(predictedHeightNaturalRegen, heightNaturalRegen)
+  heightModelStats$rmseNaturalRegen = sqrt(mean(residualsNaturalRegen^2))
   
   plantationIndices = which(validationData$isPlantation)
   heightPlantation = validationData$TotalHt[plantationIndices]
   predictedHeightPlantation = predictedHeight[plantationIndices]
   residualsPlantation = predictedHeightPlantation - heightPlantation
-  model$biasPlantation = mean(residualsPlantation)
-  model$maePlantation = mean(abs(residualsPlantation))
-  model$nsePlantation = 1 - sum(residualsPlantation^2) / sum((heightPlantation - mean(heightPlantation))^2)
-  model$paePlantation = 100 * mean(abs(residualsPlantation / heightPlantation))
-  model$pearsonPlantation = cor(predictedHeightPlantation, heightPlantation)
-  model$rmsePlantation = sqrt(mean(residualsPlantation^2))
+  heightModelStats$biasPlantation = mean(residualsPlantation)
+  heightModelStats$maePlantation = mean(abs(residualsPlantation))
+  heightModelStats$nsePlantation = 1 - sum(residualsPlantation^2) / sum((heightPlantation - mean(heightPlantation))^2)
+  heightModelStats$paePlantation = 100 * mean(abs(residualsPlantation / heightPlantation))
+  heightModelStats$pearsonPlantation = cor(predictedHeightPlantation, heightPlantation)
+  heightModelStats$rmsePlantation = sqrt(mean(residualsPlantation^2))
   
-  return(model)
+  return(heightModelStats)
 }
 
 get_preferred_model_linetype_legend = function()
@@ -592,21 +661,57 @@ get_preferred_model_linetype_legend = function()
            theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
 }
 
-get_list_coefficients = function(modelList, fitSet = "primary", fixedWeight = NA_real_)
+get_list_coefficients = function(modelOrCrossValidationList, fitSet = "primary", fixedWeight = NA_real_)
 {
-  return(bind_rows(lapply(modelList$fit, get_model_coefficients, fitSet = fitSet, fixedWeight = fixedWeight)) %>%
-           mutate(repetition = as.numeric(str_replace(modelList$id, "Repeat", "")), 
-                  fold = as.numeric(str_replace(modelList$id2, "Fold", ""))))
+  get_coefficients = function(modelOrStats)
+  {
+    if (is.null(modelOrStats$stats))
+    {
+      # model object with attached stats
+      return(modelOrStats$coefficients %>% mutate(name = modelOrStats$name, fitting = modelOrStats$fitting))
+    }
+    # stats object
+    return(modelOrStats$stats$coefficients %>% mutate(name = modelOrStats$stats$name, fitting = modelOrStats$stats$fitting))
+  }
+
+  if (is(modelOrCrossValidationList, "vfold_cv"))
+  {
+    # cross validation list
+    coefficients = bind_rows(lapply(modelOrCrossValidationList$fit, get_coefficients)) %>%
+      mutate(repetition = as.numeric(str_replace(modelOrCrossValidationList$id, "Repeat", "")), 
+             fold = as.numeric(str_replace(modelOrCrossValidationList$id2, "Fold", "")))
+  } else
+  {
+    # single model
+    coefficients = get_coefficients(modelOrCrossValidationList) %>% mutate(repetition = 1, fold = 1)
+  }
+  
+  coefficients %<>% mutate(fitSet = fitSet,
+                           fixedWeight = fixedWeight) %>%
+   relocate(fitSet, fixedWeight, name, repetition, fold)
+  return(coefficients)
 }
 
-get_list_results = function(modelList = NULL, name = NULL, fitSet = "primary", fixedWeight = NA_real_)
+get_list_stats = function(modelOrCrossValidationList, fitSet = "primary", fixedWeight = NA_real_)
 {
-  return(bind_rows(lapply(modelList$fit, get_model_results, name = NAME, fitSet = fitSet, fixedWeight = fixedWeight)) %>%
-           mutate(repetition = as.numeric(str_replace(modelList$id, "Repeat", "")), 
-                  fold = as.numeric(str_replace(modelList$id2, "Fold", ""))))
+  if (is(modelOrCrossValidationList, "vfold_cv"))
+  {
+    # cross validation list
+    stats = bind_rows(lapply(modelOrCrossValidationList$fit, get_model_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>% 
+      mutate(repetition = as.numeric(str_replace(modelOrCrossValidationList$id, "Repeat", "")), 
+             fold = as.numeric(str_replace(modelOrCrossValidationList$id2, "Fold", "")))
+  } else {
+    # single mode
+    stats = get_model_stats(modelOrCrossValidationList, fitSet = fitSet, fixedWeight = fixedWeight) %>% 
+      mutate(repetition = 1, fold = 1)
+  }
+  
+  stats %<>% 
+    relocate(fitSet, fixedWeight, name, repetition, fold)
+  return(stats)
 }
 
-get_model_coefficients = function(model, fitSet = "primary", fixedWeight = NA_real_)
+get_model_coefficients = function(model)
 {
   if (is.null(model$coefficients))
   {
@@ -620,11 +725,13 @@ get_model_coefficients = function(model, fitSet = "primary", fixedWeight = NA_re
   {
     coefficients = tibble(!!!set_names(model$coefficients, names(model$coefficients)))
   }
-  coefficients %<>% 
-    mutate(fitSet = fitSet, name = model$name, fitting = class(model)[1], fixedWeight = fixedWeight, fitTimeInS = model$fitTimeInS) %>%
-    relocate(fitSet, name, fitting, fixedWeight)
+
+  if (is(model, "gam"))
+  {
+    coefficients %<>% rename(a0 = `(Intercept)`)
+  }
   
-  if (class(model)[1] == "lm")
+  if (is(model, "lm"))
   {
     coefficientNames = names(coefficients)
     # change linear regression nomenclature to match nonlinear
@@ -661,16 +768,23 @@ get_model_coefficients = function(model, fitSet = "primary", fixedWeight = NA_re
       }
     }
   }
+  
   return(coefficients)
 }
 
-get_model_results = function(model = NULL, name = NULL, fitSet = "primary", fixedWeight = NA_real_, fittingMethod = NA_character_)
+get_model_stats = function(modelOrStats = NULL, name = NULL, fitSet = "primary", fixedWeight = NA_real_, fittingMethod = NA_character_)
 {
-  if (is.null(model))
+  modelStats = modelOrStats
+  if (is.null(modelOrStats$stats) == FALSE)
   {
-    if (is.null(name) | is.null(fittingMethod))
+    modelStats = modelOrStats$stats
+  }
+  
+  if (is.null(modelStats))
+  {
+    if (is.null(name) | is.na(fittingMethod))
     {
-      stop("Name and fittingMethod must be specified if model is NULL.")
+      stop("Name and fittingMethod must be specified if modelStats is NULL.")
     }
     return(tibble(fitSet = fitSet, name = name, fitting = fittingMethod, n = NA_real_, 
                   isConverged = NA_real_, significant = NA_real_, fixedWeight = fixedWeight,
@@ -687,67 +801,38 @@ get_model_results = function(model = NULL, name = NULL, fitSet = "primary", fixe
                   adaptiveWeightFraction = NA_real_, maxResidual = NA_real_))
   }
   
-  if (is.null(fittingMethod) == FALSE)
+  if (is.na(fittingMethod) == FALSE)
   {
-    stop("fittingMethod is obtained from model when model is specified.")
-  }
-  fittingMethod = class(model)[1]
-  switch(fittingMethod, 
-         "gam" = { isConverged = model$converged }, 
-         "gnls" = { isConverged = (model$numIter < 500) }, # crude approximation since gnls() doesn't report convergence info
-         "gsl_nls" = { isConverged = model$convInfo$isConv }, 
-         "lm" = { isConverged = TRUE }, # linear models are deterministic, so no convergence to check
-         "nlrob" = { isConverged = model$status == "converged" },
-         stop(paste0("Unhandled model fitting method ", fittingMethod, ".")))
-  
-  if (("mape" %in% names(model)) == FALSE)
-  {
-    stop(paste0(fittingMethod, " ", formula(model)[2], " model ", model$name, " is missing summary statistics."))
-  }
-  if (isConverged == FALSE)
-  {
-    warning(paste0(fittingMethod, " ", formula(model)[2], " model using ", model$name, " is not converged."))
+    stop("get_model_stats() obtains fittingMethod from the model when model is specified.")
   }
   
-  power = NA_real_
-  powerPlantation = NA_real_
-  if (is.null(model$modelStruct$varStruct) == FALSE)
-  {
-    power = model$modelStruct$varStruct[1]
-    if (length(model$modelStruct$varStruct) > 1)
-    {
-      powerPlantation = model$modelStruct$varStruct[2]
-    }
-  }
-  
-  residuals = residuals(model)
-  return(tibble(fitSet = fitSet, name = model$name, fitting = fittingMethod, n = sum(is.na(residuals) == FALSE), 
-                isConverged = isConverged, significant = model$significant, fixedWeight = fixedWeight,
-                aic = model$aic, aicN = model$aic / nobs(model), aict = model$aict,
-                bias = model$bias, biasNaturalRegen = model$biasNaturalRegen, biasPlantation = model$biasPlantation,
-                bic = model$bic, bict = model$bict,
-                mab = model$mab, mapb = model$mapb,
-                mae = model$mae, maeNaturalRegen = model$mapeNaturalRegen, maePlantation = model$mapePlantation,
-                mape = model$mape, mapeNaturalRegen = model$mapeNaturalRegen, mapePlantation = model$mapePlantation,
-                nse = model$nse, nseNaturalRegen = model$nseNaturalRegen, nsePlantation = model$nsePlantation,
-                pearson = model$pearson, pearsonNaturalRegen = model$pearsonNaturalRegen, pearsonPlantation = model$pearsonPlantation,
-                rmse = model$rmse, rmseNaturalRegen = model$rmseNaturalRegen, rmsePlantation = model$rmsePlantation,
-                rmspe = model$rmspe,
-                power = power, powerPlantation = powerPlantation,
-                adaptiveWeightFraction = model$adaptiveWeightFraction, maxResidual = residuals[which.max(abs(residuals))]))
+  return(tibble(fitSet = fitSet, name = modelStats$name, fitting = modelStats$fitting, n = modelStats$n, 
+                isConverged = modelStats$isConverged, significant = modelStats$significant, fixedWeight = fixedWeight,
+                aic = modelStats$aic, aict = modelStats$aict,
+                bias = modelStats$bias, biasNaturalRegen = modelStats$biasNaturalRegen, biasPlantation = modelStats$biasPlantation,
+                bic = modelStats$bic, bict = modelStats$bict,
+                mab = modelStats$mab, mapb = modelStats$mapb,
+                mae = modelStats$mae, maeNaturalRegen = modelStats$mapeNaturalRegen, maePlantation = modelStats$mapePlantation,
+                mape = modelStats$mape, mapeNaturalRegen = modelStats$mapeNaturalRegen, mapePlantation = modelStats$mapePlantation,
+                nse = modelStats$nse, nseNaturalRegen = modelStats$nseNaturalRegen, nsePlantation = modelStats$nsePlantation,
+                pearson = modelStats$pearson, pearsonNaturalRegen = modelStats$pearsonNaturalRegen, pearsonPlantation = modelStats$pearsonPlantation,
+                rmse = modelStats$rmse, rmseNaturalRegen = modelStats$rmseNaturalRegen, rmsePlantation = modelStats$rmsePlantation,
+                rmspe = modelStats$rmspe,
+                varPower = modelStats$variancePower, varPowerPlantation = modelStats$variancePowerPlantation,
+                adaptiveWeightFraction = modelStats$adaptiveWeightFraction))
 }
 
 impute_basal_area = function(Species, heightInM, isPlantation)
 {
   # preferred fits from ends of HtDia PSME.R, ALRU2.R, THSE.R, ...
-  basalAreaInM2 = recode(Species,
-                         DF = (0.6895239663 - 0.4132029239 * isPlantation) * (exp((0.0003122770 - 0.0005283067 * isPlantation) * (heightInM - 1.37)^(1.9075142639 - 0.1005401747 * isPlantation)) - 1),
-                         RA = 7.159320e+02 * (exp(4.270042e-07 * (heightInM - 1.37)^(1.904561e+00 - 1.121828e-01 * isPlantation)) - 1),
-                         WH = (1.068577e-04 + 5.234021e-05 * isPlantation) * (heightInM - 1.37)^(2.178129e+00 - 1.778726e-01 * isPlantation),
-                         BM = 5.348649e+02 * (exp(3.583647e-07 * (heightInM - 1.37)^(2.216220e+00 - 1.465682e-01 * isPlantation)) - 1),
-                         OM = 1.3558236 * (exp(0.0001969 * (heightInM - 1.37)^(2.0561921 - 0.2726091 * isPlantation)) - 1),
-                         RC = 3.445860e+02 * (exp(0.0001969 * (heightInM - 1.37)^(6.923252e-07 - 2.181920e+00 * isPlantation)) - 1),
-                         .default = 1.828744e+02 * (exp(5.045842e-07 * (heightInM - 1.37)^(2.306458e+00 - 1.884820e-01 * isPlantation)) - 1))
+  basalAreaInM2 = case_match(Species,
+                             "DF" ~ (0.6895239663 - 0.4132029239 * isPlantation) * (exp((0.0003122770 - 0.0005283067 * isPlantation) * (heightInM - 1.37)^(1.9075142639 - 0.1005401747 * isPlantation)) - 1),
+                             "RA" ~ 7.159320e+02 * (exp(4.270042e-07 * (heightInM - 1.37)^(1.904561e+00 - 1.121828e-01 * isPlantation)) - 1),
+                             "WH" ~ (1.068577e-04 + 5.234021e-05 * isPlantation) * (heightInM - 1.37)^(2.178129e+00 - 1.778726e-01 * isPlantation),
+                             "BM" ~ 5.348649e+02 * (exp(3.583647e-07 * (heightInM - 1.37)^(2.216220e+00 - 1.465682e-01 * isPlantation)) - 1),
+                             "OM" ~ 1.3558236 * (exp(0.0001969 * (heightInM - 1.37)^(2.0561921 - 0.2726091 * isPlantation)) - 1),
+                             "RC" ~ 3.445860e+02 * (exp(0.0001969 * (heightInM - 1.37)^(6.923252e-07 - 2.181920e+00 * isPlantation)) - 1),
+                             .default = 1.828744e+02 * (exp(5.045842e-07 * (heightInM - 1.37)^(2.306458e+00 - 1.884820e-01 * isPlantation)) - 1))
   basalAreaInM2 = if_else(basalAreaInM2 < 0.25 * pi * (0.01 * 2.54)^2, 0.25 * pi * (0.01 * 2.54)^2, basalAreaInM2) # clamp regressions to minimum cruised basal area: blocks implied negative DBHes
   return(replace_na(basalAreaInM2, 0.25 * pi * (0.01 * 10)^2)) # assume any tree without a height is 10 cm DBH
 }
@@ -757,14 +842,26 @@ impute_height = function(Species, DBH, isPlantation)
   # for simplicity and for now, central Chapman-Richards fits for all species
   # Other forms have slightly lower error, see HtDia.xlsx.
   # switch fails with multi-argument returns not permitted
-  return(recode(Species,
-                DF = 1.37 + (65.30943 - 13.13382 * isPlantation) * (1 - exp(-0.02209 * DBH))^(1.50887 - 0.31001 * isPlantation),
-                RA = 1.37 + (24.70557 + 2.93605 * isPlantation) * (1 - exp(-0.04842 * DBH))^(1.17287 - 0.07762 * isPlantation),
-                WH = 1.37 + (50.20361 - 6.13208 * isPlantation) * (1 - exp(-0.0260 * DBH))^(1.43803 - 0.23284 * isPlantation),
-                BM = 1.37 + (26.01242 + 1.31902 * isPlantation) * (1 - exp(-0.03156 * DBH))^(1.03369 - 0.09901 * isPlantation),
-                OM = 1.37 + (17.65233 - 1.52591 * isPlantation) * (1 - exp(-0.05721 * DBH))^(1.23109 - 0.25308 * isPlantation),
-                RC = 1.37 + (53.09458 - 8.88290 * isPlantation) * (1 - exp(-0.01434 * DBH))^(1.22216 - 0.17121 * isPlantation),
-                .default = 1.37 + (57.89105 - 9.52781 * isPlantation) * (1 - exp(-0.01026  * DBH))^(0.93663 - 0.12157 * isPlantation)))
+  return(case_match(Species,
+                    "DF" ~ 1.37 + (65.30943 - 13.13382 * isPlantation) * (1 - exp(-0.02209 * DBH))^(1.50887 - 0.31001 * isPlantation),
+                    "RA" ~ 1.37 + (24.70557 + 2.93605 * isPlantation) * (1 - exp(-0.04842 * DBH))^(1.17287 - 0.07762 * isPlantation),
+                    "WH" ~ 1.37 + (50.20361 - 6.13208 * isPlantation) * (1 - exp(-0.0260 * DBH))^(1.43803 - 0.23284 * isPlantation),
+                    "BM" ~ 1.37 + (26.01242 + 1.31902 * isPlantation) * (1 - exp(-0.03156 * DBH))^(1.03369 - 0.09901 * isPlantation),
+                    "OM" ~ 1.37 + (17.65233 - 1.52591 * isPlantation) * (1 - exp(-0.05721 * DBH))^(1.23109 - 0.25308 * isPlantation),
+                    "RC" ~ 1.37 + (53.09458 - 8.88290 * isPlantation) * (1 - exp(-0.01434 * DBH))^(1.22216 - 0.17121 * isPlantation),
+                    .default = 1.37 + (57.89105 - 9.52781 * isPlantation) * (1 - exp(-0.01026  * DBH))^(0.93663 - 0.12157 * isPlantation)))
+}
+
+is_model_converged = function(model)
+{
+  switch(class(model)[1], 
+         "gam" = { isConverged = model$converged }, 
+         "gnls" = { isConverged = (model$numIter < 500) }, # crude approximation since gnls() doesn't report convergence info
+         "gsl_nls" = { isConverged = model$convInfo$isConv }, 
+         "lm" = { isConverged = TRUE }, # linear models are deterministic, so no convergence to check
+         "nlrob" = { isConverged = model$status == "converged" },
+         stop(paste0("Unhandled model fitting method ", class(model)[1], ".")))
+  return(isConverged)
 }
 
 plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)"), speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitXlabels = FALSE)
