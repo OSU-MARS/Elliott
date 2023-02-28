@@ -92,12 +92,18 @@ with_progress({
             aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
           }
 
-          #print(paste0(.y$species[1], " ", .y$responseVariable[1], " ", .y$name[1], " (", nrow(.x), ") x ", otherModelName, " (", nrow(otherModelResults), "):",
-          #             " mab ", sum(is.na(.x$mab)), " ", sum(is.na(otherModelResults$mab)),
-          #             " mae ", sum(is.na(.x$mae)), " ", sum(is.na(otherModelResults$mae)),
-          #             " pearson ", sum(is.na(.x$pearson)), " ", sum(is.na(otherModelResults$pearson)),
-          #             " nse ", sum(is.na(.x$nse)), " ", sum(is.na(otherModelResults$nse)),
-          #             " rmse ", sum(is.na(.x$rmse)), " ", sum(is.na(otherModelResults$rmse))), quote = FALSE)
+          if ((sum(is.na(.x$mae)) + sum(is.na(otherModelResults$mae)) + sum(is.na(.x$pearson)) + sum(is.na(otherModelResults$pearson)) + 
+               sum(is.na(.x$nse)) + sum(is.na(otherModelResults$nse)) + sum(is.na(.x$rmse)) + sum(is.na(otherModelResults$rmse))) > 0)
+          {
+            # WeightedROC() errors on NAs in its arguments but can't do so informatively
+            # Fail informatively instead so that investigation is possible.
+            stop(paste0(.y$species[1], " ", .y$responseVariable[1], " ", .y$name[1], " (", nrow(.x), ") x ", otherModelName, " (", nrow(otherModelResults), "):",
+                        " mab ", sum(is.na(.x$mab)), " ", sum(is.na(otherModelResults$mab)),
+                        " mae ", sum(is.na(.x$mae)), " ", sum(is.na(otherModelResults$mae)),
+                        " pearson ", sum(is.na(.x$pearson)), " ", sum(is.na(otherModelResults$pearson)),
+                        " nse ", sum(is.na(.x$nse)), " ", sum(is.na(otherModelResults$nse)),
+                        " rmse ", sum(is.na(.x$rmse)), " ", sum(is.na(otherModelResults$rmse))), quote = FALSE)
+          }
           return(tibble(otherModelName = otherModelName, fitting = .x$fitting[1], isBaseForm = .x$isBaseForm[1],
                         hasPhysio = .x$hasPhysio[1], hasStand = .x$hasStand[1],
                         aucDeltaAicN = WeightedAUC(WeightedROC(guess = c(.x$deltaAicN, otherModelResults$deltaAicN), label = lowerIsBetter)),
@@ -121,12 +127,12 @@ with_progress({
 heightDiameterModelRanking = heightDiameterModelAucs %>% 
   group_by(responseVariable, species, name) %>%
   summarize(fitting = fitting[1], isBaseForm = isBaseForm[1], hasPhysio = hasPhysio[1], hasStand = hasStand[1],
-            aucDeltaAicN = mean(if_else(name != otherModelName, aucDeltaAicN, NA_real_), na.rm = TRUE),
-            aucMab = mean(if_else(name != otherModelName, aucMab, NA_real_), na.rm = TRUE),
-            aucMae = mean(if_else(name != otherModelName, aucMae, NA_real_), na.rm = TRUE),
-            aucPearson = mean(if_else(name != otherModelName, aucPearson, NA_real_), na.rm = TRUE),
-            aucNse = mean(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
-            aucRmse = mean(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
+            aucDeltaAicN = median(if_else(name != otherModelName, aucDeltaAicN, NA_real_), na.rm = TRUE),
+            aucMab = median(if_else(name != otherModelName, aucMab, NA_real_), na.rm = TRUE),
+            aucMae = median(if_else(name != otherModelName, aucMae, NA_real_), na.rm = TRUE),
+            aucPearson = median(if_else(name != otherModelName, aucPearson, NA_real_), na.rm = TRUE),
+            aucNse = median(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
+            aucRmse = median(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
             .groups = "drop_last") %>%
   mutate(aucBlended = 0.5 * if_else(responseVariable == "height", aucMae, aucRmse) + 0.2 * if_else(responseVariable == "DBH", aucMae, aucRmse) + 0.3 * aucDeltaAicN) %>%
   ungroup()
@@ -256,7 +262,7 @@ heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>%
   mutate(nlrobPct = 100 * nlrob / uniqueNonlinear, gslNlsPct = nlrobPct + 100 * gslNls / uniqueNonlinear, totalFailPct = 100 * fail / uniqueNonlinear) %>%
   arrange(desc(fitSet))
 # fittings which failed
-heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable, species, name)
+heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable, species, name) %>% arrange(desc(fitSet))
 
 
 ## Figure 1: overall dataset summary
@@ -353,30 +359,30 @@ heightFromDiameterModelComparison = heightDiameterModelRanking %>% filter(respon
   mutate(name = factor(name, levels = heightFromDiameterAccuracyLevels$name))
 ggplot(heightFromDiameterModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucMab)) +
-  labs(title = "a) MAB", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "a) MAB", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(limits = rev) +
 ggplot(heightFromDiameterModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucMae)) +
-  labs(title = "b) MAE", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "b) MAE", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 ggplot(heightFromDiameterModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-  labs(title = "c) RMSE", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "c) RMSE", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 ggplot(heightFromDiameterModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-  labs(title = "d) AIC", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "d) AIC", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 ggplot(heightFromDiameterModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucNse)) +
-  labs(title = "e) model efficiency", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "e) model efficiency", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 plot_annotation(theme = theme(plot.margin =  margin())) +
 plot_layout(nrow = 1, guides = "collect") &
   scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
   scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), title = element_text(size = 8))
-#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC.png", height = 12, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.png", height = 12, width = 20, units = "cm", dpi = 150)
 
 
 ## Figure 3: diameter-height error summary
@@ -464,30 +470,30 @@ diameterFromHeightModelComparison = heightDiameterModelRanking %>% filter(respon
   mutate(name = factor(name, levels = diameterFromHeightAccuracyLevels$name))
 ggplot(diameterFromHeightModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucMab)) +
-  labs(title = "a) MAB", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "a) MAB", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(limits = rev) +
 ggplot(diameterFromHeightModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucMae)) +
-  labs(title = "b) MAE", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "b) MAE", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 ggplot(diameterFromHeightModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-  labs(title = "c) RMSE", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "c) RMSE", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 ggplot(diameterFromHeightModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-  labs(title = "d) AIC", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "d) AIC", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 ggplot(diameterFromHeightModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucNse)) +
-  labs(title = "e) model efficiency", x = NULL, y = NULL, fill = bquote(bar("AUC"))) +
+  labs(title = "e) model efficiency", x = NULL, y = NULL, fill = "median\nAUC") +
   scale_y_discrete(labels = NULL, limits = rev) +
 plot_annotation(theme = theme(plot.margin =  margin())) +
 plot_layout(nrow = 1, guides = "collect") &
   scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
-  scale_x_discrete(labels = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
+  scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), title = element_text(size = 8))
-#ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC.png", height = 12, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.png", height = 12, width = 20, units = "cm", dpi = 150)
 
 
 ## Figure 4: comparison of accuracy metrics
@@ -500,7 +506,7 @@ accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(resp
                                   rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
                                   mutate(responseVariable = "DBH")) %>%
   mutate(metricX = factor(metricX, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse", "pearson"), labels = c("MAB,\n%", "MAE,\n%", "RMSE", "normalized\nΔAIC", "model\nefficiency", "Pearson's\nR")),
-         metricY = factor(metricY, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse", "pearson"), labels = c("MAB,\n%", "MAE,\n%", "RMSE", "normalized\nΔAIC", "model\nefficiency", "Pearson's\nR")))
+         metricY = factor(metricY, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse", "pearson"), labels = c("MAB, %", "MAE, %", "RMSE", "normalize ΔAIC", "model efficiency", "Pearson's R")))
 
 ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) + 
   coord_equal() +
@@ -598,8 +604,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
 # bigleaf maple    unified Richards  Weibull BA+L                   REML GAM                power physio
 #                  Michaelis-Menten  Chapman-Richards physio        Ruark                   Chapman-Richards physio
 #                  Prodan                                           power
-print(preferredForms %>% filter(species %in% c("western hemlock", "bigleaf maple")) %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 20, ellipsis = ""), rmseName = str_trunc(rmseName, 20, ellipsis = ""), aicName = str_trunc(aicName, 20, ellipsis = "")), n = 32)
-
+#print(preferredForms %>% filter(species %in% c("western hemlock", "bigleaf maple")) %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 20, ellipsis = ""), rmseName = str_trunc(rmseName, 20, ellipsis = ""), aicName = str_trunc(aicName, 20, ellipsis = "")), n = 32)
 if (exists("tsheHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/TSHE preferred models.Rdata") }
 if (exists("acmaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ACMA3 preferred models.Rdata") }
 
@@ -669,8 +674,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
 # western redcedar  Hossfeld IV       Sharma-Parton physio           parabolic               power ABA+T
 #                   Michaelis-Menten  Sharma-Parton BA+L physio      Ruark                   Chapman-Richards RelHt
 #                   Prodan            Sharma-Parton BA+L             REML GAM
-print(preferredForms %>% filter(species %in% c("Oregon myrtle", "western redcedar")) %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 22, ellipsis = ""), rmseName = str_trunc(rmseName, 22, ellipsis = ""), aicName = str_trunc(aicName, 22, ellipsis = "")), n = 32)
-
+#print(preferredForms %>% filter(species %in% c("Oregon myrtle", "western redcedar")) %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 22, ellipsis = ""), rmseName = str_trunc(rmseName, 22, ellipsis = ""), aicName = str_trunc(aicName, 22, ellipsis = "")), n = 32)
 if (exists("umcaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/UMCA preferred models.Rdata") }
 if (exists("thplHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/THPL preferred models.Rdata") }
 
@@ -737,8 +741,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
 # other species  Curtis            REML GAM BA+L                  REML GAM                Sibbesen form physio
 #                power             REML GAM BAL+L physio          parabolic               Chapman-Richards form RelHt
 #                Korf                                             linear
-print(preferredForms %>% filter(species == "other species") %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 22, ellipsis = ""), rmseName = str_trunc(rmseName, 22, ellipsis = ""), aicName = str_trunc(aicName, 22, ellipsis = "")), n = 16)
-
+#print(preferredForms %>% filter(species == "other species") %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 22, ellipsis = ""), rmseName = str_trunc(rmseName, 22, ellipsis = ""), aicName = str_trunc(aicName, 22, ellipsis = "")), n = 16)
 if (exists("otherHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/other preferred models.Rdata") }
 
 ggplot() +
