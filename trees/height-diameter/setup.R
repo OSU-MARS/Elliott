@@ -174,8 +174,8 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
   }
   
   # use map() instead of future_map() since GAM constraints fail to flow with future_map()
-  fits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = map(splits, fitFunction))
-  return(fits)
+  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = map(splits, fitFunction))
+  return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
 
 # gnls() does something internally which manages to modify variables within fit_gnls() if one of its arguments is named formula
@@ -244,8 +244,8 @@ fit_gnls = function(name, modelFormula, data, start, control = gnlsControl(maxIt
     }
   }
   
-  fits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
-  return(fits)
+  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
+  return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
 
 fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(maxiter = 100), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
@@ -306,8 +306,8 @@ fit_gsl_nls = function(name, formula, data, start, control = gsl_nls_control(max
     }
   }
   
-  fits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
-  return(fits)
+  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
+  return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
 
 fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
@@ -366,8 +366,8 @@ fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions =
     }
   }
   
-  fits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
-  return(fits)
+  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
+  return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
 
 fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter = 100), maxit = 50, folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, significant = TRUE, tDegreesOfFreedom = 8)
@@ -434,8 +434,8 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
     }
   }
 
-  fits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
-  return(fits)
+  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
+  return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
 
 get_adaptive_weighting = function(model)
@@ -458,6 +458,17 @@ get_adaptive_weighting = function(model)
            adaptiveWeightFraction = 0 
          })
   return(adaptiveWeightFraction)
+}
+
+get_cross_validation_return_value = function(splitsAndFits, returnModel)
+{
+  if (returnModel)
+  {
+    # if full models are retained retain also the training-validation data splits for each model fit
+    return(splitsAndFits)
+  }
+  # if only model statistics are kept then drop the data splits
+  return(splitsAndFits %>% select(-splits))
 }
 
 get_dbh_stats = function(name, model, validationData, validationWeights = validationData$heightWeight, significant = TRUE, tDegreesOfFreedom = 8)
@@ -674,7 +685,9 @@ get_list_coefficients = function(modelOrCrossValidationList, fitSet = "primary",
     return(modelOrStats$stats$coefficients %>% mutate(name = modelOrStats$stats$name, fitting = modelOrStats$stats$fitting))
   }
 
-  if (is(modelOrCrossValidationList, "vfold_cv"))
+  # complete vfold_cv return tibble: vfold_cv, tbl_df, tbl, data.frame
+  # vfold_cv() %>% select(-splits): tbl_df, tbl, data.frame
+  if (is(modelOrCrossValidationList, "tbl_df"))
   {
     # cross validation list
     coefficients = bind_rows(lapply(modelOrCrossValidationList$fit, get_coefficients)) %>%
@@ -694,14 +707,14 @@ get_list_coefficients = function(modelOrCrossValidationList, fitSet = "primary",
 
 get_list_stats = function(modelOrCrossValidationList, fitSet = "primary", fixedWeight = NA_real_)
 {
-  if (is(modelOrCrossValidationList, "vfold_cv"))
+  if (is(modelOrCrossValidationList, "tbl_df"))
   {
     # cross validation list
     stats = bind_rows(lapply(modelOrCrossValidationList$fit, get_model_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>% 
       mutate(repetition = as.numeric(str_replace(modelOrCrossValidationList$id, "Repeat", "")), 
              fold = as.numeric(str_replace(modelOrCrossValidationList$id2, "Fold", "")))
   } else {
-    # single mode
+    # single model
     stats = get_model_stats(modelOrCrossValidationList, fitSet = fitSet, fixedWeight = fixedWeight) %>% 
       mutate(repetition = 1, fold = 1)
   }
@@ -1344,8 +1357,3 @@ if (htDiaOptions$includeInvestigatory)
     geom_histogram(aes(x = Age_2020, y = ..density..), binwidth = 5, fill = "green4") +
     labs(x = "stand age in 2020, years", y = "probability", color = NULL)
 }
-
-
-## persist workspace to disk
-#save.image("trees/height-diameter/height-diameter.Rdata")
-#load("trees/height-diameter/height-diameter.Rdata")

@@ -13,9 +13,9 @@ psme2016defaultWeightPhysio = psme2016defaultWeight %>% filter(is.na(elevation) 
 
 psmeOptions = list(fitHeightPrimary = FALSE, # 
                    fitHeightNlrobAndFixedWeight = FALSE, # 
-                   fitDbhPrimary = FALSE, # 
+                   fitDbhPrimary = TRUE, # 
                    fitDbhNlrobAndFixedWeight = TRUE, # 
-                   fitSlowGams = FALSE)
+                   fitSlowGams = TRUE)
 
 if (psmeOptions$fitHeightPrimary)
 {
@@ -70,7 +70,7 @@ if (psmeOptions$fitHeightNlrobAndFixedWeight)
 {
   # nlrob()
   psmeHeightFromDiameterNlrob = list(chapmanRichards = fit_nlrob("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 65.3, a1p = -13.1, b1 = -0.022, b2 = 1.51, b2p = -0.31))) # b1p not significant
-  psmeHeightFromDiameterNlrob$chapmanRichardsBal = fit_nlrob("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 72.9, a1p = -11.8, a2 = 0.087, a2p = 0.84, a3 = -0.0021, a3p = -0.073, b1 = -0.016, b2 = 1.26, b2p = -0.054)) # a3 not significant, step factor with b1p
+  psmeHeightFromDiameterNlrob$chapmanRichardsBal = fit_nlrob("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 70, a1p = -9, a2 = 0.1, a2p = 0.7, a3 = 0, a3p = -0.15, b1 = -0.017, b2 = 1.3, b2p = -0.06)) # a3 not significant, step factor with b1p
   psmeHeightFromDiameterNlrob$chapmanRichardsBalPhysio = fit_nlrob("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), psme2016physio, start = list(a1 = 74.3, a2 = 0.096, a2p = 0.92, a3 = 0, a3p = 0, a4 = -0.015, a5 = -0.101, a6 = 0.793, a7 = 1.695, a8 = 0.183, b1 = -0.018, b1p = 0.005, b2 = 1.30, b2p = -0.154)) # a4 not significant
   psmeHeightFromDiameterNlrob$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016physio, start = list(a1 = 68.5, a1p = -13.4, a4 = -0.0045, a5 = -8.09, a6 = 0.783, a7 = 0.766, a8 = 0.213, b1 = -0.022, b2 = 1.50, b2p = -0.31)) # a4p not significant, a5p induces overfitting
   psmeHeightFromDiameterNlrob$curtis = fit_nlrob("Curtis", TotalHt ~ 1.37 + (a1 + a1p*isPlantation) * DBH / (1 + DBH)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.409, a1p = -0.685, b1 = 0.200, b1p = -0.156))
@@ -313,7 +313,7 @@ if (psmeOptions$fitDbhPrimary)
   psmeDiameterFromHeight$chapmanRichardsAbat = fit_gsl_nls("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016, start = list(a1 = -136, a1p = 59.2, a2 = 0.109, a3 = 0.0684, b1 = 0.00811, b1p = 0.00403, b2 = 0.786))
   psmeDiameterFromHeight$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a5 * sin(3.14159/180 * slope) + a8 * topographicShelterIndex)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016physio, start = list(a1 = -13.8, a1p = -0.65, a5 = -3.58, a8 = 0.091, b1 = 0.019, b1p = 0.0062, b2 = 0.30))
   psmeDiameterFromHeight$chapmanRichardsRelHt = fit_gsl_nls("Chapman-Richards inverse RelHt", DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^(b2 + b2p * isPlantation), 0.9999)), psme2016, start = list(a1 = -1.67, a9 = -9.26, b1 = 0.020, b1p = 0.004, b2 = 0.004, b2p = 0.089))
-  psmeDiameterFromHeight$michaelisMentenReplace = fit_gsl_nls("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016, start = list(a1 = 190, a1p = -118, a2 = 67.3, a2p = -38.3, b1 = 0.78, b1p = -0.08))
+  psmeDiameterFromHeight$michaelisMentenReplace = fit_gsl_nls("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^b1 / (a2 + a2p * isPlantation - (TotalHt - 1.37)^b1), psme2016, start = list(a1 = 150, a1p = -77, a2 = 50, a2p = -15, b1 = 0.72)) # b1p not significant
   psmeDiameterFromHeight$naslund = fit_gsl_nls("Näslund inverse", DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), psme2016, start = list(a1 = 5.0, a1p = -1.6, a2 = -0.085, a2p = -0.018))
   psmeDiameterFromHeight$power = fit_gsl_nls("power", DBH ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.57, a1p = 0.327, b1 = 1.04, b1p = -0.108))
   #psmeDiameterFromHeight$powerAbat = fit_gsl_nls("power ABA+T", DBH ~ (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * tallerApproxBasalArea + a3 * standBasalAreaApprox)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 2.14, a1p = -0.051, a2 = -0.0065, a2p = -0.0038, a3 = 0.00085, b1 = 0.963, b1p = -0.053))
@@ -323,30 +323,36 @@ if (psmeOptions$fitDbhPrimary)
   psmeDiameterFromHeight$ruarkAbat = fit_gsl_nls("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.6, a2 = -0.005, b1 = 0.88, b1p = -0.133, b2 = 0.003, b2p = 0.009)) # a2p, a3p not significant, a2-a3 not mutually significant
   psmeDiameterFromHeight$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.5, a6 = -0.05, b1 = 0.84, b1p = -0.11, b2 = 0.005, b2p = 0.008)) # a1p, a4, a5, a7, a8 not significant
   psmeDiameterFromHeight$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.4, a9 = 0.45, b1 = 0.83, b1p = -0.13, b2 = 0.004, b2p = 0.008)) # a9p not significant
+  psmeDiameterFromHeight$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.4, a6 = -0.05, a9 = 0.4, b1 = 0.83, b1p = -0.13, b2 = 0.0042, b2p = 0.008))
   #psmeDiameterFromHeight$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), psme2016, start = list(a1 = 0.002, a2 = 0.055, b1 = 1.05, Ha = 18.6))
   psmeDiameterFromHeight$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation)*(exp(b2*(tph/topHeight)^(b3 + b3p * isPlantation)*(TotalHt - 1.37)) - 1)^(b4 + b4p * isPlantation), psme2016, start = list(a1 = 9, b1 = 0.4, b1p = -0.14, b2 = 0.04, b3 = -0.06, b3p = 0.11, b4 = 0.3, b4p = 0.13), control = gsl_nls_control(maxiter = 250))
   psmeDiameterFromHeight$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.89, a1p = -0.922, b1 = 0.519, b2 = 0.111, b2p = 0.017))
   psmeDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + (a3 + a3p * isPlantation) * standBasalAreaApprox)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.898, a1p = -0.879, a2 = 0.00198, a3 = -0.00386, a3p = -0.00386, b1 = 0.527, b2 = 0.111, b2p = 0.0190))
-  psmeDiameterFromHeight$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016physio, start = list(a1 = 3.812, a1p = -0.925, a4 = 0.00022, a6 = -0.0495, a7 = -0.0151, a8 = -0.00630, b1 = 0.520, b2 = 0.111, b2p = 0.0173))
+  psmeDiameterFromHeight$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.0, a1p = -0.3, a6 = -0.06, b1 = 0.60, b2 = 0.09))  # a4, a5, a7, a8, b2p not significant
   psmeDiameterFromHeight$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a1p * isPlantation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.90, a1p = -0.95, a9 = 0.085, b1 = 0.520, b2 = 0.109, b2p = 0.016))
+  psmeDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.2, a1p = -0.6, a6 = -0.06, a9 = 0.5, b1 = 0.60, b2 = 0.09))
   psmeDiameterFromHeight$weibull = fit_gsl_nls("Weibull inverse", DBH ~ ((a1 + a1p * isPlantation)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37), 0.9999)))^b2, psme2016, start = list(a1 = -347, a1p = 128, b1 = 0.010, b1p = 0.0027, b2 = 0.81))
   # GAMs
   psmeDiameterFromHeight$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 10, pc = psme2016gamConstraint), data = psme2016)
   psmeDiameterFromHeight$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 28, pc = psme2016gamConstraint), data = psme2016, nthreads = 4)
+  psmeDiameterFromHeight$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 13, pc = psme2016gamConstraint), data = psme2016, nthreads = 4)
   if (psmeOptions$fitSlowGams)
   {
     psmeDiameterFromHeight$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 331, pc = psme2016gamConstraint), data = psme2016physio, nthreads = 6) # slow since minimum (k = 496, edf = 397, 2x2 cross validation = 18 minutes with Zen 3, 4.6 GHz), AIC 151550: 151552 without AAT, 151700 without ABA, 151783 without elevation, 151533 without slope, 151561 without sin(aspect), 151562 without cos(aspect), 151650 without topographic shelter -> drop slope -> AIC 151800 without AAT, 151920 without ABA, 151926 without elevation, 151742 without sin(aspect), 151693 without cos(aspect), 151902 without topographic shelter
     psmeDiameterFromHeight$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 85, pc = psme2016gamConstraint), data = psme2016physio, nthreads = 6)
-    
+    psmeDiameterFromHeight$gamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 331, pc = psme2016gamConstraint), data = psme2016physio, nthreads = 6)
+
     psmeDiameterFromHeightGamAbatPhysio = psmeDiameterFromHeight$gamAbatPhysio
     psmeDiameterFromHeightGamPhysio = psmeDiameterFromHeight$gamPhysio
-    save(file = "trees/height-diameter/data/PSME DBH primary GAMs.Rdata", psmeDiameterFromHeightGamAbatPhysio, psmeDiameterFromHeightGamPhysio)
+    psmeDiameterFromHeightGamRelHtPhysio = psmeDiameterFromHeight$gamRelHtPhysio
+    save(file = "trees/height-diameter/data/PSME DBH primary GAMs.Rdata", psmeDiameterFromHeightGamAbatPhysio, psmeDiameterFromHeightGamPhysio, psmeDiameterFromHeightGamRelHtPhysio)
     rm(psmeDiameterFromHeightGamAbatPhysio, psmeDiameterFromHeightGamPhysio)
   } else {
     load("trees/height-diameter/data/PSME DBH primary GAMs.Rdata")
     psmeDiameterFromHeight$gamAbatPhysio = psmeDiameterFromHeightGamAbatPhysio
     psmeDiameterFromHeight$gamPhysio = psmeDiameterFromHeightGamPhysio
-    rm(psmeDiameterFromHeightGamAbatPhysio, psmeDiameterFromHeightGamPhysio)
+    psmeDiameterFromHeight$gamRelHtPhysio = psmeDiameterFromHeightGamRelHtPhysio
+    rm(psmeDiameterFromHeightGamAbatPhysio, psmeDiameterFromHeightGamPhysio, psmeDiameterFromHeightGamRelHtPhysio)
   }
   
   save(file = "trees/height-diameter/data/PSME DBH primary.rdata", psmeDiameterFromHeight)
@@ -363,7 +369,7 @@ if (psmeOptions$fitDbhNlrobAndFixedWeight)
   psmeDiameterFromHeightNlrob$chapmanRichardsAbat = fit_nlrob("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016, start = list(a1 = -136, a1p = 59, a2 = 0.24, a3 = 0.05, b1 = 0.008, b1p = 0.004, b2 = 0.79)) # a2p, a3p, b2p not significant
   psmeDiameterFromHeightNlrob$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016physio, start = list(a1 = -13, a1p = -45, a8 = 0.05, b1 = 0.0198, b1p = -0.0057, b2 = 0.74), control = nls.control(maxiter = 250)) # a4, a5, a6, a7 not significant
   psmeDiameterFromHeightNlrob$chapmanRichardsRelHt = fit_nlrob("Chapman-Richards inverse RelHt", DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin((b1*(TotalHt - 1.37))^(b2 + b2p * isPlantation), 0.9999)), psme2016, start = list(a1 = -3.4, a9 = -8.0, b1 = 0.025, b2 = 0.02, b2p = 0.15)) # a1p, b1p not significant
-  psmeDiameterFromHeightNlrob$michaelisMentenReplace = fit_nlrob("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016, start = list(a1 = 170, a1p = -80, a2 = 50, a2p = -20, b1 = 0.77, b1p = -0.04))
+  psmeDiameterFromHeightNlrob$michaelisMentenReplace = fit_nlrob("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^b1 / (a2 + a2p * isPlantation - (TotalHt - 1.37)^b1), psme2016, start = list(a1 = 140, a1p = -55, a2 = 50, a2p = -11, b1 = 0.74))
   psmeDiameterFromHeightNlrob$naslund = fit_nlrob("Näslund inverse", DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), psme2016, start = list(a1 = 4.95, a1p = -2.05, a2 = -0.085, a2p = -0.03), control = nls.control(maxiter = 250))
   psmeDiameterFromHeightNlrob$power = fit_nlrob("power", DBH ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.2, a1p = 1.0, b1 = 1.1, b1p = -0.23))
   #psmeDiameterFromHeightNlrob$powerAbat = fit_nlrob("power ABA+T", DBH ~ (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.5, a1p = 0.9, a2 = -0.003, a2p = -0.008, b1 = 1.05, b1p = -0.17)) # a3 not significant
@@ -373,12 +379,14 @@ if (psmeOptions$fitDbhNlrobAndFixedWeight)
   psmeDiameterFromHeightNlrob$ruarkAbat = fit_nlrob("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.4, a2 = -0.007, b1 = 0.87, b1p = -0.11, b2 = 0.003, b2p = 0.007))
   psmeDiameterFromHeightNlrob$ruarkPhysio = fit_nlrob("Ruark physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.5, a6 = -0.04, b1 = 0.82, b1p = -0.07, b2 = 0.007, b2p = 0.005))
   psmeDiameterFromHeightNlrob$ruarkRelHt = fit_nlrob("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.4, a9 = 0.5, b1 = 0.80, b1p = -0.11, b2 = 0.0045, b2p = 0.006))
+  psmeDiameterFromHeightNlrob$ruarkRelHtPhysio = fit_nlrob("Ruark RelHt physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.4, a6 = -0.05, a9 = 0.4, b1 = 0.83, b1p = -0.13, b2 = 0.0042, b2p = 0.008))
   #psmeDiameterFromHeightNlrob$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), psme2016, start = list(a1 = 0.002, a2 = 0.055, b1 = 1.05, Ha = 18.6)) # converges from red alder values but fails to reconverge (singular gradient or NaN-inf with nls())
   #psmeDiameterFromHeightNlrob$sharmaParton = fit_nlrob("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation)*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^(b4 + b4p * isPlantation), psme2016, start = list(a1 = 9, b1 = 0.4, b1p = -0.14, b2 = 0.04, b3 = -0.06, b4 = 0.3, b4p = 0.13), control = nls.control(maxiter = 500)) # b3p not significant, a1p NaN-inf (not significant?), b4p significance debatable, singular gradient with all relative height forms attempted, >1000 iterations with nlrob()
   psmeDiameterFromHeightNlrob$sibbesenReplace = fit_nlrob("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 2.9, a1p = -0.2, b1 = 0.64, b2 = 0.08, b2p = -0.005))
   psmeDiameterFromHeightNlrob$sibbesenReplaceAbat = fit_nlrob("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea + (a3 + a3p * isPlantation) * standBasalAreaApprox)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 2.65, a2 = -0.005, a3 = 0.002, a3p = -0.006, b1 = 0.68, b2 = 0.07, b2p = -0.005)) # a1p, a2, a2p not significant
   psmeDiameterFromHeightNlrob$sibbesenReplacePhysio = fit_nlrob("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 2.95, a1p = -0.32, a6 = -0.06, b1 = 0.63, b2 = 0.08)) # a4, a5, a7, a8, b2p not significant
   psmeDiameterFromHeightNlrob$sibbesenReplaceRelHt = fit_nlrob("Sibbesen replace RelHt", DBH ~ (a1 + a1p * isPlantation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016, start = list(a1 = 3.3, a1p = -0.6, a9 = 0.55, b1 = 0.60, b2 = 0.075)) # a9p, b2p not significant
+  psmeDiameterFromHeightNlrob$sibbesenReplaceRelHtPhysio = fit_nlrob("Sibbesen replace RelHt physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.2, a1p = -0.6, a6 = -0.06, a9 = 0.5, b1 = 0.60, b2 = 0.09))
   psmeDiameterFromHeightNlrob$weibull = fit_nlrob("Weibull inverse", DBH ~ ((a1 + a1p * isPlantation)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37), 0.9999)))^b2, psme2016, start = list(a1 = -360, a1p = 140, b1 = 0.01, b1p = 0.003, b2 = 0.81)) # b2p not significant
   #confint_nlrob(psmeDiameterFromHeightNlrob$sibbesenReplaceRelHt, level = 0.99)
 
@@ -388,8 +396,8 @@ if (psmeOptions$fitDbhNlrobAndFixedWeight)
   psmeDiameterFromHeightGslNlsDefault$chapmanRichards = fit_gsl_nls("Chapman-Richards inverse", DBH ~ (a1 + a1p * isPlantation)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016defaultWeight, start = list(a1 = -121, a1p = 48.7, b1 = 0.00866, b1p = 0.00364, b2 = 0.781))
   psmeDiameterFromHeightGslNlsDefault$chapmanRichardsAbat = fit_gsl_nls("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016defaultWeight, start = list(a1 = -136, a1p = 59.2, a2 = 0.109, a3 = 0.0684, b1 = 0.00811, b1p = 0.00403, b2 = 0.786))
   psmeDiameterFromHeightGslNlsDefault$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a5 * sin(3.14159/180 * slope) + a8 * topographicShelterIndex)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016defaultWeightPhysio, start = list(a1 = -13.8, a1p = -0.65, a5 = -3.58, a8 = 0.091, b1 = 0.019, b1p = 0.0062, b2 = 0.30))
-  psmeDiameterFromHeightGslNlsDefault$chapmanRichardsRelHt = fit_gsl_nls("Chapman-Richards inverse RelHt", DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^(b2 + b2p * isPlantation), 0.9999)), psme2016defaultWeight, start = list(a1 = -5.8, a9 = -5.3, b1 = 0.020, b1p = 0.0036, b2 = 0.009, b2p = 0.089))
-  psmeDiameterFromHeightGslNlsDefault$michaelisMentenReplace = fit_gsl_nls("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016defaultWeight, start = list(a1 = 190, a1p = -118, a2 = 67.3, a2p = -38.3, b1 = 0.78, b1p = -0.08))
+  psmeDiameterFromHeightGslNlsDefault$chapmanRichardsRelHt = fit_gsl_nls("Chapman-Richards inverse RelHt", DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^(b2 + b2p * isPlantation), 0.9999)), psme2016defaultWeight, start = list(a1 = -5.8, a9 = -5.3, b1 = 0.020, b1p = 0.0033, b2 = 0.0085, b2p = 0.089))
+  psmeDiameterFromHeightGslNlsDefault$michaelisMentenReplace = fit_gsl_nls("Michaelis-Menten replace", DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), psme2016defaultWeight, start = list(a1 = 190, a2 = 115, b1 = 0.91)) # a1p, a2p not significant
   psmeDiameterFromHeightGslNlsDefault$naslund = fit_gsl_nls("Näslund inverse", DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), psme2016defaultWeight, start = list(a1 = 5.0, a1p = -1.6, a2 = -0.085, a2p = -0.018))
   psmeDiameterFromHeightGslNlsDefault$power = fit_gsl_nls("power", DBH ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016defaultWeight, start = list(a1 = 1.57, a1p = 0.327, b1 = 1.04, b1p = -0.108))
   #psmeDiameterFromHeightGslNlsDefault$powerAbat = fit_gsl_nls("power ABA+T", DBH ~ (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * tallerApproxBasalArea + a3 * standBasalAreaApprox)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016defaultWeight, start = list(a1 = 2.14, a1p = -0.051, a2 = -0.0065, a2p = -0.0038, a3 = 0.00085, b1 = 0.963, b1p = -0.053))
@@ -399,12 +407,14 @@ if (psmeOptions$fitDbhNlrobAndFixedWeight)
   psmeDiameterFromHeightGslNlsDefault$ruarkAbat = fit_gsl_nls("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016defaultWeight, start = list(a1 = 2.6, a2 = -0.005, b1 = 0.88, b1p = -0.133, b2 = 0.003, b2p = 0.009))
   psmeDiameterFromHeightGslNlsDefault$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016defaultWeightPhysio, start = list(a1 = 2.5, a6 = -0.05, b1 = 0.84, b1p = -0.11, b2 = 0.005, b2p = 0.008))
   psmeDiameterFromHeightGslNlsDefault$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016defaultWeight, start = list(a1 = 2.4, a9 = 0.45, b1 = 0.83, b1p = -0.13, b2 = 0.004, b2p = 0.008))
+  psmeDiameterFromHeightGslNlsDefault$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016defaultWeightPhysio, start = list(a1 = 2.4, a6 = -0.05, a9 = 0.4, b1 = 0.83, b1p = -0.13, b2 = 0.0042, b2p = 0.008))
   #psmeDiameterFromHeightGslNlsDefault$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), psme2016defaultWeight, start = list(a1 = 0.002, a2 = 0.055, b1 = 1.05, Ha = 86)) # NaN-inf
   psmeDiameterFromHeightGslNlsDefault$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation)*(exp(b2*(tph/topHeight)^(b3 + b3p * isPlantation)*(TotalHt - 1.37)) - 1)^(b4 + b4p * isPlantation), psme2016defaultWeight, start = list(a1 = 9, b1 = 0.4, b1p = -0.14, b2 = 0.04, b3 = -0.06, b3p = 0.11, b4 = 0.3, b4p = 0.13), control = gsl_nls_control(maxiter = 250))
   psmeDiameterFromHeightGslNlsDefault$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016defaultWeight, start = list(a1 = 3.89, a1p = -0.922, b1 = 0.519, b2 = 0.111, b2p = 0.017))
   psmeDiameterFromHeightGslNlsDefault$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + (a3 + a3p * isPlantation) * standBasalAreaApprox)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016defaultWeight, start = list(a1 = 3.898, a1p = -0.879, a2 = 0.00198, a3 = -0.00386, a3p = -0.00386, b1 = 0.527, b2 = 0.111, b2p = 0.0190))
-  psmeDiameterFromHeightGslNlsDefault$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a6 * cos(3.14159/180 * aspect) + a7 * sin(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016defaultWeightPhysio, start = list(a1 = 3.812, a1p = -0.925, a4 = 0.00022, a6 = -0.0495, a7 = -0.0151, a8 = -0.00630, b1 = 0.520, b2 = 0.111, b2p = 0.0173))
+  psmeDiameterFromHeightGslNlsDefault$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016defaultWeightPhysio, start = list(a1 = 3.2, a1p = -0.24, a6 = -0.05, b1 = 0.55, b2 = 0.111))
   psmeDiameterFromHeightGslNlsDefault$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a1p * isPlantation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016defaultWeight, start = list(a1 = 3.90, a1p = -0.95, a9 = 0.085, b1 = 0.520, b2 = 0.109, b2p = 0.016))
+  psmeDiameterFromHeightGslNlsDefault$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016defaultWeightPhysio, start = list(a1 = 3.2, a1p = -0.6, a6 = -0.06, a9 = 0.5, b1 = 0.60, b2 = 0.09))
   psmeDiameterFromHeightGslNlsDefault$weibull = fit_gsl_nls("Weibull inverse", DBH ~ ((a1 + a1p * isPlantation)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37), 0.9999)))^b2, psme2016defaultWeight, start = list(a1 = -347, a1p = 128, b1 = 0.010, b1p = 0.0027, b2 = 0.81))
   
   save(file = "trees/height-diameter/data/PSME DBH nlrob gsl_nls default.rdata", psmeDiameterFromHeightNlrob, psmeDiameterFromHeightGslNlsDefault)
@@ -418,28 +428,24 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & ps
   if (exists("psmeHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/PSME TotalHt primary.rdata") }
   if (exists("psmeHeightFromDiameterGslNlsDefault") == FALSE) { load("trees/height-diameter/data/PSME TotalHt nlrob gsl_nls default.rdata") }
   #if (exists("psmeHeightFromDiameterGnls") == FALSE) { load("trees/height-diameter/data/PSME TotalHt GNLS.rdata") }
-  psmeCoefficients = bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_coefficients)),
-                               bind_rows(lapply(psmeHeightFromDiameterGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
-                               bind_rows(lapply(psmeHeightFromDiameterNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
-                               #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_coefficients))) %>%
-                       mutate(responseVariable = "height")
-  psmeResults = bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_stats)),
-                          bind_rows(lapply(psmeHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
-                          bind_rows(lapply(psmeHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
-                          #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_stats))) %>%
-                  mutate(responseVariable = "height")
-  rm(psmeHeightFromDiameter, psmeHeightFromDiameterGslNlsDefault, psmeHeightFromDiameterNlrob)
-  gc()
-  
   if (exists("psmeDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/PSME DBH primary.rdata") }
-  if (exists("psmeDiameterFromHeightNls") == FALSE) { load("trees/height-diameter/data/PSME DBH nlrob gsl_nls default.rdata") }
-  psmeCoefficients = bind_rows(psmeCoefficients,
+  if (exists("psmeDiameterFromHeightGslNlsDefault") == FALSE) { load("trees/height-diameter/data/PSME DBH nlrob gsl_nls default.rdata") }
+  psmeCoefficients = bind_rows(bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_coefficients)),
+                                         bind_rows(lapply(psmeHeightFromDiameterGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
+                                         bind_rows(lapply(psmeHeightFromDiameterNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
+                                         #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_coefficients))) %>%
+                                 mutate(responseVariable = "height"),
                                bind_rows(bind_rows(lapply(psmeDiameterFromHeight, get_list_coefficients)),
                                          bind_rows(lapply(psmeDiameterFromHeightGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
                                          bind_rows(lapply(psmeDiameterFromHeightNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
                                  mutate(responseVariable = "DBH")) %>%
     mutate(species = "PSME")
-  psmeResults = bind_rows(psmeResults,
+  
+  psmeResults = bind_rows(bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_stats)),
+                                    bind_rows(lapply(psmeHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
+                                    bind_rows(lapply(psmeHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
+                                    #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_stats))) %>%
+                            mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(psmeDiameterFromHeight, get_list_stats)),
                                     get_model_stats(name = "Schnute inverse", fitting = "gsl_nls"),
                                     bind_rows(lapply(psmeDiameterFromHeightGslNlsDefault, get_list_stats, fitSet = "nlrob", fixedWeight = -1)),
@@ -561,6 +567,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & ps
   psmeDiameterFromHeightPreferred = list(chapmanReplace = fit_nlrob("Chapman-Richards replace", DBH ~ (a1 + a1p * isPlantation)*(exp((b1 + b1p * isPlantation)*(TotalHt - 1.37)) - 1)^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 75.6, a1p = -47.4, b1 = 0.016, b1p = 0.020, b2 = 0.792, b2p = -0.0780), folds = 1, repetitions = 1))
   psmeDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 28, pc = psme2016gamConstraint), data = psme2016, nthreads = 4, folds = 1, repetitions = 1)
   psmeDiameterFromHeightPreferred$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 85, pc = psme2016gamConstraint), data = psme2016physio, nthreads = 6, folds = 1, repetitions = 1)
+  psmeDiameterFromHeightPreferred$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 13, pc = psme2016gamConstraint), data = psme2016, nthreads = 4, folds = 1, repetitions = 1)
   psmeDiameterFromHeightPreferred$michaelisMentenReplace = fit_nlrob("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016, start = list(a1 = 190, a1p = -118, a2 = 67.3, a2p = -38.3, b1 = 0.78, b1p = -0.08), folds = 1, repetitions = 1)
   psmeDiameterFromHeightPreferred$ruark = fit_nlrob("Ruark", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.67, b1 = 0.813, b1p = -0.126, b2 = 0.0067, b2p = 0.0096), folds = 1, repetitions = 1)
   

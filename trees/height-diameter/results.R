@@ -1,7 +1,9 @@
 # load data from setup.R, get regressions and summaries from <species>.R
 handlers(global = TRUE)
 handlers("progress")
+plan(multisession, workers = 7)
 
+#rm(psmeResults, alruResults, tsheResults, acmaResults, umcaResults, thplResults, otherResults, psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients, umcaCoefficients, thplCoefficients, otherCoefficients)
 if (exists("psmeResults") == FALSE) { load("trees/height-diameter/data/PSME results.Rdata") }
 if (exists("alruResults") == FALSE) { load("trees/height-diameter/data/ALRU2 results.Rdata") }
 if (exists("tsheResults") == FALSE) { load("trees/height-diameter/data/TSHE results.Rdata") }
@@ -40,90 +42,122 @@ primaryResults = heightDiameterResults %>%
   group_by(responseVariable, species) %>%
   mutate(deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
   ungroup()
-#print(primaryResults %>% group_by(fitSet, responseVariable) %>% summarize(n = n(), names = unique(name)), n = 60)
+#print(primaryResults %>% group_by(fitSet, responseVariable) %>% reframe(n = n(), names = unique(name)), n = 60)
 #primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na(deltaAicN)), mab = sum(is.na(mab)), mae = sum(is.na(mae)), pearson = sum(is.na(pearson)), nse = sum(is.na(nse)), rmse = sum(is.na(rmse)))
 
 # rank model forms by estimated prediction ability (using AUC) for form selection
-# This is somewhat computationally intensive, hence the progress bar, but still only takes a minute or so single threaded.
+#          runtime, seconds
+# workers  group_modify()   group_by() %>% group_split() %>% future_map(), including 5-6s startup latency
+#  1       157              104
+#  4                         30.8
+#  6                         23.4
+#  7                         20.6
+#  8                         20.9
+# 16                         20.4
 with_progress({
   crossValidatedModelCount = primaryResults %>% group_by(responseVariable, species) %>% summarize(n = length(unique(name)), .groups = "drop")
   progressBar = progressor(steps = sum(crossValidatedModelCount$n))
   
-  heightDiameterModelAucs = primaryResults %>% 
-    group_by(responseVariable, species, name) %>% # for now, look across fit set and weighting as GAMs are only in the primary set with estimated weights
-    group_modify(~{
-      if ((nrow(.x) == 1) | all(is.na(.x$nse)))
+  heightDiameterModelAucs = primaryResults %>%
+    group_by(responseVariable, species, name) %>%
+    group_split() %>%
+    future_map_dfr(function(fitResults)
+    {
+      if ((nrow(fitResults) == 1) | all(is.na(fitResults$nse)))
       {
         # no distribution to compare to since this model has only a no fit result or wasn't cross validated
-        progressBar(str_pad(paste(.y$responseVariable, .y$species, .y$name), 60, "right"))
-        return(tibble(otherModelName = NA_character_, fitting = .x$fitting[1], isBaseForm = .x$isBaseForm[1], hasPhysio = .x$hasPhysio[1], hasStand = .x$hasStand[1],
-                      aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucPearson = NA_real_, aucNse = NA_real_, aucRmse = NA_real_))
+        progressBar(str_pad(paste(fitResults$responseVariable[1], fitResults$species[1], fitResults$name[1]), 60, "right"))
+        return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
+                      otherModelName = NA_character_, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1], hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1],
+                      aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucPearson = NA_real_, aucNse = NA_real_, aucRmse = NA_real_,
+                      speciesFraction = fitResults$speciesFraction[1]))
       }
       
       # get all other cross-validation results for this response variable and species
       # Assumes no names are shared across fittings in the results set.
-      matchingResults = primaryResults %>% filter(responseVariable == .y$responseVariable, species == .y$species)
-      matchingModelNames = unique(matchingResults$name)
+      matchingFitResults = primaryResults %>% filter(responseVariable == fitResults$responseVariable[1], species == fitResults$species[1])
+      matchingModelNames = unique(matchingFitResults$name)
       pairwiseAucs = bind_rows(lapply(matchingModelNames, function(otherModelName) 
+      {
+        otherFitResults = matchingFitResults %>% filter(name == otherModelName)
+        
+        if ((nrow(otherFitResults) == 1) | all(is.na(otherFitResults$nse)))
         {
-          otherModelResults = matchingResults %>% filter(responseVariable == .y$responseVariable, species == .y$species, name == otherModelName)
-          
-          if ((nrow(otherModelResults) == 1) | all(is.na(otherModelResults$nse)))
-          {
-            # also no distribution to compare to if the other model has only a no fit result or wasn't cross validated
-            return(tibble(otherModelName = otherModelName, fitting = .x$fitting[1], isBaseForm = .x$isBaseForm[1], hasPhysio = .x$hasPhysio[1], hasStand = .x$hasStand[1],
-                          aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucPearson = NA_real_, aucNse = NA_real_, aucRmse = NA_real_))
-          }
-          
-          # find AUCs: for species with few samples (e.g. THPL) mean absolute bias may be all NA, which case WeightedROC() errors
-          # AUC is the probability a sample from one empirical distribution is greater than a sample from an another 
-          # distribution (see AUC.R). If the labels are reversed, the probability changes to the sample being less than.
-          # The AUCs found in the group_modify() below are thus the probability a base form improves on a base GAM.
-          # Base GAMs are retained as controls and, since the GAM's goodness of fit metrics are compared with themselves,
-          # should always have AUCs of 0.5.
-          lowerIsBetter = factor(c(rep(0, nrow(.x)), rep(1, nrow(otherModelResults))), levels = c(0, 1))
-          higherIsBetter = factor(c(rep(1, nrow(.x)), rep(0, nrow(otherModelResults))), levels = c(0, 1))
-          
-          # estimate AUC for bias based on what data is available, which is potentially none for species with few measurements
-          availableMabData = tibble(guess = c(.x$mab, otherModelResults$mab), label = lowerIsBetter) %>% drop_na()
-          aucMab = NA_real_
-          if (nrow(availableMabData) > 0)
-          {
-            aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
-          }
+          # also no distribution to compare to if the other model has only a no fit result or wasn't cross validated
+          return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
+                        otherModelName = otherModelName, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1], hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1],
+                        aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucPearson = NA_real_, aucNse = NA_real_, aucRmse = NA_real_,
+                        speciesFraction = fitResults$speciesFraction[1]))
+        }
+        
+        # find AUCs: for species with few samples (e.g. THPL) mean absolute bias may be all NA, which case WeightedROC() errors
+        # AUC is the probability a sample from one empirical distribution is greater than a sample from an another 
+        # distribution (see AUC.R). If the labels are reversed, the probability changes to the sample being less than.
+        # The AUCs found in the group_modify() below are thus the probability a base form improves on a base GAM.
+        # Base GAMs are retained as controls and, since the GAM's goodness of fit metrics are compared with themselves,
+        # should always have AUCs of 0.5.
+        lowerIsBetter = factor(c(rep(0, nrow(fitResults)), rep(1, nrow(otherFitResults))), levels = c(0, 1))
+        higherIsBetter = factor(c(rep(1, nrow(fitResults)), rep(0, nrow(otherFitResults))), levels = c(0, 1))
 
-          if ((sum(is.na(.x$mae)) + sum(is.na(otherModelResults$mae)) + sum(is.na(.x$pearson)) + sum(is.na(otherModelResults$pearson)) + 
-               sum(is.na(.x$nse)) + sum(is.na(otherModelResults$nse)) + sum(is.na(.x$rmse)) + sum(is.na(otherModelResults$rmse))) > 0)
-          {
-            # WeightedROC() errors on NAs in its arguments but can't do so informatively
-            # Fail informatively instead so that investigation is possible.
-            stop(paste0(.y$species[1], " ", .y$responseVariable[1], " ", .y$name[1], " (", nrow(.x), ") x ", otherModelName, " (", nrow(otherModelResults), "):",
-                        " mab ", sum(is.na(.x$mab)), " ", sum(is.na(otherModelResults$mab)),
-                        " mae ", sum(is.na(.x$mae)), " ", sum(is.na(otherModelResults$mae)),
-                        " pearson ", sum(is.na(.x$pearson)), " ", sum(is.na(otherModelResults$pearson)),
-                        " nse ", sum(is.na(.x$nse)), " ", sum(is.na(otherModelResults$nse)),
-                        " rmse ", sum(is.na(.x$rmse)), " ", sum(is.na(otherModelResults$rmse))), quote = FALSE)
-          }
-          return(tibble(otherModelName = otherModelName, fitting = .x$fitting[1], isBaseForm = .x$isBaseForm[1],
-                        hasPhysio = .x$hasPhysio[1], hasStand = .x$hasStand[1],
-                        aucDeltaAicN = WeightedAUC(WeightedROC(guess = c(.x$deltaAicN, otherModelResults$deltaAicN), label = lowerIsBetter)),
-                        aucMab = aucMab,
-                        aucMabN = nrow(availableMabData),
-                        aucMae = WeightedAUC(WeightedROC(guess = c(.x$mae, otherModelResults$mae), label = lowerIsBetter)),
-                        aucPearson = WeightedAUC(WeightedROC(guess = c(.x$pearson, otherModelResults$pearson), label = higherIsBetter)),
-                        aucNse = WeightedAUC(WeightedROC(guess = c(.x$nse, otherModelResults$nse), label = higherIsBetter)),
-                        aucRmse = WeightedAUC(WeightedROC(guess = c(.x$rmse, otherModelResults$rmse), label = lowerIsBetter))))
-        }))
+        # estimate AUC for bias based on what data is available, which is potentially none for species with few measurements
+        availableMabData = tibble(guess = c(fitResults$mab, otherFitResults$mab), label = lowerIsBetter) %>% drop_na()
+        aucMab = NA_real_
+        if (nrow(availableMabData) > 0)
+        {
+          aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
+        }
+        
+        if ((sum(is.na(fitResults$mae)) + sum(is.na(otherFitResults$mae)) + sum(is.na(fitResults$pearson)) + sum(is.na(otherFitResults$pearson)) + 
+             sum(is.na(fitResults$nse)) + sum(is.na(otherFitResults$nse)) + sum(is.na(fitResults$rmse)) + sum(is.na(otherFitResults$rmse))) > 0)
+        {
+          # WeightedROC() errors on NAs in its arguments but can't do so informatively
+          # Fail informatively instead so that investigation is possible.
+          print(otherFitResults %>% filter(is.na(mae)))
+          stop(paste0(fitResults$species[1], " ", fitResults$responseVariable[1], " ", fitResults$name[1], " (", nrow(fitResults), ") x ", otherModelName, " (", nrow(otherFitResults), "):",
+                      " mab ", sum(is.na(fitResults$mab)), " ", sum(is.na(otherFitResults$mab)),
+                      " mae ", sum(is.na(fitResults$mae)), " ", sum(is.na(otherFitResults$mae)),
+                      " pearson ", sum(is.na(fitResults$pearson)), " ", sum(is.na(otherFitResults$pearson)),
+                      " nse ", sum(is.na(fitResults$nse)), " ", sum(is.na(otherFitResults$nse)),
+                      " rmse ", sum(is.na(fitResults$rmse)), " ", sum(is.na(otherFitResults$rmse))), quote = FALSE)
+        }
+        
+        deltaAicNguess = c(fitResults$deltaAicN, otherFitResults$deltaAicN)
+        maeGuess = c(fitResults$mae, otherFitResults$mae)
+        pearsonGuess = c(fitResults$pearson, otherFitResults$pearson)
+        nseGuess = c(fitResults$nse, otherFitResults$nse)
+        rmseGuess = c(fitResults$rmse, otherFitResults$rmse)
+        expectedLength = nrow(fitResults) + nrow(otherFitResults)
+        if ((length(deltaAicNguess) != expectedLength) | (length(maeGuess) != expectedLength) | (length(pearsonGuess) != expectedLength) |
+            (length(nseGuess) != expectedLength) | (length(rmseGuess) != expectedLength))
+        {
+          stop(paste0(fitResults$species[1], " ", fitResults$responseVariable[1], " ", fitResults$name[1], " (", nrow(fitResults), ") x ", otherModelName, " (", nrow(otherFitResults), ") NULLs in data:", 
+                      " AICn ", length(deltaAicNguess), 
+                      " MAE ", length(maeGuess),
+                      " Pearson ", length(pearsonGuess),
+                      " NSE ", length(nseGuess),
+                      " RMSE ", length(rmseGuess)))
+        }
+        return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
+                      otherModelName = otherModelName, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1],
+                      hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1],
+                      aucDeltaAicN = WeightedAUC(WeightedROC(guess = deltaAicNguess, label = lowerIsBetter)),
+                      aucMab = aucMab,
+                      aucMabN = nrow(availableMabData),
+                      aucMae = WeightedAUC(WeightedROC(guess = maeGuess, label = lowerIsBetter)),
+                      aucPearson = WeightedAUC(WeightedROC(guess = pearsonGuess, label = higherIsBetter)),
+                      aucNse = WeightedAUC(WeightedROC(guess = nseGuess, label = higherIsBetter)),
+                      aucRmse = WeightedAUC(WeightedROC(guess = rmseGuess, label = lowerIsBetter)),
+                      speciesFraction = fitResults$speciesFraction[1]))
+      }))
       
-      progressBar(str_pad(paste(.y$responseVariable, .y$species, .y$name), 60, "right"))
+      progressBar(str_pad(paste(fitResults$responseVariable[1], fitResults$species[1], fitResults$name[1]), 60, "right"))
       return(pairwiseAucs)
-    }) %>%
-    ungroup()
+    })
 })
 #heightDiameterModelAucs %>% group_by(responseVariable, species) %>%
 #  summarize(matrixElements = n(), mabN = sum(is.na(aucMab) == FALSE), mabInputN = sum(aucMabN, na.rm = TRUE), maeN = sum(is.na(aucMae) == FALSE), rmseN = sum(is.na(aucRmse) == FALSE), nseN = sum(is.na(aucNse) == FALSE), pearsonN = sum(is.na(aucNse) == FALSE), .groups = "drop")
 
-# take mean AUCs over otherModelName, excluding self and unsuccessful fits
+# take median AUCs over otherModelName, excluding self and unsuccessful fits
 heightDiameterModelRanking = heightDiameterModelAucs %>% 
   group_by(responseVariable, species, name) %>%
   summarize(fitting = fitting[1], isBaseForm = isBaseForm[1], hasPhysio = hasPhysio[1], hasStand = hasStand[1],
@@ -133,11 +167,16 @@ heightDiameterModelRanking = heightDiameterModelAucs %>%
             aucPearson = median(if_else(name != otherModelName, aucPearson, NA_real_), na.rm = TRUE),
             aucNse = median(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
             aucRmse = median(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
+            speciesFraction = speciesFraction[1],
             .groups = "drop_last") %>%
-  mutate(aucBlended = 0.5 * if_else(responseVariable == "height", aucMae, aucRmse) + 0.2 * if_else(responseVariable == "DBH", aucMae, aucRmse) + 0.3 * aucDeltaAicN) %>%
+  mutate(aucBlended = 0.7 * if_else(responseVariable == "height", aucMae, aucRmse) + 0.3 * if_else(responseVariable == "DBH", aucMae, aucRmse) + 0.0 * aucDeltaAicN) %>%
   ungroup()
-heightDiameterModelRanking %>% group_by(responseVariable, species) %>%
-  summarize(n = n(), mabN = sum(is.na(aucMab) == FALSE), maeN = sum(is.na(aucMae) == FALSE), rmseN = sum(is.na(aucRmse) == FALSE), nseN = sum(is.na(aucNse) == FALSE), pearsonN = sum(is.na(aucNse) == FALSE), .groups = "drop")
+heightDiameterModelDisplaySort = heightDiameterModelRanking %>%
+  group_by(responseVariable, name) %>%
+  summarize(penalizedBlendedAuc = sum(speciesFraction * if_else(is.na(aucBlended), 0, aucBlended)), .groups = "drop") %>%
+  arrange(responseVariable, penalizedBlendedAuc)
+#heightDiameterModelRanking %>% group_by(responseVariable, species) %>%
+#  summarize(n = n(), mabN = sum(is.na(aucMab) == FALSE), maeN = sum(is.na(aucMae) == FALSE), rmseN = sum(is.na(aucRmse) == FALSE), nseN = sum(is.na(aucNse) == FALSE), pearsonN = sum(is.na(aucNse) == FALSE), .groups = "drop")
 
 # find preferred model forms
 nPreferredModelForms = 4
@@ -356,7 +395,7 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
 #ggsave("trees/height-diameter/figures/Figure 02 height accuracy.png", height = 12, width = 20, units = "cm", dpi = 150)
 
 heightFromDiameterModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "height") %>%
-  mutate(name = factor(name, levels = heightFromDiameterAccuracyLevels$name))
+  mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "height"))$name)))
 ggplot(heightFromDiameterModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucMab)) +
   labs(title = "a) MAB", x = NULL, y = NULL, fill = "median\nAUC") +
@@ -467,7 +506,7 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
 #ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy.png", height = 12, width = 20, units = "cm", dpi = 150)
 
 diameterFromHeightModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "DBH") %>%
-  mutate(name = factor(name, levels = diameterFromHeightAccuracyLevels$name))
+  mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "DBH"))$name)))
 ggplot(diameterFromHeightModelComparison) +
   geom_raster(aes(x = species, y = name, fill = aucMab)) +
   labs(title = "a) MAB", x = NULL, y = NULL, fill = "median\nAUC") +
@@ -534,7 +573,7 @@ ggsave("trees/height-diameter/figures/Figure 04 accuracy metric correlation.png"
 # red alder   Weibull           Sharma-Parton physio           REML GAM                Chapman-Richards physio
 #             Chapman-Richards  Sharma-Parton BA+L physio      parabolic               Sibbesen form physio
 #             Michaelis-Menten  Chapman-Richards BA+L physio
-#print(preferredForms %>% filter(species %in% c("Douglas-fir", "red alder")) %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 20, ellipsis = ""), rmseName = str_trunc(rmseName, 20, ellipsis = ""), aicName = str_trunc(aicName, 20, ellipsis = "")), n = 32)
+#print(preferredForms %>% filter(species %in% c("Douglas-fir", "red alder")) %>% select(-mabName, -aucMab, -nseName, -aucNse, -pearsonName, -aucPearson) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 20, ellipsis = ""), rmseName = str_trunc(rmseName, 20, ellipsis = ""), aicName = str_trunc(aicName, 20, ellipsis = "")), n = 33)
 if (exists("psmeHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/PSME preferred models.Rdata") }
 if (exists("alruHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ALRU2 preferred models.Rdata") }
 
@@ -552,15 +591,15 @@ ggplot() +
   theme(legend.key = element_rect(fill = alpha("white", 0.5)), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$gamAat), y = psme2016$TotalHt, color = "REML GAM ABA+T", group = psme2016$isPlantation, linetype = psme2016$isPlantation), alpha = 0.4, orientation = "y") +
-  geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$michaelisMentenForm), y = psme2016$TotalHt, color = "Michaelis-Menten form", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
-  geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$ruark), y = psme2016$TotalHt, color = "Ruark", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
+  geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$gamPhysio), y = psme2016physio$TotalHt, color = "REML GAM physio", group = psme2016physio$isPlantation, linetype = psme2016physio$isPlantation), alpha = 0.4, orientation = "y") +
+  geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$chapmanReplace), y = psme2016$TotalHt, color = "Chapman-Richards replace", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
+  geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$michaelisMentenReplace), y = psme2016$TotalHt, color = "Michaelis-Menten replace", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "b) Douglas-fir DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("Michaelis-Menten form", "Ruark", "REML GAM ABA+T", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
+  scale_color_manual(breaks = c("Chapman-Richards replace", "Michaelis-Menten replace", "REML GAM physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
@@ -576,15 +615,15 @@ ggplot() +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
   geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$chapmanRichardsPhysio), y = alru2016physio$TotalHt, color = "Chapman-Richards physio", group = alru2016physio$isPlantation, linetype = alru2016physio$isPlantation), alpha = 0.4, orientation = "y") +
+  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$chapmanRichardsPhysio), y = alru2016physio$TotalHt, color = "Chapman-Richards inverse physio", group = alru2016physio$isPlantation, linetype = alru2016physio$isPlantation), alpha = 0.4, orientation = "y") +
+  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$chapmanRichards), y = alru2016$TotalHt, color = "Chapman-Richards inverse", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gam), y = alru2016$TotalHt, color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
-  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$parabolic), y = alru2016$TotalHt, color = "parabolic", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "d) red alder DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = "DBH, cm", y = NULL, color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("REML GAM", "parabolic", "Chapman-Richards physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
+  scale_color_manual(breaks = c("Chapman-Richards inverse", "REML GAM", "Chapman-Richards inverse physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 get_preferred_model_linetype_legend() +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
