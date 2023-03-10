@@ -94,26 +94,35 @@ modeledVariance = crossing(tibble(DBH = seq(0, 250), TotalHt = seq(1.37, 85, len
          estDbhVarThpl = predict_gsl_nls(varianceForDbh$thpl, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$thpl), 5)),
          estDbhVarOther = predict_gsl_nls(varianceForDbh$other, ., pmin(1/(varianceForDbhWeightMultiplier$psme*(.$TotalHt - 1.37)^varianceForDbhWeightPower$other), 5))) %>%
   pivot_longer(cols = c(starts_with("estHeightVar"), starts_with("estDbhVar")), names_to = c("estimate", "speciesGroup"), names_pattern = "(estHeightVar|estDbhVar)(\\w{4,5})") %>%
+  filter((speciesGroup == "Psme") |
+         ((speciesGroup == "Alru") & (((estimate == "estHeightVar") & (DBH < 125)) | ((estimate == "estDbhVar") & (TotalHt < 50)))) |
+         ((speciesGroup == "Tshe") & (((estimate == "estHeightVar") & (DBH < 175)) | ((estimate == "estDbhVar") & (TotalHt < 75)))) |
+         ((speciesGroup == "Acma") & (((estimate == "estHeightVar") & (DBH < 175)) | ((estimate == "estDbhVar") & (TotalHt < 50)))) |
+         ((speciesGroup == "Umca") & (((estimate == "estHeightVar") & (DBH < 125)) | ((estimate == "estDbhVar") & (TotalHt < 40)))) |
+         ((speciesGroup == "Thpl") & (((estimate == "estHeightVar") & (DBH < 200)) | ((estimate == "estDbhVar") & (TotalHt < 70)))) |
+         ((speciesGroup == "Other") & (((estimate == "estHeightVar") & (DBH < 175)) | ((estimate == "estDbhVar") & (TotalHt < 60))))) %>%
   pivot_wider(id_cols = c("DBH", "TotalHt", "speciesGroup", "isPlantation"), names_from = "estimate", values_from = "value") %>%
   mutate(speciesGroup = factor(if_else(speciesGroup != "Other", speciesGroup, "other"), levels = levels(predictionError$speciesGroup)))
 #print(modeledVariance, n = 100)
 
+## Figure S04: residual variance model
 speciesGroupColors = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")
 speciesGroupNames = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")
 ggplot() +
   geom_errorbar(aes(x = dbhClass, ymin = varianceQ025, ymax = varianceQ975, alpha = n), empiricalHeightVariance, color = "grey50", linewidth = 0.3, na.rm = TRUE) +
   geom_point(aes(x = dbhClass, y = variance, alpha = n, shape = isPlantation, size = isPlantation), empiricalHeightVariance, color = "grey40", na.rm = TRUE) +
   geom_ribbon(aes(x = DBH, ymin = pmax(estHeightVar[,2], 0), ymax = estHeightVar[,3], fill = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, alpha = 0.1) +
-  geom_path(aes(x = DBH, y = estHeightVar[,1], color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance) +
-  coord_cartesian(xlim = c(0, 250), ylim = c(0, 125)) +
+  geom_path(aes(x = DBH, y = estHeightVar[,1], color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 220), ylim = c(0, 125)) +
   facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
   labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL) +
+  scale_x_continuous(breaks = seq(0, 300, by = 100)) +
 ggplot() +
   geom_errorbar(aes(xmin = varianceQ025, xmax = varianceQ975, y = heightClass, alpha = n), empiricalDbhVariance, color = "grey50", linewidth = 0.3, na.rm = TRUE, orientation = "y") +
   geom_point(aes(x = variance, y = heightClass, alpha = n, shape = isPlantation, size = isPlantation), empiricalDbhVariance, color = "grey40", na.rm = TRUE) +
   geom_ribbon(aes(xmin = pmax(estDbhVar[,2], 0), xmax = estDbhVar[,3], y = TotalHt, fill = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, alpha = 0.1) +
-  geom_path(aes(x = estDbhVar[,1], y = TotalHt, color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance) +
-  coord_cartesian(xlim = c(0, 1500), ylim = c(0, 83)) +
+  geom_path(aes(x = estDbhVar[,1], y = TotalHt, color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 1550), ylim = c(0, 83)) +
   facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
   labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL) +
 plot_annotation(theme = theme(plot.margin = margin())) +
@@ -125,8 +134,8 @@ plot_layout(guides = "collect") &
   scale_linetype_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c("solid", "longdash")) &
   scale_shape_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(16, 18)) &
   scale_size_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(1.5, 1.9)) &
-  theme(legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"))
-ggsave("trees/height-diameter/figures/error model gsl_nls.png", height = 15, width = 22, units = "cm", dpi = 200)
+  theme(legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"), strip.text = element_text(size = 8))
+ggsave("trees/height-diameter/figures/Figure S04 error model gsl_nls.png", height = 15, width = 22, units = "cm", dpi = 200)
 
 
 ## height interquartile ranges
@@ -169,8 +178,6 @@ heightIqr = bind_rows(tibble(species = "PSME", name = "Michaelis-Menten", fittin
                       tibble(species = "other", name = "Michaelis-Menten", fitting = "nlrq", DBH = other2016$DBH, isPlantation = other2016$isPlantation, q25 = predict(otherHeightFromDiameterMichaelisMentenQ25), q75 = predict(otherHeightFromDiameterMichaelisMentenQ75))) %>%
   mutate(species = factor(species, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"),  levels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other")),
          iqr = q75 - q25)
-
-# Figure S4 in results.R
 
 ggplot() +
   geom_point(aes(x = DBH, y = TotalHt), psme2016, alpha = 0.1, color = "grey25", shape = 16) +
@@ -224,8 +231,6 @@ diameterIqr = bind_rows(tibble(species = "PSME", name = "Ruark", fitting = "nlrq
                         tibble(species = "other", name = "Ruark", fitting = "nlrq", TotalHt = other2016$TotalHt, isPlantation = other2016$isPlantation, q25 = predict(otherDiameterFromHeightRuarkQ25), q75 = predict(otherDiameterFromHeightRuarkQ75))) %>%
   mutate(species = factor(species, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"),  levels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other")),
          iqr = q75 - q25)
-
-# Figure S5 in results.R
 
 ggplot() +
   geom_point(aes(x = DBH, y = TotalHt), psme2016, alpha = 0.1, color = "grey25", shape = 16) +
@@ -533,4 +538,140 @@ residualPower %>% select(species, ht_b1, ht_b1p, dia_b1, dia_b1p) %>%
             dia_b1 = round(2 * mean(dia_b1), 1), dia_b1p = round(2 * mean(dia_b1p), 1))
 residualPower %>% summarize(ht_b1 = mean(ht_b1), ht_b1p = mean(ht_b1 + if_else(is.na(ht_b1p), 0, ht_b1p)), dia_b1 = mean(dia_b1), dia_b1p = mean(dia_b1 + dia_b1p))
 
-# Figure S6 in results.R
+
+## Figures S4-6: estimates of residual variance
+# heightIqr, diameterIqr, and residualPower are calculated in residuals.R
+ggplot() +
+  geom_line(aes(x = seq(0, 250), y = seq(0, 250)^0.5), color = "grey70", linetype = "longdash") +
+  geom_line(aes(x = DBH, y = iqr, color = species, group = paste(species, name, isPlantation)), heightIqr %>% filter(name == "Michaelis-Menten", isPlantation == FALSE)) +
+  annotate("text", x = 0, y = 24, label = "a) natural regeneration", hjust = 0, size = 3.5) +
+  guides(color = guide_legend(order = 1), linetype = guide_legend(order = 2)) +
+  labs(x = "DBH, cm", y = "Michaelis-Menten interquartile height range, m", color = NULL, linetype = NULL) +
+  scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = speciesGroupColors) +
+  theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
+ggplot() +
+  geom_line(aes(x = seq(0, 250), y = seq(0, 250)^0.5), color = "grey70", linetype = "longdash") +
+  geom_line(aes(x = DBH, y = iqr, color = species, group = paste(species, name, isPlantation)), heightIqr %>% filter(name == "Michaelis-Menten", isPlantation == TRUE)) +
+  annotate("text", x = 0, y = 24, label = "b) plantations", hjust = 0, size = 3.5) +
+  guides(color = guide_legend(order = 1), linetype = guide_legend(order = 2)) +
+  labs(x = "DBH, cm", y = NULL, color = NULL, linetype = NULL) +
+  scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = speciesGroupColors) +
+  theme(legend.justification = c(1, 0), legend.position = "none") +
+plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+ggsave("trees/height-diameter/figures/Figure S04 height interquartile range.png", height = 10, width = 18, units = "cm", dpi = 150)
+
+ggplot() +
+  geom_line(aes(x = seq(0, 100), y = 80/80*seq(0, 100)^0.9), color = "grey70", linetype = "longdash") +
+  geom_line(aes(x = TotalHt, y = iqr, color = species, group = paste(species, name, isPlantation)), diameterIqr %>% filter(isPlantation == FALSE)) +
+  annotate("text", x = 0, y = 62, label = "a) natural regeneration", hjust = 0, size = 3.5) +
+  coord_cartesian(xlim = c(0, 82), ylim = c(0, 61)) +
+  guides(color = guide_legend(order = 1), linetype = guide_legend(order = 2)) +
+  labs(x = "height, m", y = "Ruark interquartile DBH range, cm", color = NULL, linetype = NULL) +
+  scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = speciesGroupColors) +
+  theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
+ggplot() +
+  geom_line(aes(x = TotalHt, y = iqr, color = species, group = paste(species, name, isPlantation)), diameterIqr %>% filter(isPlantation == TRUE)) +
+  geom_line(aes(x = seq(0, 100), y = 30/80*seq(0, 100)^1.2), color = "grey70", linetype = "longdash") +
+  annotate("text", x = 0, y = 62, label = "b) plantations", hjust = 0, size = 3.5) +
+  coord_cartesian(xlim = c(0, 82), ylim = c(0, 61)) +
+  guides(color = guide_legend(order = 1), linetype = guide_legend(order = 2)) +
+  labs(x = "height, m", y = NULL, color = NULL, linetype = NULL) +
+  scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = speciesGroupColors) +
+  theme(legend.justification = c(1, 0), legend.position = "none") +
+plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+ggsave("trees/height-diameter/figures/Figure S05 diameter interquartile range.png", height = 10, width = 18, units = "cm", dpi = 150)
+
+ggplot(residualPower) +
+  geom_errorbar(aes(xmin = ht_b1_min, xmax = ht_b1_max, y = htName, color = species), width = 0.25) +
+  geom_errorbar(aes(xmin = ht_b1p_min, xmax = ht_b1p_max, y = htName, color = species), width = 0.25, na.rm = TRUE) +
+  geom_point(aes(x = ht_b1, y = htName, color = species, shape = "b1"), size = 1.7) +
+  geom_point(aes(x = ht_b1 + ht_b1p, y = htName, color = species, shape = "b1p"), size = 1.7, na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 2.1)) +
+  facet_grid(rows = vars(species), labeller = label_wrap_gen(width = 10), switch = "y") +
+  labs(x = "power fitted to height residuals", y = NULL, color = NULL, shape = NULL) +
+  scale_y_discrete(limits = rev) +
+  theme(strip.background = element_blank(), strip.placement = "outside") +
+ggplot(residualPower) +
+  geom_segment(x = 2.01, xend = 2.11, y = "Ruark", yend = "Ruark", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", data = tibble(species = factor("other species", levels = levels(residualPower$species))), linewidth = 0.4) +
+  geom_errorbar(aes(xmin = dia_b1_min, xmax = dia_b1_max, y = diaName, color = species), width = 0.25) +
+  geom_errorbar(aes(xmin = dia_b1p_min, xmax = dia_b1p_max, y = diaName, color = species), width = 0.25) +
+  geom_point(aes(x = dia_b1, y = diaName, color = species, shape = "b1"), size = 1.7) +
+  geom_point(aes(x = dia_b1 + dia_b1p, y = diaName, color = species, shape = "b1p"), size = 1.7) +
+  coord_cartesian(xlim = c(0, 2.1)) +
+  facet_grid(rows = vars(species), labeller = label_wrap_gen(width = 10), switch = "y") +
+  labs(x = "power fitted to DBH residuals", y = NULL, color = NULL, shape = NULL) +
+  scale_y_discrete(limits = rev) +
+  theme(strip.background = element_blank(), strip.placement = "outside", strip.text = element_blank()) +
+plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
+plot_layout(nrow = 1, guides = "collect") &
+  guides(color = "none") &
+  scale_color_manual(breaks = levels(residualPower$species), limits = levels(residualPower$species), values = speciesGroupColors) &
+  scale_shape_manual(breaks = c("b1", "b1p"), labels = c("base power", "plantations"), values = c(15, 17)) &
+  theme(legend.position = "bottom")
+ggsave("trees/height-diameter/figures/Figure S06 residual power estimates.png", height = 14, width = 20, units = "cm", dpi = 150)
+
+
+## Figures S7-12: Q-Q plots
+plot_qq(psmeHeightFromDiameterPreferred$chapmanRichards, psmeHeightFromDiameterPreferred$michaelisMenten, psmeHeightFromDiameterPreferred$sharmaParton, psmeHeightFromDiameterPreferred$sharmaZhang,
+        psmeDiameterFromHeightPreferred$ChapmanRichards, psmeDiameterFromHeightPreferred$chapmanForm, psmeDiameterFromHeightPreferred$ruark, psmeDiameterFromHeightPreferred$sibbesenForm,
+        "Douglas-fir")
+ggsave("trees/height-diameter/figures/Figure S07 PSME Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+plot_qq(alruHeightFromDiameterPreferred$chapmanRichards, alruHeightFromDiameterPreferred$michaelisMenten, alruHeightFromDiameterPreferred$sharmaParton, alruHeightFromDiameterPreferred$sharmaZhang,
+        alruDiameterFromHeightPreferred$chapmanRichards, alruDiameterFromHeightPreferred$chapmanForm, alruDiameterFromHeightPreferred$ruark, alruDiameterFromHeightPreferred$sibbesenForm,
+        "red alder", tDegreesOfFreedom = 8, tSkew = 2.1)
+ggsave("trees/height-diameter/figures/Figure S08 ALRU2 Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+plot_qq(tsheHeightFromDiameterPreferred$chapmanRichards, tsheHeightFromDiameterPreferred$michaelisMenten, tsheHeightFromDiameterPreferred$sharmaParton, tsheHeightFromDiameterPreferred$sharmaZhang,
+        tsheDiameterFromHeightPreferred$chapmanRichards, tsheDiameterFromHeightPreferred$chapmanForm, tsheDiameterFromHeightPreferred$ruark, tsheDiameterFromHeightPreferred$sibbesenForm,
+        "western hemlock", tDegreesOfFreedom = 7, tSkew = 2)
+ggsave("trees/height-diameter/figures/Figure S08 TSHE Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+plot_qq(acmaHeightFromDiameterPreferred$chapmanRichards, acmaHeightFromDiameterPreferred$michaelisMenten, acmaHeightFromDiameterPreferred$sharmaParton, acmaHeightFromDiameterPreferred$sharmaZhang,
+        acmaDiameterFromHeightPreferred$chapmanRichards, acmaDiameterFromHeightPreferred$chapmanForm, acmaDiameterFromHeightPreferred$ruark, acmaDiameterFromHeightPreferred$sibbesenForm,
+        "bigleaf maple", tDegreesOfFreedom = 10, tSkew = 4)
+ggsave("trees/height-diameter/figures/Figure S09 ACMA3 Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+plot_qq(umcaHeightFromDiameterPreferred$chapmanRichards, umcaHeightFromDiameterPreferred$michaelisMenten, umcaHeightFromDiameterPreferred$sharmaParton, umcaHeightFromDiameterPreferred$sharmaZhang,
+        umcaDiameterFromHeightPreferred$chapmanRichards, umcaDiameterFromHeightPreferred$chapmanForm, umcaDiameterFromHeightPreferred$ruark, umcaDiameterFromHeightPreferred$sibbesenForm,
+        "Oregon myrtle", tDegreesOfFreedom = 8, tSkew = 4)
+ggsave("trees/height-diameter/figures/Figure S10 UMCA Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+plot_qq(thplHeightFromDiameterPreferred$chapmanRichards, thplHeightFromDiameterPreferred$michaelisMenten, thplHeightFromDiameterPreferred$sharmaParton, thplHeightFromDiameterPreferred$sharmaZhang,
+        thplDiameterFromHeightPreferred$chapmanRichards, thplDiameterFromHeightPreferred$chapmanForm, thplDiameterFromHeightPreferred$ruark, thplDiameterFromHeightPreferred$sibbesenForm,
+        "western redcedar", tDegreesOfFreedom = 8, tSkew = 3)
+ggsave("trees/height-diameter/figures/Figure S11 THPL Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+plot_qq(otherHeightFromDiameterPreferred$chapmanRichards, otherHeightFromDiameterPreferred$michaelisMenten, otherHeightFromDiameterPreferred$sharmaParton, otherHeightFromDiameterPreferred$sharmaZhang,
+        otherDiameterFromHeightPreferred$chapmanRichards, otherDiameterFromHeightPreferred$chapmanForm, otherDiameterFromHeightPreferred$ruark, otherDiameterFromHeightPreferred$sibbesenForm,
+        "other species", tDegreesOfFreedom = 3, tSkew = 1)
+ggsave("trees/height-diameter/figures/Figure S12 other Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+
+
+## companion variance structure summary from GNLS
+# Use all available results here as gnls() is excluded from primary results set by default.
+ggplot(heightDiameterResults %>% filter(is.na(power) == FALSE) %>% mutate(name = str_replace(name, " GNLS", ""))) +
+  geom_point(aes(x = power, y = name, color = species)) +
+  coord_cartesian(xlim = c(0, 2)) +
+  facet_grid(rows = vars(species), labeller = label_wrap_gen(width = 10), switch = "y") +
+  guides(color = guide_legend(ncol = 7)) +
+  labs(x = "power fitted to height residuals", y = NULL, color = NULL) +
+  scale_color_manual(breaks = levels(heightDiameterResults$species), limits = levels(heightDiameterResults$species), values = speciesGroupColors) +
+  scale_y_discrete(limits = rev) +
+  theme(legend.position = "none", strip.background = element_blank(), strip.placement = "outside")
+
+ggplot(heightDiameterResults %>% filter(responseVariable == "height", fitting != "gnls")) +
+  geom_boxplot(aes(x = bias, y = species, color = species), width = 0.6) +
+  coord_cartesian(xlim = c(-2, 2)) +
+  guides(color = "none") +
+  labs(x = "nlrob() or gsl_nls() bias, m height", y = NULL, color = NULL, shape = NULL) +
+  scale_color_manual(breaks = levels(heightDiameterResults$species), limits = levels(heightDiameterResults$species), values = speciesGroupColors) +
+  theme(legend.position = "none") +
+  ggplot(heightDiameterResults %>% filter(responseVariable == "height", fitting == "gnls")) +
+  geom_boxplot(aes(x = bias, y = species, color = species), width = 0.6) +
+  coord_cartesian(xlim = c(-2, 2)) +
+  guides(color = "none") +
+  labs(x = "gnls() bias, m height", y = NULL, color = NULL, shape = NULL) +
+  scale_color_manual(breaks = levels(heightDiameterResults$species), limits = levels(heightDiameterResults$species), values = speciesGroupColors) +
+  scale_y_discrete(labels = NULL) +
+  theme(legend.position = "none")

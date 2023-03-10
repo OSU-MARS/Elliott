@@ -467,17 +467,20 @@ get_cross_validation_return_value = function(splitsAndFits, returnModel)
     # if full models are retained retain also the training-validation data splits for each model fit
     return(splitsAndFits)
   }
-  # if only model statistics are kept then drop the data splits
-  return(splitsAndFits %>% select(-splits))
+  # if only model statistics are kept then drop the data splits and bind together each fit's single 
+  # row statistics tibble into one tibble with kr rows (k-folds x r-repetitions = kr fits)
+  return(bind_rows(splitsAndFits$fit) %>% 
+           mutate(repetition = as.numeric(str_replace(splitsAndFits$id, "Repeat", "")), 
+                  fold = as.numeric(str_replace(splitsAndFits$id2, "Fold", ""))))
 }
 
 get_dbh_stats = function(name, model, validationData, validationWeights = validationData$heightWeight, significant = TRUE, tDegreesOfFreedom = 8)
 {
-  dbhModelStats = list(name = name, 
-                       fitting = class(model)[1], 
-                       coefficients = get_model_coefficients(model), 
-                       isConverged = is_model_converged(model),
-                       adaptiveWeightFraction = get_adaptive_weighting(model))
+  dbhModelStats = get_model_stats(NULL, name = name, fittingMethod = class(model)[1]) %>% 
+    mutate(name = name, 
+           coefficients = get_model_coefficients(model), 
+           isConverged = is_model_converged(model),
+           adaptiveWeightFraction = get_adaptive_weighting(model))
   if (dbhModelStats$isConverged == FALSE)
   {
     warning(paste0(dbhModelStats$fitting, " ", formula(model)[2], " model using ", name, " is not converged."))
@@ -579,11 +582,11 @@ get_fit_return_value = function(model, modelStats, returnModel)
 
 get_height_stats = function(name, model, validationData, validationWeights = validationData$dbhWeight, significant = TRUE, tDegreesOfFreedom = 8)
 {
-  heightModelStats = list(name = name, 
-                          fitting = class(model)[1], 
-                          coefficients = get_model_coefficients(model), 
-                          isConverged = is_model_converged(model),
-                          adaptiveWeightFraction = get_adaptive_weighting(model))
+  heightModelStats = get_model_stats(NULL, name = name, fittingMethod = class(model)[1]) %>% 
+    mutate(coefficients = get_model_coefficients(model), 
+           isConverged = is_model_converged(model), 
+           significant = significant, 
+           adaptiveWeightFraction = get_adaptive_weighting(model))
   if (heightModelStats$isConverged == FALSE)
   {
     warning(paste0(heightModelStats$fitting, " ", formula(model)[2], " model using ", name, " is not converged."))
@@ -672,31 +675,36 @@ get_preferred_model_linetype_legend = function()
            theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
 }
 
-get_list_coefficients = function(modelOrCrossValidationList, fitSet = "primary", fixedWeight = NA_real_)
+get_list_coefficients = function(modelCrossValidationListOrStatsTibble, fitSet = "primary", fixedWeight = NA_real_)
 {
-  get_coefficients = function(modelOrStats)
-  {
-    if (is.null(modelOrStats$stats))
-    {
-      # model object with attached stats
-      return(modelOrStats$coefficients %>% mutate(name = modelOrStats$name, fitting = modelOrStats$fitting))
-    }
-    # stats object
-    return(modelOrStats$stats$coefficients %>% mutate(name = modelOrStats$stats$name, fitting = modelOrStats$stats$fitting))
-  }
-
   # complete vfold_cv return tibble: vfold_cv, tbl_df, tbl, data.frame
   # vfold_cv() %>% select(-splits): tbl_df, tbl, data.frame
-  if (is(modelOrCrossValidationList, "tbl_df"))
+  if (is(modelCrossValidationListOrStatsTibble, "vfold_cv"))
   {
-    # cross validation list
-    coefficients = bind_rows(lapply(modelOrCrossValidationList$fit, get_coefficients)) %>%
-      mutate(repetition = as.numeric(str_replace(modelOrCrossValidationList$id, "Repeat", "")), 
-             fold = as.numeric(str_replace(modelOrCrossValidationList$id2, "Fold", "")))
-  } else
+    # cross validation tibble
+    coefficients = bind_rows(lapply(modelCrossValidationListOrStatsTibble$fit, function(fit) 
+      { 
+        return(fit$stats$coefficients %>% 
+                 mutate(fitting = fit$stats$fitting,
+                        name = fit$stats$name))
+      })) %>%
+      mutate(repetition = as.numeric(str_replace(modelCrossValidationListOrStatsTibble$id, "Repeat", "")), 
+             fold = as.numeric(str_replace(modelCrossValidationListOrStatsTibble$id2, "Fold", "")))
+  } else if (is(modelCrossValidationListOrStatsTibble, "tbl_df"))
+  {
+    # model statistics tibble
+    coefficients = modelCrossValidationListOrStatsTibble$coefficients %>% 
+      mutate(fitting = modelCrossValidationListOrStatsTibble$fitting,
+             name = modelCrossValidationListOrStatsTibble$name,
+             repetition = modelCrossValidationListOrStatsTibble$repetition, 
+             fold = modelCrossValidationListOrStatsTibble$fold)
+  } else 
   {
     # single model
-    coefficients = get_coefficients(modelOrCrossValidationList) %>% mutate(repetition = 1, fold = 1)
+    coefficients = modelCrossValidationListOrStatsTibble$stats$coefficients %>% 
+      mutate(fitting = modelCrossValidationListOrStatsTibble$stats$fitting, 
+             name = modelCrossValidationListOrStatsTibble$stats$name, 
+             repetition = 1, fold = 1)
   }
   
   coefficients %<>% mutate(fitSet = fitSet,
@@ -705,21 +713,26 @@ get_list_coefficients = function(modelOrCrossValidationList, fitSet = "primary",
   return(coefficients)
 }
 
-get_list_stats = function(modelOrCrossValidationList, fitSet = "primary", fixedWeight = NA_real_)
+get_list_stats = function(modelCrossValidationListOrStatsTibble, fitSet = "primary", fixedWeight = NA_real_)
 {
-  if (is(modelOrCrossValidationList, "tbl_df"))
+  if (is(modelCrossValidationListOrStatsTibble, "vfold_cv"))
   {
     # cross validation list
-    stats = bind_rows(lapply(modelOrCrossValidationList$fit, get_model_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>% 
-      mutate(repetition = as.numeric(str_replace(modelOrCrossValidationList$id, "Repeat", "")), 
-             fold = as.numeric(str_replace(modelOrCrossValidationList$id2, "Fold", "")))
+    stats = bind_rows(lapply(modelCrossValidationListOrStatsTibble$fit, get_model_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>% 
+      mutate(repetition = as.numeric(str_replace(modelCrossValidationListOrStatsTibble$id, "Repeat", "")), 
+             fold = as.numeric(str_replace(modelCrossValidationListOrStatsTibble$id2, "Fold", "")))
+  } else if (is(modelCrossValidationListOrStatsTibble, "tbl_df"))
+  {
+    # model statistics tibble
+    stats = modelCrossValidationListOrStatsTibble %>%
+      mutate(fitSet = fitSet, fixedWeight = fixedWeight)
   } else {
     # single model
-    stats = get_model_stats(modelOrCrossValidationList, fitSet = fitSet, fixedWeight = fixedWeight) %>% 
+    stats = get_model_stats(modelCrossValidationListOrStatsTibble, fitSet = fitSet, fixedWeight = fixedWeight) %>% 
       mutate(repetition = 1, fold = 1)
   }
   
-  stats %<>% 
+  stats %<>% select(-coefficients) %>%
     relocate(fitSet, fixedWeight, name, repetition, fold)
   return(stats)
 }
@@ -793,46 +806,33 @@ get_model_stats = function(modelOrStats = NULL, name = NULL, fitSet = "primary",
     modelStats = modelOrStats$stats
   }
   
-  if (is.null(modelStats))
+  if (is.null(modelStats) == FALSE)
   {
-    if (is.null(name) | is.na(fittingMethod))
+    if (is.na(fittingMethod) == FALSE)
     {
-      stop("Name and fittingMethod must be specified if modelStats is NULL.")
+      stop("get_model_stats() obtains fittingMethod from the model when model is specified.")
     }
-    return(tibble(fitSet = fitSet, name = name, fitting = fittingMethod, n = NA_real_, 
-                  isConverged = NA_real_, significant = NA_real_, fixedWeight = fixedWeight,
-                  aic = NA_real_, aicN = NA_real_, aict = NA_real_,
-                  bias = NA_real_, biasNaturalRegen = NA_real_, biasPlantation = NA_real_,
-                  bic = NA_real_, bict = NA_real_,
-                  mab = NA_real_, mapb = NA_real_,
-                  mape = NA_real_, mapeNaturalRegen = NA_real_, mapePlantation = NA_real_,
-                  nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
-                  pearson = NA_real_, pearsonNaturalRegen = NA_real_, pearsonPlantation = NA_real_,
-                  rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
-                  rmspe = NA_real_,
-                  power = NA_real_, powerPlantation = NA_real_,
-                  adaptiveWeightFraction = NA_real_, maxResidual = NA_real_))
+    
+    return(modelStats)
   }
   
-  if (is.na(fittingMethod) == FALSE)
+  if (is.null(name) | is.na(fittingMethod))
   {
-    stop("get_model_stats() obtains fittingMethod from the model when model is specified.")
+    stop("Name and fittingMethod must be specified if modelStats is NULL.")
   }
-  
-  return(tibble(fitSet = fitSet, name = modelStats$name, fitting = modelStats$fitting, n = modelStats$n, 
-                isConverged = modelStats$isConverged, significant = modelStats$significant, fixedWeight = fixedWeight,
-                aic = modelStats$aic, aict = modelStats$aict,
-                bias = modelStats$bias, biasNaturalRegen = modelStats$biasNaturalRegen, biasPlantation = modelStats$biasPlantation,
-                bic = modelStats$bic, bict = modelStats$bict,
-                mab = modelStats$mab, mapb = modelStats$mapb,
-                mae = modelStats$mae, maeNaturalRegen = modelStats$mapeNaturalRegen, maePlantation = modelStats$mapePlantation,
-                mape = modelStats$mape, mapeNaturalRegen = modelStats$mapeNaturalRegen, mapePlantation = modelStats$mapePlantation,
-                nse = modelStats$nse, nseNaturalRegen = modelStats$nseNaturalRegen, nsePlantation = modelStats$nsePlantation,
-                pearson = modelStats$pearson, pearsonNaturalRegen = modelStats$pearsonNaturalRegen, pearsonPlantation = modelStats$pearsonPlantation,
-                rmse = modelStats$rmse, rmseNaturalRegen = modelStats$rmseNaturalRegen, rmsePlantation = modelStats$rmsePlantation,
-                rmspe = modelStats$rmspe,
-                varPower = modelStats$variancePower, varPowerPlantation = modelStats$variancePowerPlantation,
-                adaptiveWeightFraction = modelStats$adaptiveWeightFraction))
+  return(tibble(fitSet = fitSet, name = name, fitting = fittingMethod, fixedWeight = fixedWeight,
+                n = NA_real_,  isConverged = NA_real_, significant = NA_real_,
+                aic = NA_real_, aicN = NA_real_, aict = NA_real_,
+                bias = NA_real_, biasNaturalRegen = NA_real_, biasPlantation = NA_real_,
+                bic = NA_real_, bict = NA_real_,
+                mab = NA_real_, mapb = NA_real_,
+                mape = NA_real_, mapeNaturalRegen = NA_real_, mapePlantation = NA_real_,
+                nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
+                pearson = NA_real_, pearsonNaturalRegen = NA_real_, pearsonPlantation = NA_real_,
+                rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
+                rmspe = NA_real_,
+                power = NA_real_, powerPlantation = NA_real_,
+                adaptiveWeightFraction = NA_real_, maxResidual = NA_real_))
 }
 
 impute_basal_area = function(Species, heightInM, isPlantation)
@@ -1038,6 +1038,17 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
 
 
 ## load data
+# Notable properties of cruise data loaded into trees2016
+#  - Plots are either count plots, where trees aren't measured, or count plots, where all trees and snags are measured
+#    for DBH and a subset measured for height. Thus, all stems with heights (TotalHt if unbroke, Ht2 if broken) are 
+#    also have DBH measurements.
+#  - Trees are on CO (count) and IP (measure) plots. Count plots are variable radius and count trees by species. 
+#    Measure plots are nested variable radius and small tree fixed plots. Small tree plots count trees trees up to four
+#    inches DBH (10 cm) by species with DBH to the nearest inch (excepting two records). CB and IB plots contain only 
+#    records for other species with TreeCount = 0.
+#  - Trees on variable radius measure plots generally have TreeCount = 1, as expected, but 462 records have TreeCount
+#    = 2. Since it's very unlikely two trees are on the same plot with the same DBH and, often, the same height, these
+#    records are assumed to be incorrect and the tree count is changed to one.
 stands2022 = read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% 
   mutate(Cruised_Si = na_if(Cruised_Si, 0),
          ODSL_Site_ = na_if(ODSL_Site_, 0),
@@ -1046,119 +1057,202 @@ stands2022 = read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>%
                                        if_else(startsWith(ODSL_VEG_L, "OT"), "other",
                                                "Douglas-fir"))))
 
-plots2016 = read_xlsx("GIS/Trees/2015-16 cruise/CruisePlots_All_20151211.xlsx")
+plots2016 = read_xlsx("GIS/Trees/2015-16 cruise/CruisePlots_All_20151211.xlsx") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
 
 trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 2015-16.xlsx", sheet = "CRUISERECS"),
-                                          stands2022 %>% select(StandID, GrossAc, Age_2020, Cruised_Si, Elev_Mean, SlopeMean, AspectSin, AspectCos),
-                                          by = c("StandID")),
-                                plots2016 %>% select(STAND, PltInteger, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(PlotID = PltInteger),
-                                by = c("PlotID")) %>%
+                                stands2022 %>% select(StandID, GrossAc, Age_2020, Cruised_Si, Elev_Mean, SlopeMean, AspectSin, AspectCos),
+                                by = c("StandID")),
+                      plots2016 %>% select(STAND, PltInteger, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(PlotID = PltInteger),
+                      by = c("PlotID")) %>%
   rename(standAge2020 = Age_2020) %>%
   mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
-         isConifer = Species %in% c("DF", "WH", "RC", "SS", "CX", "PC", "PY", "GF", "LP"),
-         isLiveUnbroken = (CompCode %in% c("BT", "D.", "SN")) == FALSE,
          BHAge = na_if(BHAge, 0), # years
          DBH = na_if(2.54 * DBH, 0), # inches to cm
          Dia1 = na_if(2.54 * Dia1, 0),
          Ht1 = na_if(0.3048 * Ht1, 0), # feet to m
          Ht2 = na_if(0.3048 * Ht2, 0),
+         isConifer = Species %in% c("DF", "WH", "RC", "SS", "CX", "PC", "PY", "GF", "LP"),
+         isPlantation = standAge2020 < 75,
+         isLive = (CompCode %in% c("D.", "SN")) == FALSE,
+         isLiveUnbroken = isLive & (CompCode != "BT"),
+         SampleFactor = 2.47105 * if_else(SamplingMethod == "BAF", 0.092903, 1) * SampleFactor, # convert BAF from ft²/ac to m²/ha and TPA to TPH, BAF conversion is BAF ft²/ac * 2.47105 ac/ha * 0.092903 m²/ft² = 0.229568 m²/ha / ft²/ac
          TotalHt = na_if(0.3048 * TotalHt, 0),
+         TreeCount = if_else((PlotType == "IP") & (SamplingMethod == "BAF") & (TreeCount > 1), 1, TreeCount), # fix tree duplication per notes above
          basalArea = 0.25 * pi * (0.01*DBH)^2, # m² 
          breastHeight = 1.37, # m, used for offset in lm() height regressions
-         dbhWeightDefault = DBH^-1,
-         heightWeightDefault = TotalHt^-2,
-         isPlantation = standAge2020 < 75,
-         SampleFactor = 2.47105 * SampleFactor, # trees per acre to trees per hectare
-         standArea = 0.404686 * GrossAc,  # ac to ha
-         standSampleFactor = mean(SampleFactor),
-         treeBasalAreaPerHectare = SampleFactor * if_else(SamplingMethod == "BAF", 0.092903, basalArea), # m²/ha, conversion factor is either 2.47105 * 0.092903 = 0.229568 m²/ha / ft²/ac or 2.47105 ac/ha
          heightDiameterRatio = TotalHt / (0.01 * DBH), # (DBH conversion from cm to m)
+         imputedBasalArea = if_else(is.na(TotalHt) == FALSE, impute_basal_area(Species, TotalHt, isPlantation), basalArea), # m², imputed whenever height is available to impute
          imputedHeight = if_else(is.na(TotalHt) == FALSE, TotalHt, if_else(is.na(DBH) == FALSE, impute_height(Species, DBH, isPlantation), NA_real_)), # where possible, perform basic height imputation
-         treeBasalAreaPerHectareApprox = SampleFactor * if_else(SamplingMethod == "BAF", 0.092903, impute_basal_area(Species, TotalHt, isPlantation))) %>% # m²/ha, stack basal area regression on height regression when possible; BAF has to be used with prism trees
+         standArea = 0.404686 * GrossAc,  # ac to ha
+         treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea), # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
+         treeBasalAreaPerHectareApprox = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", if_else(is.na(basalArea) == FALSE, imputedBasalArea / basalArea, 1), imputedBasalArea)) %>% # m²/ha, stack basal area regression on height regression when possible; BAF has to be used with prism trees but imputed basal area is used where possible to introduce estimation error
   select(-GrossAc) %>%
-  group_by(PlotID) %>%
-  mutate(plotTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * SampleFactor),
-         plotTreesWithDbh = sum(if_else(is.na(DBH), 0, SampleFactor)),
-         plotContributionToStandBasalArea = 0,
-         plotContributionToStandBasalArea = replace(plotContributionToStandBasalArea, 1, sum(treeBasalAreaPerHectare)),
-         plotContributionToStandApproxBasalArea = 0,
-         plotContributionToStandApproxBasalArea = replace(plotContributionToStandApproxBasalArea, 1, sum(treeBasalAreaPerHectareApprox))) %>%
   group_by(StandID) %>%
   arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>% # put largest diameter live trees first in each stand for calculating BAL (numbers sort before NA)
-  mutate(plotsInStand = length(unique(PlotID)),
-         standBasalAreaPerHectare = sum(plotContributionToStandBasalArea) / plotsInStand, # m²/ha
-         standBasalAreaApprox = sum(plotContributionToStandApproxBasalArea) / plotsInStand, # m²/ha
-         basalAreaLarger = (cumsum(isLiveUnbroken * treeBasalAreaPerHectare) - treeBasalAreaPerHectare[1]) / plotsInStand, # m²/ha
-         treeTphContribution = SampleFactor / plotsInStand, # trees per hectare
-         tph = sum(treeTphContribution)) %>% # stand trees per hectare
-  arrange(desc(isLiveUnbroken), desc(imputedHeight), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
-  mutate(remainingTopHeightTph = pmax(100 - cumsum(if_else(is.na(TotalHt), 0, treeTphContribution)), 0), # remaining TPH contribution to H100 definition of top height, trees not measured for TotalHt are skipped
-         remainingTopHeightFraction = remainingTopHeightTph / treeTphContribution,
-         topHeightWeight = if_else(remainingTopHeightFraction >= 1, 1, if_else(remainingTopHeightFraction > 0, remainingTopHeightFraction, 0)), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
-         topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum((is.na(TotalHt) == FALSE) * topHeightWeight), # m, tallest 100 trees per hectare
+  mutate(plotsInStand = length(unique(PlotID)), # nested fixed radius and BAF plots share same plot ID
+         standBasalAreaPerHectare = sum(isLive * treeBasalAreaPerHectare) / plotsInStand, # m²/ha
+         standBasalAreaApprox = sum(isLive * treeBasalAreaPerHectareApprox) / plotsInStand, # m²/ha
+         basalAreaLarger = (cumsum(isLive * treeBasalAreaPerHectare) - treeBasalAreaPerHectare[1]) / plotsInStand, # m²/ha
+         measurePlotsInStand = length(unique(PlotID * (PlotType == "IP"))) - any(PlotType %in% c("IB", "CO", "CB")), # if any IB, CO, or CB plots are present they'll introduce zero as a unique value which has to be subtracted from the plot count
+         measureTreeTphContribution = if_else((TreeCount == 0) | is.na(DBH), NA_real_, SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)), # trees per hectare, with trees not on measure plots NAed out
+         meanTreesPerBafPlot = sum(TreeCount * (SamplingMethod == "BAF")) / plotsInStand,
+         meanTreesPerBafMeasurePlot = sum(TreeCount * (SamplingMethod == "BAF") * (PlotType == "IP")) / measurePlotsInStand,
+         tph = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * sum(isLive * measureTreeTphContribution, na.rm = TRUE) / measurePlotsInStand) %>% # stand's total trees per hectare
+  arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
+  mutate(topHeightTph = pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), # TPH total towards the H100 definition of top height, trees not measured for TotalHt are skipped
+         topHeightWeight = pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
+         topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), # m, tallest 100 trees per hectare
          relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees (debatable if imputed heights should be included but, for now, trees not measured for height are left with NA relative height)
-         tallerApproxBasalArea = (cumsum(isLiveUnbroken * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
-         tallerTph = cumsum(isLiveUnbroken * SampleFactor) / plotsInStand) %>% 
+         tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
+         tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>% 
   ungroup()
 
 if (htDiaOptions$includeInvestigatory)
 {
+  # plots without spatial locations
   print(trees2016 %>% filter(is.na(elevation)) %>% group_by(PlotID) %>% summarize(trees = n(), .groups = "drop"), n = 51)
+  # distribution of estimated stand basal areas
   ggplot(trees2016) + geom_histogram(aes(x = standBasalAreaApprox))
+  # tree contribution to top height verification
+  #print(tibble(treeTphContribution = rep(25.5, 30) / 5) %>% 
+  #        mutate(remainingTph = 100 - cumsum(treeTphContribution),
+  #               remainingFraction = (treeTphContribution + remainingTph) / treeTphContribution,
+  #               weight = if_else(remainingFraction >= 1, 1, if_else(remainingFraction > 0, remainingFraction, 0))),
+  #      n = 40)
+
+  # check plots for calculated stand-level quantities: BA, TPH, QMD, H100
+  standsFromTrees2016 = trees2016 %>% group_by(StandID) %>%
+    summarize(plots = plotsInStand[1], measurePlots = measurePlotsInStand[1], meanTreesPerBafPlot = meanTreesPerBafPlot[1], meanTreesPerBafMeasurePlot = meanTreesPerBafMeasurePlot[1],
+              tph = tph[1], topHeight = topHeight[1], standBasalAreaPerHectare = standBasalAreaPerHectare[1], standBasalAreaApprox = standBasalAreaApprox[1],
+              qmd = sqrt(standBasalAreaPerHectare / (pi / (4 * 100^2) * tph)))
+  standsFromTrees2016 %>% summarise(stands = n(), plotsOK = sum(measurePlots <= plots), trees = sum(is.na(meanTreesPerBafPlot) == FALSE), measureTrees = sum(is.na(meanTreesPerBafMeasurePlot) == FALSE),
+                                    topHeight = sum(is.na(topHeight) == FALSE), basalArea = sum(is.na(standBasalAreaPerHectare) == FALSE), basalAreaApprox = sum(is.na(standBasalAreaApprox) == FALSE))
+  reinekeSdi = crossing(sdi = c(100 * seq(1, 9), 1000 * seq(1, 10)),
+                        tph = c(1, 10000)) %>%
+    mutate(qmd = 25.4 * (sdi/tph)^(1/1.605)) # sdi = tph * (qmd/25.4)^1.605 => (sdi/tph)^(1/1.605) = (qmd/25.4)
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 100, yend = 100), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_point(aes(x = plots, y = measurePlots), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
+    coord_cartesian(xlim = c(0, 90)) +
+    labs(x = "plots", y = "measure plots") +
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 120, yend = 120), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_point(aes(x = standBasalAreaPerHectare, y = standBasalAreaApprox), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
+    coord_cartesian(xlim = c(0, 120)) +
+    labs(x = bquote("basal area, m"^2*" ha"^-1), y = bquote("approximate basal area, m"^2*" ha"^-1)) +
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 10, yend = 10), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_point(aes(x = meanTreesPerBafPlot, y = meanTreesPerBafMeasurePlot), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
+    #coord_cartesian(xlim = c(0, 120)) +
+    labs(x = "mean trees per BAF plot", y = "mean trees per BAF measure plot") +
+  ggplot() +
+    geom_line(aes(x = tph, y = qmd, group = sdi), reinekeSdi, color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_point(aes(x = tph, y = qmd), standsFromTrees2016, alpha = 0.5, shape = 16) +
+    coord_cartesian(xlim = c(50, 5000), ylim = c(5, 95)) +
+    labs(x = "TPH", y = "QMD, cm") +
+    scale_x_log10(breaks = c(50, 100, 200, 500, 1000, 5000), minor_breaks = c(60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 2000, 3000, 4000, 6000, 7000)) +
+    scale_y_log10(breaks = c(5, 10, 20, 50, 100), minor_breaks = c(6, 7, 8, 9, 30, 40, 60, 70, 80, 90)) +
+  ggplot() +
+    geom_histogram(aes(y = topHeight), standsFromTrees2016, binwidth = 2) +
+    labs(x = "stands", y = bquote("H"[100]*", m")) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout(nrow = 2, ncol = 3)
+
+  # check plots for tree-level properties derived from stand-level properties
+  ggplot() +
+    geom_segment(aes(x = 1.5, y = 0, xend = 1.5, yend = 3000), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_histogram(aes(x = relativeHeight, fill = speciesGroup), trees2016, binwidth = 0.05, na.rm = TRUE) +
+    coord_cartesian(ylim = c(0, 2500)) +
+    labs(x = "relative height", y = "trees measured", fill = NULL) +
+    scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+    theme(legend.justification = c(1, 1), legend.position = c(1, 1)) +
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 125, yend = 125), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_point(aes(x = standBasalAreaPerHectare, y = basalAreaLarger, color = speciesGroup), trees2016, alpha = 0.2, shape = 16) +
+    guides(color = "none") +
+    labs(x = bquote("stand basal area, m"^2*" ha"^-1), y = bquote("basal area larger, m"^2*" ha"^-1), color = NULL) +
+    scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 180, yend = 180), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_point(aes(x = standBasalAreaApprox, y = tallerApproxBasalArea, color = speciesGroup), trees2016, alpha = 0.2, shape = 16) +
+    guides(color = "none") +
+    labs(x = bquote("approximate stand basal area, m"^2*" ha"^-1), y = bquote("basal area taller, m"^2*" ha"^-1), color = NULL) +
+    scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout(design = c("12\n13"))
   
-  print(tibble(treeTphContribution = rep(25.5, 30) / 5) %>% 
-          mutate(remainingTph = 100 - cumsum(treeTphContribution),
-                 remainingFraction = (treeTphContribution + remainingTph) / treeTphContribution,
-                 weight = if_else(remainingFraction >= 1, 1, if_else(remainingFraction > 0, remainingFraction, 0))),
-        n = 40)
-  
+  # export tree data joined with plots in R for joining in GIS
   plotTreeProperties = trees2016 %>% group_by(PlotID) %>%
-    summarize(liveTrees = sum(CompCode %in% c("D.", "SN") == FALSE), snags = sum(CompCode %in% c("D.", "SN")), tph = plotTrees[1], primarySpecies = unique(Species)[which.max(tabulate(match(Species, unique(Species))))], stemsWithDbh = sum(is.na(DBH) == FALSE), stemsWithHeight = sum((is.na(TotalHt) == FALSE) | (is.na(Ht2) == FALSE))) %>% # mode of species
+    summarize(liveTrees = sum(isLive), 
+              snags = sum(isLive == FALSE), 
+              tph = sum(SampleFactor * isLive * TreeCount), 
+              primarySpecies = unique(Species)[which.max(tabulate(match(Species, unique(Species))))], # mode of species
+              stemsWithDbh = sum(is.na(DBH) == FALSE), 
+              stemsWithHeight = sum((is.na(TotalHt) == FALSE) | (is.na(Ht2) == FALSE))) %>%
     mutate(stems = liveTrees + snags) %>%
     rename(PltInteger = PlotID) # for GIS joins
   plotTreeProperties %>% summarize(plots = n(), measure = sum(stemsWithDbh > 0), count = n() - measure)
-  #write_xlsx(plotTreeProperties, "GIS/Trees/2015-16 cruise/CruisePlots_All_treeProperties.xlsx")
+  #writer::write_csv(plotTreeProperties, "GIS/Trees/2015-16 cruise/CruisePlots_All_20151211 treeProperties.csv")
 }
 
 
 ## data tabulation and basic plotting
 if (htDiaOptions$includeInvestigatory)
 {
+  # Table S1
   trees2016summary = trees2016 %>% 
-    mutate(isLive = CompCode %in% c("D.", "SN") == FALSE) %>%
     #mutate(speciesClassification = if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other")) %>%
     #group_by(speciesClassification) %>%
     group_by(Species) %>% 
-    summarize(stands = length(unique(StandID)),
-              pctStems = 100 * n() / nrow(trees2016), 
-              trees = n(),
-              live = sum(isLive), plantation = sum(isPlantation), retention = sum(CompCode == "RT"), snag = sum(isLive == FALSE), 
-              dbh = sum(isLive & (DBH > 0), na.rm = TRUE), 
-              height = sum(isLive & (TotalHt > 0), na.rm = TRUE), 
-              age = sum(BHAge > 0, na.rm = TRUE), 
-              crownRatio = sum(CrownRatio > 0, na.rm = TRUE), 
-              dia1 = sum(Dia1 > 0, na.rm = TRUE), height1 = sum(Ht1 > 0, na.rm = TRUE), 
-              height2 = sum(Ht2 > 0, na.rm = TRUE), 
+    summarize(stands = n_distinct(StandID),
+              pctStems = 100 * sum(TreeCount) / sum(trees2016$TreeCount), 
+              trees = sum(TreeCount),
+              live = sum(TreeCount * isLive),
+              plantation = sum(TreeCount * isPlantation), 
+              retention = sum(TreeCount * (CompCode == "RT")), 
+              snag = sum(TreeCount * (isLive == FALSE)), 
+              dbh = sum(TreeCount * isLive * (DBH > 0), na.rm = TRUE), 
+              height = sum(TreeCount * isLive & (TotalHt > 0), na.rm = TRUE), 
+              age = sum(TreeCount * (BHAge > 0), na.rm = TRUE), 
+              crownRatio = sum(TreeCount * (CrownRatio > 0), na.rm = TRUE), 
+              dia1 = sum(TreeCount * (Dia1 > 0), na.rm = TRUE), 
+              height1 = sum(TreeCount * (Ht1 > 0), na.rm = TRUE), 
+              height2 = sum(TreeCount * (Ht2 > 0), na.rm = TRUE), 
               .groups = "drop") %>%
-    mutate(pctStands = 100 * stands / length(unique(trees2016$StandID))) %>%
+    mutate(pctStands = 100 * stands / n_distinct(trees2016$StandID)) %>%
     arrange(desc(trees))
   print(trees2016summary, n = 25)
-  
-  trees2016 %>% summarize(live = sum(CompCode %in% c("D.", "SN") == FALSE), measureTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * (DBH > 0), na.rm = TRUE), countTrees = sum((CompCode %in% c("D.", "SN") == FALSE) * is.na(DBH)),
-                          snag = sum(CompCode %in% c("D.", "SN")), measureSnag = sum(CompCode %in% c("D.", "SN") * (DBH > 0), na.rm = TRUE), countSnag = sum(CompCode %in% c("D.", "SN") * is.na(DBH)))
-  
-  trees2016 %>% filter((CompCode %in% c("D.", "SN")) == FALSE, TotalHt > 0 | Ht2 > 0) %>% summarize(n = n()) # measured snags
+
+  # plot data summary
+  trees2016 %>%
+    group_by(PlotID) %>%
+    mutate(isLive = CompCode %in% c("D.", "SN") == FALSE,
+           isMeasurePlot = sum(is.na(DBH) == FALSE) > 0) %>% # exact check used is unimportant as all stems have DBH on measure plots
+    ungroup() %>%
+    summarize(standsSampled = n_distinct(StandID),
+              plots = n_distinct(PlotID),
+              measurePlots = n_distinct(isMeasurePlot * PlotID) - 1, # minus one since zero indicates count plot (plot IDs start with 1)
+              countPlots = plots - measurePlots,
+              liveTrees = sum(isLive), 
+              measureTrees = sum(isLive * (DBH > 0), na.rm = TRUE), 
+              countTrees = sum(isLive * is.na(DBH)),
+              heightTrees = sum((TotalHt > 0) & is.na(Ht2), na.rm = TRUE),
+              brokenTrees = sum(Ht2 > 0, na.rm = TRUE),
+              snags = sum(isLive == FALSE), 
+              measureSnags = sum((isLive == FALSE) * (DBH > 0), na.rm = TRUE), 
+              countSnags = sum((isLive == FALSE) * is.na(DBH)))
+  # measured snags
   print(trees2016 %>% filter(CompCode == "RT", isPlantation == FALSE) %>% select(StandID, Species, DBH, standAge2020), n = 35)
-  
+  # height tree counts by species group  
+  trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>% 
+    group_by(speciesGroup) %>% 
+    summarize(trees = n(), conifers = sum(isConifer), broadleaves = sum(isConifer == FALSE), plantation = sum(isPlantation),
+              .groups = "drop") %>%
+    bind_rows(summarize(., across(where(is.factor), ~"total"), across(where(is.numeric), sum))) %>%
+    mutate(pctPlantation = 100 * plantation/trees)
+  # estimated total number of trees in inventoried stands
   trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%
     summarize(trees = sum(standArea * tph))
-  
-  liveUnbrokenTrees2016 %>% filter(is.na(TotalHt) == FALSE) %>% 
-    summarize(conifers = sum(isConifer), broadleaves = sum(isConifer == FALSE))
-  
-  liveUnbrokenTrees2016 %>% filter(is.na(TotalHt) == FALSE) %>% 
-    group_by(speciesGroup) %>% 
-    summarize(trees = n(), plantation = sum(isPlantation), pctPlantation = 100 * plantation/trees)
   
   ggplot(trees2016 %>% filter(is.na(Ht1) == FALSE)) +
     geom_histogram(aes(y = 100 * Ht1 / TotalHt, x = 100 * ..count.. / sum(..count..)), binwidth = 1) +
@@ -1189,7 +1283,7 @@ if (htDiaOptions$includeInvestigatory)
               .groups = "drop"),
     n = 25)
   
-  ggplot(liveUnbrokenTrees2016) + # lower violin in pair is for plantations
+  ggplot(trees2016 %>% filter(isLiveUnbroken)) + # lower violin in pair is for plantations
     geom_violin(aes(x = relativeHeight, y = speciesGroup, color = speciesGroup), draw_quantiles = c(0.25, 0.5, 0.75), na.rm = TRUE) +
     coord_cartesian(xlim = c(0, 3)) +
     ggh4x::facet_nested(rows = vars(speciesGroup, factor(isPlantation, levels = c(FALSE, TRUE), labels = c("natural regen", "plantation"))), labeller = label_wrap_gen(width = 15), scales = "free_y", switch = "y") +
@@ -1201,39 +1295,39 @@ if (htDiaOptions$includeInvestigatory)
 }
 
 
-## stand-level summaries
+## stand-level summaries and Figure 2
 if (htDiaOptions$includeInvestigatory)
 {
-  standSummary2016 = trees2016 %>% 
-    mutate(isLive = CompCode %in% c("D.", "SN") == FALSE) %>%
+  treesByStand2016 = trees2016 %>% 
     group_by(StandID) %>% 
     summarize(speciesGroup = names(sort(-table(speciesGroup)))[1], # one liner for mode of character vector (https://stackoverflow.com/questions/2547402/how-to-find-the-statistical-mode/8189441#8189441)
-              plots = length(unique(PlotID)),
-              measurePlots = length(unique(PlotID * (is.na(DBH) == FALSE))) - any(is.na(DBH)), # plot IDs start at 1 so multiplying by is.na(DBH) == FALSE introduces zero as a plot ID
-              trees = n(),
-              live = sum(isLive), plantation = sum(isPlantation), retention = sum(CompCode == "RT"), snag = sum(isLive == FALSE), 
-              dbh = sum(isLive & (DBH > 0), na.rm = TRUE), 
-              height = sum(isLive & (TotalHt > 0), na.rm = TRUE), 
-              age = sum(BHAge > 0, na.rm = TRUE), 
-              crownRatio = sum(CrownRatio > 0, na.rm = TRUE), 
-              dia1 = sum(Dia1 > 0, na.rm = TRUE), height1 = sum(Ht1 > 0, na.rm = TRUE), 
-              height2 = sum(Ht2 > 0, na.rm = TRUE), 
+              plots = n_distinct(PlotID),
+              measurePlots = n_distinct(PlotID * (is.na(DBH) == FALSE)) - any(is.na(DBH)), # plot IDs start at 1 so multiplying by is.na(DBH) == FALSE introduces zero as a plot ID
+              trees = sum(TreeCount),
+              live = sum(isLive * TreeCount), plantation = sum(isPlantation), retention = sum(CompCode == "RT"), snag = sum(isLive == FALSE), 
+              dbh = sum(isLive * TreeCount * (DBH > 0), na.rm = TRUE), 
+              height = sum(isLive * TreeCount * (TotalHt > 0), na.rm = TRUE), 
+              age = sum(TreeCount * (BHAge > 0), na.rm = TRUE), 
+              crownRatio = sum(TreeCount * (CrownRatio > 0), na.rm = TRUE), 
+              dia1 = sum(TreeCount * (Dia1 > 0), na.rm = TRUE), 
+              height1 = sum(TreeCount * (Ht1 > 0), na.rm = TRUE), 
+              height2 = sum(TreeCount * (Ht2 > 0), na.rm = TRUE), 
               .groups = "drop") %>%
     mutate(speciesGroup = factor(speciesGroup, levels = levels(trees2016$speciesGroup))) # restore factor levels lost in tabling
   
-  ggplot(standSummary2016) +
+  ggplot(treesByStand2016) +
     geom_histogram(aes(x = measurePlots, fill = speciesGroup), binwidth = 1) + # 492 stands with 26 plots
     coord_cartesian(xlim = c(0, 45)) +
     labs(x = "measure plots", y = "number of stands", fill = "most\ncommon\nspecies") +
-  ggplot(standSummary2016) +
+  ggplot(treesByStand2016) +
     geom_histogram(aes(x = trees, fill = speciesGroup), binwidth = 5) +
     coord_cartesian(xlim = c(0, 260), ylim = c(0, 170)) +
     labs(x = "trees counted", y = NULL, fill = "most\ncommon\nspecies") +
-  ggplot(standSummary2016) +
+  ggplot(treesByStand2016) +
     geom_histogram(aes(x = dbh, fill = speciesGroup), binwidth = 5) +
     coord_cartesian(xlim = c(0, 260), ylim = c(0, 170)) +
     labs(x = "DBH measure trees", y = "number of stands", fill = "most\ncommon\nspecies") +
-  ggplot(standSummary2016) +
+  ggplot(treesByStand2016) +
     geom_histogram(aes(x = height, fill = speciesGroup), binwidth = 5) +
     coord_cartesian(xlim = c(0, 260), ylim = c(0, 170)) +
     labs(x = "height measure trees", y = NULL, fill = "most\ncommon\nspecies") +
@@ -1241,6 +1335,159 @@ if (htDiaOptions$includeInvestigatory)
   plot_layout(nrow = 2, ncol = 2, guides = "collect") &
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
     theme(legend.spacing.y = unit(0.2, "line"))
+  
+  speciesCountByStand2016 = trees2016 %>% filter(isLiveUnbroken) %>% group_by(StandID) %>%
+    summarize(psmeTph = sum((speciesGroup == "DF") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              alruTph = sum((speciesGroup == "RA") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              tsheTph = sum((speciesGroup == "WH") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              acmaTph = sum((speciesGroup == "BM") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              umcaTph = sum((speciesGroup == "OM") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              thplTph = sum((speciesGroup == "RC") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              otherTph = sum((speciesGroup == "other") * meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, na.rm = TRUE),
+              totalTph = psmeTph + alruTph + tsheTph, acmaTph + umcaTph + thplTph + otherTph,
+              psmeBA = sum((speciesGroup == "DF") * treeBasalAreaPerHectare) / plotsInStand[1], # m²/ha
+              alruBA = sum((speciesGroup == "RA") * treeBasalAreaPerHectare) / plotsInStand[1],
+              tsheBA = sum((speciesGroup == "WH") * treeBasalAreaPerHectare) / plotsInStand[1],
+              acmaBA = sum((speciesGroup == "BM") * treeBasalAreaPerHectare) / plotsInStand[1],
+              umcaBA = sum((speciesGroup == "OM") * treeBasalAreaPerHectare) / plotsInStand[1],
+              thplBA = sum((speciesGroup == "RC") * treeBasalAreaPerHectare) / plotsInStand[1],
+              otherBA = sum((speciesGroup == "other") * treeBasalAreaPerHectare) / plotsInStand[1],
+              totalBA = psmeBA + alruBA + tsheBA + acmaBA + umcaBA + thplBA + otherBA,
+              psmePct = 100 * psmeBA / totalBA,
+              alruPct = 100 * alruBA / totalBA,
+              tshePct = 100 * tsheBA / totalBA,
+              acmaPct = 100 * acmaBA / totalBA,
+              umcaPct = 100 * umcaBA / totalBA,
+              thplPct = 100 * thplBA / totalBA,
+              otherPct = 100 * otherBA / totalBA,
+              primaryPct = pmax(psmePct, alruPct, tshePct, acmaPct, umcaPct, thplPct, otherPct),
+              secondaryPct = rev(sort(c_across(c(psmePct, alruPct, tshePct, acmaPct, umcaPct, thplPct, otherPct))))[2],
+              primarySpecies = if_else(primaryPct == psmePct, "PSME",
+                                       if_else(primaryPct == alruPct, "ALRU",
+                                               if_else(primaryPct == tshePct, "TSHE",
+                                                       if_else(primaryPct == acmaPct, "ACMA",
+                                                               if_else(primaryPct == umcaPct, "UMCA",
+                                                                       if_else(primaryPct == thplPct, "THPL", "other")))))),
+              secondarySpecies = if_else(secondaryPct == psmePct, "PSME",
+                                         if_else(secondaryPct == alruPct, "ALRU",
+                                                 if_else(secondaryPct == tshePct, "TSHE",
+                                                         if_else(secondaryPct == acmaPct, "ACMA",
+                                                                 if_else(secondaryPct == umcaPct, "UMCA",
+                                                                         if_else(secondaryPct == thplPct, "THPL", "other")))))),
+              isPlantation = isPlantation[1],
+              standArea = standArea[1],
+              standAge2020 = standAge2020[1],
+              topHeight = topHeight[1],
+              qmd = sqrt(totalBA / (pi / (4 * 100^2) * totalTph)))
+  #speciesCountByStand2016 %>% group_by(primarySpecies, secondarySpecies) %>% summarize(n = n())
+
+  # Reineke SDI
+  ggplot() +
+    geom_path(aes(x = tph, y = qmd, group = sdi), reinekeSdi, color = "grey80", linetype = "longdash", linewidth = 0.3) +
+    geom_point(aes(x = totalTph, y = qmd, color = primarySpecies, shape = secondarySpecies), speciesCountByStand2016, alpha = 0.5) +
+    coord_cartesian(xlim = c(30, 2500), ylim = c(5, 107)) +
+    labs(x = "trees per hectare", y = "QMD, cm", color = "primary species", shape = "secondary species") +
+    scale_color_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+    scale_shape_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), values = c(15, 16, 17, 22, 21, 24, 25)) +
+    scale_x_log10(breaks = c(10, 20, 50, 100, 200, 500, 1000, 2000, 5000), minor_breaks = c(30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 3000, 4000)) +
+    scale_y_log10(breaks = c(seq(1, 9), 10 * seq(1, 10)), minor_breaks = c(15, 25, 35, 45, 55, 65, 75, 85, 95, 150)) +
+    theme(legend.spacing.y = unit(0.3, "line"))
+  # TPH distribution by species and stand
+  ggplot(speciesCountByStand2016) + # could also pivot to longform and wrap_facet(speciesGroup)
+    geom_histogram(aes(x = psmeTph), fill = "forestgreen", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "Douglas-fir TPH", y = "stands") +
+  ggplot(speciesCountByStand2016) +
+    geom_histogram(aes(x = alruTph), fill = "red2", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "red alder TPH", y = "stands") +
+  ggplot(speciesCountByStand2016) +
+    geom_histogram(aes(x = tsheTph), fill = "blue2", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "western hemlock TPH", y = "stands") +
+  ggplot(speciesCountByStand2016) +
+    geom_histogram(aes(x = acmaTph), fill = "green3", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "bigleaf maple TPH", y = "stands") +
+  ggplot(speciesCountByStand2016) +
+    geom_histogram(aes(x = umcaTph), fill = "mediumorchid", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "Oregon myrtle TPH", y = "stands") +
+  ggplot(speciesCountByStand2016) +
+    geom_histogram(aes(x = thplTph), fill = "firebrick", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "western redcedar TPH", y = "stands") +
+  ggplot(speciesCountByStand2016) +
+    geom_histogram(aes(x = otherTph), fill = "grey65", binwidth = 50) +
+    coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
+    labs(x = "other species TPH", y = "stands") +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout(nrow = 2, ncol = 4, guides = "collect")
+  # alternate TPH brakdown
+  ggplot(speciesCountByStand2016) +
+    geom_point(aes(x = totalTph - psmeTph, y = psmeTph, color = primarySpecies, shape = secondarySpecies), alpha = 0.5) +
+    guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) +
+    labs(x = bquote("total of all other species, trees ha"^-1), y = bquote("Douglas-fir, trees ha"^-1), color = "primary species", shape = "secondary species") +
+    scale_color_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+    scale_shape_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), values = c(15, 16, 17, 22, 21, 24, 25)) +
+    theme(legend.spacing.y = unit(0.3, "line"))
+
+  # basic clustering of stand types
+  # k-means and mean shift perform poorly here, presumably due to being asked to partition continuous data. Data visualization
+  # here could use either scaled (normalized) or unscaled distances, the former emphasizing dissimilarity in species besides
+  # Douglas-fir and the latter (presumably) being more directly representative of the distribution of trees in the ground.
+  basalAreaDistances = dist(speciesCountByStand2016 %>% select(psmeBA, alruBA, tsheBA, acmaBA, umcaBA, thplBA, otherBA))
+  standHierarchyBA = hclust(basalAreaDistances, method = "ward.D") # produces the most even area distribution among hclust()'s methods
+  # ggdendro::ggdendrogram(standHierarchyBA)
+
+  speciesBasalAreaByCluster = speciesCountByStand2016 %>% mutate(clusterID = cutree(standHierarchyBA, k = 20)) %>%
+    group_by(clusterID) %>%
+    summarize(PSME = sum(psmeBA) / n(), # could also join clustersBA$centers
+              ALRU = sum(alruBA) / n(),
+              TSHE = sum(tsheBA) / n(),
+              ACMA = sum(acmaBA) / n(),
+              UMCA = sum(umcaBA) / n(),
+              THPL = sum(thplBA) / n(),
+              other = sum(otherBA) / n(),
+              meanAge2016 = sum(standAge2020) / n() - 4,
+              meanTopHeight = mean(topHeight),
+              meanTotalBasalArea = sum(totalBA) / n(),
+              totalArea = sum(standArea)) %>%
+    arrange(totalArea) %>%
+    mutate(clusterID = factor(clusterID, levels = clusterID),
+           ageLabel = if_else(totalArea == max(totalArea), sprintf('bar(age) == %.0f~"years"', meanAge2016), sprintf("%.0f", meanAge2016)),
+           ageLabelX = if_else(totalArea > 500, 30, totalArea + 30),
+           ageLabelColor = if_else(totalArea > 500, "white", "black"),
+           topHeightLabel = if_else(totalArea == max(totalArea), sprintf('bar(H[100]) == "%.1f"~"m"', meanTopHeight), sprintf('"%.1f"', meanTopHeight)),
+           topHeightLabelColor = if_else(meanTotalBasalArea > 10, "white", "black"),
+           topHeightLabelX = if_else(meanTotalBasalArea > 10, 1, meanTotalBasalArea + 1))
+  
+  # Figure 2
+  reinekeSdi = crossing(sdi = c(100 * seq(1, 9), 1000 * seq(1, 9), 10000),
+                        tph = c(1, 10000)) %>%
+    mutate(qmd = 25.4 * (sdi/tph)^(1/1.605)) # sdi = tph * (qmd/25.4)^1.605 => (sdi/tph)^(1/1.605) = (qmd/25.4)
+  speciesBasalAreaOneRowPerClusterSlice = speciesBasalAreaByCluster %>% group_by(clusterID) %>% slice(1)
+  
+  ggplot(speciesBasalAreaByCluster) +
+    geom_col(aes(x = totalArea, y = clusterID), orientation = "y") +
+    geom_text(aes(x = ageLabelX, y = clusterID, label = ageLabel), color = speciesBasalAreaByCluster$ageLabelColor, hjust = 0, parse = TRUE, size = 3) +
+    coord_cartesian(xlim = c(0, 2050)) +
+    labs(x = "area inventoried, ha", y = "stand type classification (hierarchical cluster ID)", fill = NULL) +
+    scale_x_continuous(expand = c(0.012, 0)) +
+  ggplot() +
+    geom_bar(aes(y = clusterID, fill = fct_rev(speciesGroup), weight = basalArea), speciesBasalAreaByCluster %>% select(-meanAge2016, -meanTopHeight, -starts_with("age"), -starts_with("topHeight")) %>%
+               pivot_longer(cols = -c("clusterID", "meanTotalBasalArea", "totalArea"), names_to = "speciesGroup", values_to = "basalArea") %>%
+               mutate(speciesGroup = factor(speciesGroup, levels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other")))) +
+    geom_text(aes(x = topHeightLabelX, y = clusterID, label = topHeightLabel), speciesBasalAreaOneRowPerClusterSlice, color = speciesBasalAreaOneRowPerClusterSlice$topHeightLabelColor, hjust = 0, parse = TRUE, size = 3) +
+    coord_cartesian(xlim = c(0, 83)) +
+    labs(x = bquote("mean basal area, m"^2*" ha"^-1), y = NULL, fill = NULL) +
+    scale_fill_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+    scale_x_continuous(expand = c(0.008, 0)) +
+    scale_y_discrete(labels = NULL) +
+    theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
+  # ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10, width = 22, units = "cm", dpi = 200)
 }
 
 
