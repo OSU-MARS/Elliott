@@ -1,5 +1,6 @@
 # runtimes with 10x10 cross validation and four workers (AMD Zen 3, 4.6 GHz)
-# height primary: 10.5 hours (mostly GAM BA+L physio)
+# height primary: 10.5 hours, mostly GAM BA+L physio
+#                 14.5 hours GAM ABA+T RelHt physio
 #        nlrob() + gsl_nls(): ~35 minutes
 # DBH primary: 16.5 hours (mostly GAM ABA+T physio and RelHt physio)
 #     nlrob() + gsl_nls(): ~21 minutes
@@ -24,3 +25,4 @@ handlers("progress")
 plan(multisession, workers = 4)
 
 source("trees/height-diameter/PSME.R")
+warnings()

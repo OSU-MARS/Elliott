@@ -6,3 +6,4 @@ handlers("progress")
 plan(multisession, workers = 1)
 
 source("trees/height-diameter/ACMA3.R")
+warnings()

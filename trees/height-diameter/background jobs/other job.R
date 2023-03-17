@@ -5,3 +5,4 @@ handlers("progress")
 plan(multisession, workers = 1)
 
 source("trees/height-diameter/other.R")
+warnings()

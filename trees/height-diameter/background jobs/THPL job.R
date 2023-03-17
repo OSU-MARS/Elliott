@@ -13,3 +13,4 @@ handlers("progress")
 plan(multisession, workers = 1) # THPL n is small enough single core is faster
 
 source("trees/height-diameter/THPL.R")
+warnings()

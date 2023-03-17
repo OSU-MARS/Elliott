@@ -4,6 +4,7 @@ setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")
-plan(multisession, workers = 2)
+plan(multisession, workers = 4)
 
 source("trees/height-diameter/ALRU2.R")
+warnings()

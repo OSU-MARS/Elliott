@@ -517,7 +517,7 @@ ggplot() +
   geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
   geom_line(aes(x = acma2016physio$DBH, y = predict(acmaHeightFromDiameterPreferred$weibullBal), color = "Weibull BA+L", group = acma2016physio$isPlantation, linetype = acma2016physio$isPlantation), alpha = 0.4) +
   geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$michaelisMenten), color = "Michaelis-Menten", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
-  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$richards), color = "unified Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$richardsW), color = "unified Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) bigleaf maple height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
