@@ -25,6 +25,7 @@ heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaRes
          isBaseForm = (str_detect(name, "Sharma-") == FALSE) & (str_detect(name, "ABA\\+T") == FALSE) & (str_detect(name, "BA\\+L") == FALSE) & (str_detect(name, "physio") == FALSE) & (str_detect(name, "RelHt") == FALSE),
          hasPhysio = str_detect(name, "physio"),
          hasStand = str_detect(name, "ABA\\+T") | str_detect(name, "BA\\+L") | str_detect(name, "RelHt"),
+         significant = as.logical(significant), # since R lacks NA_logical_ significant can end up being either of type double (0/1/NA_real_) or logical (TRUE/FALSE), standardize back to logical (TRUE/FALSE/NA)
          weighting = if_else(fitting %in% c("gnls", "nlrob"), "reweighted", "fixed weights"),
          sizeShapeAlpha = as.factor(if_else(significant == TRUE, weighting, "not significant"))) %>%
   group_by(fitSet, fixedWeight, responseVariable, species) %>%
@@ -93,18 +94,26 @@ with_progress({
         
         # find AUCs: for species with few samples (e.g. THPL) mean absolute bias may be all NA, which case WeightedROC() errors
         # AUC is the probability a sample from one empirical distribution is greater than a sample from an another 
-        # distribution (see AUC.R). If the labels are reversed, the probability changes to the sample being less than.
-        # The AUCs found in the group_modify() below are thus the probability a base form improves on a base GAM.
-        # Base GAMs are retained as controls and, since the GAM's goodness of fit metrics are compared with themselves,
-        # should always have AUCs of 0.5.
+        # distribution (see AUC.R). If the labels are reversed, the probability changes to a sample from the first distribution
+        # being less than a sample from the other distribution.
+        # The labels here are thus set up to measure the probabilities goodness of fit metrics from fitResults are preferable
+        # to those from otherFitResults.
         lowerIsBetter = factor(c(rep(0, nrow(fitResults)), rep(1, nrow(otherFitResults))), levels = c(0, 1))
         higherIsBetter = factor(c(rep(1, nrow(fitResults)), rep(0, nrow(otherFitResults))), levels = c(0, 1))
-
+        #if ((length(lowerIsBetter) < 2) | (length(higherIsBetter) < 2) | (n_distinct(lowerIsBetter) < 2) | (n_distinct(higherIsBetter) < 2))
+        #{
+        #  stop(paste0("ROC label formation error with name = ", otherModelName, " for ", fitResults$species[1], " ", fitResults$responseVariable[1], ".  nrow(fitResults) = ", nrow(fitResults), ", nrow(otherFitResults) = ", nrow(otherFitResults), "."))
+        #}
+        
         # estimate AUC for bias based on what data is available, which is potentially none for species with few measurements
         availableMabData = tibble(guess = c(fitResults$mab, otherFitResults$mab), label = lowerIsBetter) %>% drop_na()
         aucMab = NA_real_
-        if (nrow(availableMabData) > 0)
+        if ((nrow(availableMabData) > 1) & (n_distinct(availableMabData$label) > 1)) # unlikely but possible that availableMabData ends up with a single row, also possible one set of fits has MAB values but the other does not
         {
+          #if ((nrow(availableMabData) < 2) | (n_distinct(availableMabData$label) < 2))
+          #{
+          #  stop(paste0("MAB ROC label formation error with name = ", otherModelName, " for ", fitResults$species[1], " ", fitResults$responseVariable[1], ".  nrow(fitResults) = ", nrow(fitResults), ", nrow(otherFitResults) = ", nrow(otherFitResults), ", nrow(availableMabData) = ", nrow(availableMabData), "."))
+          #}
           aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
         }
         
@@ -113,7 +122,6 @@ with_progress({
         {
           # WeightedROC() errors on NAs in its arguments but can't do so informatively
           # Fail informatively instead so that investigation is possible.
-          print(otherFitResults %>% filter(is.na(mae)))
           stop(paste0(fitResults$species[1], " ", fitResults$responseVariable[1], " ", fitResults$name[1], " (", nrow(fitResults), ") x ", otherModelName, " (", nrow(otherFitResults), "):",
                       " mab ", sum(is.na(fitResults$mab)), " ", sum(is.na(otherFitResults$mab)),
                       " mae ", sum(is.na(fitResults$mae)), " ", sum(is.na(otherFitResults$mae)),
@@ -138,8 +146,8 @@ with_progress({
                       " NSE ", length(nseGuess),
                       " RMSE ", length(rmseGuess)))
         }
-        return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
-                      otherModelName = otherModelName, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1],
+        return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1], fitting = fitResults$fitting[1], significant = fitResults$significant[1], isBaseForm = fitResults$isBaseForm[1],
+                      otherModelName = otherModelName, otherModelSignificant = otherFitResults$significant[1],
                       hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1],
                       aucDeltaAicN = WeightedAUC(WeightedROC(guess = deltaAicNguess, label = lowerIsBetter)),
                       aucMab = aucMab,
@@ -159,6 +167,8 @@ with_progress({
 #  summarize(matrixElements = n(), mabN = sum(is.na(aucMab) == FALSE), mabInputN = sum(aucMabN, na.rm = TRUE), maeN = sum(is.na(aucMae) == FALSE), rmseN = sum(is.na(aucRmse) == FALSE), nseN = sum(is.na(aucNse) == FALSE), pearsonN = sum(is.na(aucNse) == FALSE), .groups = "drop")
 
 # take median AUCs over otherModelName, excluding self and unsuccessful fits
+# Exclusion of unsuccessful fits is debatable. If a model could not be fit then its AUC could reasonably be taken to be
+# zero rather than NA, implying all models which could be fit have an AUC of 1 in comparison.
 heightDiameterModelRanking = heightDiameterModelAucs %>% 
   group_by(responseVariable, species, name) %>%
   summarize(fitting = fitting[1], isBaseForm = isBaseForm[1], hasPhysio = hasPhysio[1], hasStand = hasStand[1],
@@ -168,6 +178,7 @@ heightDiameterModelRanking = heightDiameterModelAucs %>%
             aucPearson = median(if_else(name != otherModelName, aucPearson, NA_real_), na.rm = TRUE),
             aucNse = median(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
             aucRmse = median(if_else(name != otherModelName, aucNse, NA_real_), na.rm = TRUE),
+            significant = significant[1],
             speciesFraction = speciesFraction[1],
             .groups = "drop_last") %>%
   mutate(aucBlended = 0.7 * if_else(responseVariable == "height", aucMae, aucRmse) + 0.3 * if_else(responseVariable == "DBH", aucMae, aucRmse) + 0.0 * aucDeltaAicN) %>%
@@ -181,17 +192,17 @@ heightDiameterModelDisplaySort = heightDiameterModelRanking %>%
 
 # find preferred model forms
 nPreferredModelForms = 4
-preferredForms = full_join(full_join(full_join(heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucMab, n = nPreferredModelForms) %>% arrange(desc(aucMab)) %>% mutate(mabName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, mabName, aucMab),
-                                               heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucMae, n = nPreferredModelForms) %>% arrange(desc(aucMae)) %>% mutate(maeName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, maeName, aucMae),
+preferredForms = full_join(full_join(full_join(heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucMab, n = nPreferredModelForms) %>% arrange(desc(aucMab)) %>% mutate(mabName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, mabName, aucMab),
+                                               heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucMae, n = nPreferredModelForms) %>% arrange(desc(aucMae)) %>% mutate(maeName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, maeName, aucMae),
                                                by = c("responseVariable", "species", "isBaseForm", "rank")), # full join since western redcedar mean absolute bias is all NA
-                                     full_join(heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucRmse, n = nPreferredModelForms) %>% arrange(desc(aucRmse)) %>% mutate(rmseName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, rmseName, aucRmse),
-                                               heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucDeltaAicN, n = nPreferredModelForms) %>% arrange(desc(aucDeltaAicN)) %>% mutate(aicName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, aicName, aucDeltaAicN),
+                                     full_join(heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucRmse, n = nPreferredModelForms) %>% arrange(desc(aucRmse)) %>% mutate(rmseName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, rmseName, aucRmse),
+                                               heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucDeltaAicN, n = nPreferredModelForms) %>% arrange(desc(aucDeltaAicN)) %>% mutate(aicName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, aicName, aucDeltaAicN),
                                                by = c("responseVariable", "species", "isBaseForm", "rank")),
                                      by = c("responseVariable", "species", "isBaseForm", "rank")),
-                           full_join(full_join(heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucNse, n = nPreferredModelForms) %>% arrange(desc(aucNse)) %>% mutate(nseName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, nseName, aucNse),
-                                               heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucPearson, n = nPreferredModelForms) %>% arrange(desc(aucPearson)) %>% mutate(pearsonName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, pearsonName, aucPearson),
+                           full_join(full_join(heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucNse, n = nPreferredModelForms) %>% arrange(desc(aucNse)) %>% mutate(nseName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, nseName, aucNse),
+                                               heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucPearson, n = nPreferredModelForms) %>% arrange(desc(aucPearson)) %>% mutate(pearsonName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, pearsonName, aucPearson),
                                                by = c("responseVariable", "species", "isBaseForm", "rank")),
-                                     heightDiameterModelRanking %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucBlended, n = nPreferredModelForms) %>% arrange(desc(aucBlended)) %>% mutate(blendedName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, blendedName, aucBlended),
+                                     heightDiameterModelRanking %>% filter(significant) %>% group_by(responseVariable, species, isBaseForm) %>% slice_max(aucBlended, n = nPreferredModelForms) %>% arrange(desc(aucBlended)) %>% mutate(blendedName = name, rank = row_number()) %>% select(responseVariable, species, isBaseForm, rank, blendedName, aucBlended),
                                      by = c("responseVariable", "species", "isBaseForm", "rank")),
                            by = c("responseVariable", "species", "isBaseForm", "rank")) %>%
   arrange(desc(responseVariable), species, desc(isBaseForm), rank) %>%
@@ -318,62 +329,14 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
 ## Figure 4: height-diameter AUCs
 heightFromDiameterModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "height") %>%
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "height"))$name)))
-ggplot(heightFromDiameterModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucMab)) +
-  labs(title = "a) MAB", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(limits = rev) +
-ggplot(heightFromDiameterModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucMae)) +
-  labs(title = "b) MAE", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-ggplot(heightFromDiameterModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-  labs(title = "c) RMSE", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-ggplot(heightFromDiameterModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-  labs(title = "d) AIC", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-ggplot(heightFromDiameterModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucNse)) +
-  labs(title = "e) model efficiency", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-plot_annotation(theme = theme(plot.margin =  margin())) +
-plot_layout(nrow = 1, guides = "collect") &
-  scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
-  scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), title = element_text(size = 8))
+plot_auc_bank(heightFromDiameterModelComparison)
 #ggsave("trees/height-diameter/figures/Figure 04 height accuracy AUC median.png", height = 12, width = 20, units = "cm", dpi = 150)
 
 
 ## Figure 5: diameter AUCs
 diameterFromHeightModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "DBH") %>%
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "DBH"))$name)))
-ggplot(diameterFromHeightModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucMab)) +
-  labs(title = "a) MAB", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(limits = rev) +
-ggplot(diameterFromHeightModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucMae)) +
-  labs(title = "b) MAE", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-ggplot(diameterFromHeightModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-  labs(title = "c) RMSE", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-ggplot(diameterFromHeightModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-  labs(title = "d) AIC", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-ggplot(diameterFromHeightModelComparison) +
-  geom_raster(aes(x = species, y = name, fill = aucNse)) +
-  labs(title = "e) model efficiency", x = NULL, y = NULL, fill = "median\nAUC") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-plot_annotation(theme = theme(plot.margin =  margin())) +
-plot_layout(nrow = 1, guides = "collect") &
-  scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
-  scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), title = element_text(size = 8))
+plot_auc_bank(diameterFromHeightModelComparison)
 #ggsave("trees/height-diameter/figures/Figure 05 diameter accuracy AUC median.png", height = 12, width = 20, units = "cm", dpi = 150)
 
 

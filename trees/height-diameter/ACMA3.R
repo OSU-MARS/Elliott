@@ -11,8 +11,11 @@ acma2016defaultWeight = acma2016 %>% mutate(dbhWeight = pmin(1/DBH, 5),
                                             heightWeight = pmin(1/TotalHt, 5))
 acma2016defaultWeightPhysio = acma2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-acmaOptions = list(fitHeight = TRUE, 
-                   fitDbh = TRUE)
+acmaOptions = tibble(fitHeight = FALSE, 
+                     fitHeightGnls = FALSE,
+                     fitHeightMixed = TRUE,
+                     fitDbh = FALSE,
+                     fitDbhMixed = TRUE)
 
 if (acmaOptions$fitHeight)
 {
@@ -56,7 +59,7 @@ if (acmaOptions$fitHeight)
   acmaHeightFromDiameterNlrob$power = fit_nlrob("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^b1, acma2016, start = list(a1 = 1.11, a1p = 0.21, b1 = 0.75)) # b1p not significant
   acmaHeightFromDiameterNlrob$ratkowsky = fit_nlrob("Ratkowsky", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp(b1/(DBH + b2 + b2p * isPlantation)), acma2016, start = list(a1 = 31.8, a1p = 3.00, b1 = -25.7, b2 = 6.70, b2p = 0.62)) # b1p not significant
   acmaHeightFromDiameterNlrob$richardsW = fit_nlrob("unified Richards", TotalHt ~ 1.37 + Ha * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), acma2016, start = list(Ha = 22.8, d = 0.723, kU = 0.025, kUp = 0.0064)) # Hap, dp not significant
-  acmaHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = list(a1 = 19, b1 = 0.1, b2 = -0.03, b3 = 0.06, b4 = 1.1, b4p = -0.25))
+  acmaHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = list(a1 = 19, b1 = 0.1, b2 = -0.03, b3 = 0.06, b4 = 1.1, b4p = -0.25), control = nls.control(maxiter = 100, tol = 1E-4)) # job step factor
   acmaHeightFromDiameterNlrob$sharmaPartonBal = fit_nlrob("Sharma-Parton BA+L", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = list(a1 = 16, b1 = 0.12, b2 = -0.031, b3 = -0.06, b4 = 1.14, b4p = -0.22)) # a1p, b1p, b2p, b3p not significant
   #acmaHeightFromDiameterNlrob$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a6 * sin(3.14159/180 * aspect))*topHeight^(b1 + b1p * isPlantation) * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, acma2016physio, start = list(a1 = 12, a6 = 0.4, b1 = 0.2, b1p = 0.04, b2 = -0.037, b3 = -0.046, b4 = 1.06)) # a1p, a4, a5, a6, a7, a8, b1, b2p, b3p, b4p not significant, job step size with nlrob()
   #acmaHeightFromDiameterNlrob$sharmaPartonPhysio = fit_gsl_nls("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a6 * sin(3.14159/180 * aspect))*topHeight^(b1 + b1p * isPlantation) * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, acma2016physio, start = list(a1 = 11, a6 = 0.3, b1 = 0.2, b1p = 0.06, b2 = -0.03, b3 = 0, b4 = 1.0), significant = FALSE) # a4, a5, a6, a7, a8, b1, b2p, b3p, b4p not significant, job step size with nlrob()
@@ -127,16 +130,16 @@ if (htDiaOptions$includeInvestigatory)
 
 
 ## bigleaf maple height-diameter GNLS regressions
-if (htDiaOptions$fitGnls)
+if (acmaOptions$fitHeightGnls)
 {
-  acmaHeightFromDiameterGnls = list(chapmanRichards = fit_gnls("Chapman-Richards GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^b2, acma2016, start = acmaHeightFromDiameter$chapmanRichards$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1)) # corSymm viable but dropped
-  acmaHeightFromDiameterGnls$chapmanRichardsBal = fit_gnls("Chapman-Richards BA+L GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), acma2016, start = acmaHeightFromDiameter$chapmanRichardsBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-4, tolerance = 1E-3, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1) #  # corSymm viable but dropped, step halving at nlsTol = 0.001, maxiter at default msTol and tolerance
-  acmaHeightFromDiameterGnls$sharmaParton = fit_gnls("Sharma-Parton GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(b1 + b1p * isPlantation)*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = acmaHeightFromDiameter$sharmaParton$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.002), folds = 1, repetitions = 1) # foreign NaN-inf with plot correlation, step halving at nlsTol = 0.001
-  acmaHeightFromDiameterGnls$sharmaPartonBal = fit_gnls("Sharma-Parton BA+L GNLS", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = acmaHeightFromDiameter$sharmaPartonBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1) # corSymm viable but dropped, step halving at nlsTol = 0.01
-  acmaHeightFromDiameterGnls$sharmaZhang = fit_gnls("Sharma-Zhang GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^b4, acma2016, start = acmaHeightFromDiameter$sharmaZhang$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1) # corSymm viable but dropped, step halving at nlsTol = 0.005
-  acmaHeightFromDiameterGnls$sharmaZhangBal = fit_gnls("Sharma-Zhang BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = acmaHeightFromDiameter$sharmaZhangBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1) # corSymm viable but dropped, step halving at nlsTol = 0.005
-  acmaHeightFromDiameterGnls$weibull = fit_gnls("Weibull GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp(b1*DBH^b2)), acma2016, start = acmaHeightFromDiameter$weibull$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5), folds = 1, repetitions = 1) # corSymm viable but dropped
-  acmaHeightFromDiameterGnls$weibullBal = fit_gnls("Weibull BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), acma2016, start = acmaHeightFromDiameter$weibullBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5), folds = 1, repetitions = 1) # corSymm viable but dropped
+  acmaHeightFromDiameterGnls = list(chapmanRichards = fit_gnls("Chapman-Richards GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) *(1 - exp(b1*DBH))^b2, acma2016, start = acmaHeightFromDiameter$chapmanRichards$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50))) # corSymm viable but dropped
+  acmaHeightFromDiameterGnls$chapmanRichardsBal = fit_gnls("Chapman-Richards BA+L GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^(b2 + b2p * isPlantation), acma2016, start = acmaHeightFromDiameter$chapmanRichardsBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-4, tolerance = 1E-3, maxIter = 250, nlsMaxIter = 50)) #  # corSymm viable but dropped, step halving at nlsTol = 0.001, maxiter at default msTol and tolerance
+  acmaHeightFromDiameterGnls$sharmaParton = fit_gnls("Sharma-Parton GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^(b1 + b1p * isPlantation)*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = acmaHeightFromDiameter$sharmaParton$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.002)) # foreign NaN-inf with plot correlation, step halving at nlsTol = 0.001
+  acmaHeightFromDiameterGnls$sharmaPartonBal = fit_gnls("Sharma-Parton BA+L GNLS", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = acmaHeightFromDiameter$sharmaPartonBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50)) # corSymm viable but dropped, step halving at nlsTol = 0.01
+  acmaHeightFromDiameterGnls$sharmaZhang = fit_gnls("Sharma-Zhang GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^b4, acma2016, start = acmaHeightFromDiameter$sharmaZhang$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50)) # corSymm viable but dropped, step halving at nlsTol = 0.005
+  acmaHeightFromDiameterGnls$sharmaZhangBal = fit_gnls("Sharma-Zhang BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), acma2016, start = acmaHeightFromDiameter$sharmaZhangBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, msTol = 1E-6, tolerance = 1E-5, maxIter = 250, nlsMaxIter = 50)) # corSymm viable but dropped, step halving at nlsTol = 0.005
+  acmaHeightFromDiameterGnls$weibull = fit_gnls("Weibull GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp(b1*DBH^b2)), acma2016, start = acmaHeightFromDiameter$weibull$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5)) # corSymm viable but dropped
+  acmaHeightFromDiameterGnls$weibullBal = fit_gnls("Weibull BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), acma2016, start = acmaHeightFromDiameter$weibullBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50, msTol = 1E-6, tolerance = 1E-5)) # corSymm viable but dropped
 
   save(acmaHeightFromDiameterGnls, file = "trees/height-diameter/data/ACMA3 GNLS.rdata")
 }
@@ -171,6 +174,80 @@ if (htDiaOptions$includeInvestigatory)
     scale_color_manual(breaks = c("base", "ElliottWeibull", "ElliottBAL", "ElliottBALn", "ElliottBALp", "TemesgenWeibull"), labels = c(bquote("1.37 + b"[0]*"DBH"^{b[1]}), "Weibull", "Weibull with BA+L", "Weibull with BA+L, natural regeneration", "Weibull with BA+L, plantation", "Weibull, Temesgen et al. 2007"), values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
     scale_y_continuous(breaks = seq(0, 100, by = 20)) +
     theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
+}
+
+
+## other height-diameter nlme regressions
+if (acmaOptions$fitHeightMixed)
+{
+  acmaHeightFromDiameterMixed = list(chapmanRichards = fit_nlme("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1r)*(1 - exp(b1*DBH))^(b2 + b2p*isPlantation), acma2016,
+                                                                fixedFormula = a1 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+                                                                start = list(fixed = c(a1 = 27, b1 = -0.03, b2 = 1.1, b2p = -0.2))))
+  acmaHeightFromDiameterMixed$chapmanRichardsBal = fit_nlme("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, 
+                                                            fixedFormula = a1 + a2+ b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+                                                            start = list(fixed = c(a1 = 26, a2 = 0.05, b1 = -0.025, b2 = 1.08, b2p = -0.2)), control = nlmeControl(maxIter = 100, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5), significant = FALSE) # step halving
+  acmaHeightFromDiameterMixed$chapmanRichardsBalPhysio = fit_nlme("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger + a5 * slope) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016physio,
+                                                                  fixedFormula = a1 + a2 + a5 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+                                                                  start = list(fixed = c(a1 = 30, a2 = 0.06, a5 = -0.1, b1 = -0.03, b2 = 1.1, b2p = -0.19)), significant = FALSE)
+  acmaHeightFromDiameterMixed$chapmanRichardsPhysio = fit_nlme("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a1r + a5 * sin(3.14159/180 * slope)) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), acma2016, 
+                                                               fixedFormula = a1 + a5 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+                                                               start = list(fixed = c(a1 = 30, a5 = -7, b1 = -0.034, b2 = 1.1, b2p = -0.28)), significant = FALSE)
+  #acmaHeightFromDiameterMixed$curtis = fit_nlme("Curtis", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r) * DBH / (1 + DBH)^b1, acma2016, 
+  #                                              fixedFormula = a1 + a1p + b1 ~ 1, randomFormula = a1r ~ 1,
+  #                                              start = list(fixed = c(a1 = 1.24, a1p = 0.23, b1 = 0.28)), control = nlmeControl(maxIter = 500)) # >500 job iterations
+  #acmaHeightFromDiameterMixed$hossfeld = fit_nlme("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r) / (1 + b1 * DBH^b2), acma2016, 
+  #                                                fixedFormula = a1 + a1p + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+  #                                                start = list(fixed = c(a1 = 40.1, a1p = 6.30, b1 = 44.9, b2 = -0.97)), control = nlmeControl(maxIter = 500)) # job >500 iterations
+  #acmaHeightFromDiameterMixed$korf = fit_nlme("Korf", TotalHt ~ 1.37 + (a1 + a1r)*exp(b1*DBH^(b2 + b2p * isPlantation)), acma2016, 
+  #                                            fixedFormula = a1 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+  #                                            start = list(fixed = c(a1 = 70, b1 = -5.0, b2 = -0.35, b2p = -0.02)), control = nlmeControl(maxIter = 500)) # >500 iterations
+  #acmaHeightFromDiameterMixed$michaelisMenten = fit_nlme("Michaelis-Menten", TotalHt ~ 1.37 + (a1 + a1r)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), acma2016, 
+  #                                                       fixedFormula = a1 + a2 + a2p + b1 ~ 1, randomFormula = a1r ~ 1,
+  #                                                       start = list(fixed = c(a1 = 41.2, a2 = 49.0, a2p = -9.29, b1 = 0.986)), control = nlmeControl(maxIter = 500)) # job >500 iterations
+  acmaHeightFromDiameterMixed$prodan = fit_nlme("Prodan", TotalHt ~ 1.37 + DBH^2 / (a1 * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3 + a3r), acma2016, 
+                                                fixedFormula = a1 + a2 + a2p + a3 ~ 1, randomFormula = a3r ~ 1,
+                                                start = list(fixed = c(a1 = 0.024, a2 = 1.27, a2p = -0.23, a3 = -0.19)))
+  acmaHeightFromDiameterMixed$power = fit_nlme("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*DBH^b1, acma2016, 
+                                               fixedFormula = a1 + a1p + b1 ~ 1, randomFormula = a1r ~ 1,
+                                               start = list(fixed = c(a1 = 1.11, a1p = 0.21, b1 = 0.75)))
+  acmaHeightFromDiameterMixed$ratkowsky = fit_nlme("Ratkowsky", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*exp(b1/(DBH + b2 + b2p * isPlantation)), acma2016, 
+                                                   fixedFormula = a1 + a1p + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+                                                   start = list(fixed = c(a1 = 31.8, a1p = 3.00, b1 = -25.7, b2 = 6.70, b2p = 0.62)), control = nlmeControl(maxIter = 250))
+  acmaHeightFromDiameterMixed$richardsW = fit_nlme("unified Richards", TotalHt ~ 1.37 + (Ha + Har) * (1 + ((1.37/(Ha + Har))^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), acma2016, 
+                                                   fixedFormula = Ha + d + kU + kUp ~ 1, randomFormula = Har ~ 1,
+                                                   start = list(fixed = c(Ha = 22.8, d = 0.723, kU = 0.025, kUp = 0.0064)))
+  #acmaHeightFromDiameterMixed$sharmaParton = fit_nlme("Sharma-Parton", TotalHt ~ 1.37 + (a1 + a1r)*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^(b4 + b4p * isPlantation), acma2016, 
+  #                                                    fixedFormula = a1 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
+  #                                                    start = list(fixed = c(a1 = 19, b1 = 0.1, b2 = -0.03, b3 = 0.06, b4 = 1.1, b4p = -0.25))) # singularity in backsolve
+  #acmaHeightFromDiameterMixed$sharmaPartonBal = fit_nlme("Sharma-Parton BA+L", TotalHt ~ 1.37 + (a1 + a1r)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), acma2016,
+  #                                                       fixedFormula = a1 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
+  #                                                       start = list(fixed = c(a1 = 15, b1 = 0.14, b2 = -0.03, b3 = -0.06, b4 = 1.1, b4p = -0.24))) # singularity in backsolve
+  #acmaHeightFromDiameterMixed$sharmaPartonBalPhysio = fit_nlme("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1r + a6 * sin(3.14159/180 * aspect))*topHeight^(b1 + b1p * isPlantation) * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, acma2016physio, 
+  #                                                             fixedFormula = a1 + a6 + b1 + b1 + b1p + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                             start = list(fixed = c(a1 = 12, a6 = 0.4, b1 = 0.2, b1p = 0.04, b2 = -0.037, b3 = -0.046, b4 = 1.06)), significant = FALSE) # singularity in backsolve
+  #acmaHeightFromDiameterMixed$sharmaPartonPhysio = fit_nlme("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a1r + a6 * sin(3.14159/180 * aspect))*topHeight^(b1 + b1p * isPlantation) * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, acma2016physio, 
+  #                                                          fixedFormula = a1 + a6 + b1 + b1p + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                          start = list(fixed = c(a1 = 11, a6 = 0.3, b1 = 0.2, b1p = 0.06, b2 = -0.03, b3 = 0, b4 = 1.0)), significant = FALSE) # singularity in backsolve
+  #acmaHeightFromDiameterMixed$sharmaZhang = fit_nlme("Sharma-Zhang", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*standBasalAreaPerHectare^b1*(1 - exp(b2*tph^b3*DBH))^b4, acma2016,
+  #                                                   fixedFormula = a1 + a1p + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                   start = list(fixed = c(a1 = 17, a1p = 2.0, b1 = 0.1, b2 = -0.05, b3 = -0.1, b4 = 1.0))) # singularity in backsolve
+  #acmaHeightFromDiameterMixed$sharmaZhangBal = fit_nlme("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), acma2016, 
+  #                                                      fixedFormula = a1 + a2 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
+  #                                                      start = list(fixed = c(a1 = 22, a2 = 0.05, b1 = 0.05, b2 = -0.02, b3 = 0.04, b4 = 1.09, b4p = -0.2)), significant = FALSE) # singularity in backsolve
+  acmaHeightFromDiameterMixed$sibbesen = fit_nlme("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*DBH^(b1*DBH^b2), acma2016, 
+                                                  fixedFormula = a1 + a1p + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                  start = list(fixed = c(a1 = 0.752, a1p = 0.120, b1 = 1.180, b2 = -0.087)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # job step halving
+  acmaHeightFromDiameterMixed$weibull = fit_nlme("Weibull", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*(1 - exp(b1*DBH^b2)), acma2016, 
+                                                 fixedFormula = a1 + a1p + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                 start = list(fixed = c(a1 = 27, a1p = 3, b1 = -0.033, b2 = 0.94)))
+  acmaHeightFromDiameterMixed$weibullBal = fit_nlme("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), acma2016, 
+                                                    fixedFormula = a1 + a2 + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                    start = list(fixed = c(a1 = 26, a2 = 0.1, b1 = -0.026, b1p = -0.008, b2 = 0.99)), control = nlmeControl(maxIter = 500))
+
+  acmaHeightFromDiameterMixed$gamm = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 7, pc = acma2016gamConstraint), data = acma2016, mixed = TRUE)
+  acmaHeightFromDiameterMixed$gammBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 14, pc = acma2016gamConstraint), data = acma2016, mixed = TRUE)
+  
+  save(file = "trees/height-diameter/data/ACMA3 TotalHt mixed.Rdata", acmaHeightFromDiameterMixed)
 }
 
 
@@ -318,31 +395,46 @@ if (htDiaOptions$includeInvestigatory)
     theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
 }
 
+if (acmaOptions$fitDbhMixed)
+{
+  acmaDiameterFromHeightMixed = list(gamm = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 8, pc = acma2016gamConstraint), data = acma2016, mixed = TRUE))
+  acmaDiameterFromHeightMixed$gammAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 13, pc = acma2016gamConstraint), data = acma2016, mixed = TRUE)
+  acmaDiameterFromHeightMixed$gammRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 7, pc = acma2016gamConstraint), data = acma2016, mixed = TRUE)
+  
+  save(file = "trees/height-diameter/data/ACMA3 DBH mixed.Rdata", acmaDiameterFromHeightMixed)
+}
+
 
 ## collect model parameters
-if (acmaOptions$fitHeight & acmaOptions$fitDbh)
+if (acmaOptions$fitHeight & acmaOptions$fitHeightMixed & acmaOptions$fitDbh & acmaOptions$fitDbhMixed)
 {
   if (exists("acmaHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/ACMA3 TotalHt.Rdata") }
   #if (exists("acmaHeightFromDiameterGnls") == FALSE) { load("trees/height-diameter/data/ACMA3 TotalHt GNLS.Rdata") }
+  if (exists("acmaHeightFromDiameterMixed") == FALSE) { load("trees/height-diameter/data/ACMA3 TotalHt mixed.Rdata") }
   if (exists("acmaDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/ACMA3 DBH.Rdata") }
+  if (exists("acmaDiameterFromHeightMixed") == FALSE) { load("trees/height-diameter/data/ACMA3 DBH mixed.Rdata") }
   
   acmaCoefficients = bind_rows(bind_rows(bind_rows(lapply(acmaHeightFromDiameter, get_list_coefficients)),
+                                         #bind_rows(lapply(acmaHeightFromDiameterGnls, get_model_coefficients)),
                                          bind_rows(lapply(acmaHeightFromDiameterGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
+                                         bind_rows(lapply(acmaHeightFromDiameterMixed, get_list_coefficients, fitSet = "mixed")),
                                          bind_rows(lapply(acmaHeightFromDiameterNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
-                                         #bind_rows(lapply(acmaHeightFromDiameterGnls, get_model_coefficients))) %>%
                                  mutate(responseVariable = "height"),
                                bind_rows(bind_rows(lapply(acmaDiameterFromHeight, get_list_coefficients)),
                                          bind_rows(lapply(acmaDiameterFromHeightGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
+                                         bind_rows(lapply(acmaDiameterFromHeightMixed, get_list_coefficients, fitSet = "mixed")),
                                          bind_rows(lapply(acmaDiameterFromHeightNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
                                  mutate(responseVariable = "DBH")) %>%
     mutate(species = "ACMA3")
   acmaResults = bind_rows(bind_rows(bind_rows(lapply(acmaHeightFromDiameter, get_list_stats)),
                                     bind_rows(lapply(acmaHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
+                                    bind_rows(lapply(acmaHeightFromDiameterMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(acmaHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
                                     #bind_rows(lapply(acmaHeightFromDiameterGnls, get_model_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(acmaDiameterFromHeight, get_list_stats)),
                                     bind_rows(lapply(acmaDiameterFromHeightGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
+                                    bind_rows(lapply(acmaDiameterFromHeightMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(acmaDiameterFromHeightNlrob, get_list_stats, fitSet = "nlrob"))) %>%
                               mutate(responseVariable = "DBH")) %>%
     mutate(species = "ACMA3")

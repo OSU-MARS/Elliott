@@ -11,8 +11,11 @@ umca2016defaultWeight = umca2016 %>% mutate(dbhWeight = pmin(1/DBH, 5),
                                             heightWeight = pmin(1/TotalHt, 5))
 umca2016defaultWeightPhysio = umca2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-umcaOptions = list(fitHeight = FALSE, 
-                   fitDbh = TRUE)
+umcaOptions = tibble(fitHeight = FALSE, 
+                     fitHeightGnls = FALSE,
+                     fitHeightMixed = TRUE,
+                     fitDbh = FALSE,
+                     fitDbhMixed = TRUE)
 
 if (umcaOptions$fitHeight)
 {
@@ -31,7 +34,7 @@ if (umcaOptions$fitHeight)
   umcaHeightFromDiameter$prodan = fit_gsl_nls("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.037, a1p = 0.020, a2 = 1.109, a2p = -0.472, a3 = 1.242)) # a3p not significant
   umcaHeightFromDiameter$power = fit_gsl_nls("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^b1, umca2016, start = list(a1 = 0.821, a1p = 0.206, b1 = 0.810)) # b1p not significant
   umcaHeightFromDiameter$ratkowsky = fit_gsl_nls("Ratkowsky", TotalHt ~ 1.37 + a1*exp((b1 + b1p * isPlantation)/(DBH + b2)), umca2016, start = list(a1 = 21.6, b1 = -16.5, b1p = 1.974, b2 = 3.629)) # a1p, b2p not significant
-  umcaHeightFromDiameter$richardsW = fit_gsl_nls("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016, start = list(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045)) # dp not significant, job step factor with nlrob()
+  umcaHeightFromDiameter$richardsW = fit_gsl_nls("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/(Ha + Hap * isPlantation))^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016, start = list(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045)) # dp not significant, job step factor with nlrob()
   umcaHeightFromDiameter$sharmaParton = fit_gsl_nls("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016, start = list(a1 = 24, b1 = 0, b2 = -0.043, b3 = 0, b4 = 1.05)) # a1p, b1, b1p, b2p, b3, b3p, b4p not significant, job step factor with nlrob()
   umcaHeightFromDiameter$sharmaPartonBal = fit_gsl_nls("Sharma-Parton BA+L", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, umca2016, start = list(a1 = 20, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.1)) # a1p, b1, b1p, b2p, b3, b3p, b4p not significant
   umcaHeightFromDiameter$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, umca2016physio, start = list(a1 = 22, a4 = -0.013, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.05), significant = FALSE) # a4, a5, a6, a7, a8, b1, b1p, b2p, b3, b3p, b4p not significant, job step factor with nlrob()
@@ -55,7 +58,7 @@ if (umcaOptions$fitHeight)
   umcaHeightFromDiameterNlrob$prodan = fit_nlrob("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.037, a1p = 0.020, a2 = 1.109, a2p = -0.472, a3 = 1.242))
   umcaHeightFromDiameterNlrob$power = fit_nlrob("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^b1, umca2016, start = list(a1 = 0.821, a1p = 0.206, b1 = 0.810))
   umcaHeightFromDiameterNlrob$ratkowsky = fit_nlrob("Ratkowsky", TotalHt ~ 1.37 + a1*exp((b1 + b1p * isPlantation)/(DBH + b2)), umca2016, start = list(a1 = 21.6, b1 = -16.5, b1p = 1.974, b2 = 3.629))
-  #umcaHeightFromDiameterNlrob$richardsW = fit_nlrob("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016, start = list(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045))
+  umcaHeightFromDiameterNlrob$richardsW = fit_nlrob("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/(Ha + Hap * isPlantation))^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016, start = list(Ha = 17.0, Hap = -3.3, d = 1.03, kU = 0.032, kUp = 0.013), control = nls.control(maxiter = 100, tol = 1E-4)) # job step factor
   umcaHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016, start = list(a1 = 16, b1 = 0, b2 = -0.045, b3 = 0.085, b4 = 1.2))
   umcaHeightFromDiameterNlrob$sharmaPartonBal = fit_nlrob("Sharma-Parton BA+L", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), umca2016, start = list(a1 = 15, b1 = 0, b2 = -0.06, b3 = 0, b4 = 1.2, b4p = -0.20), control = nls.control(maxiter = 100, tol = 0.001)) # job step factor
   #umcaHeightFromDiameterNlrob$sharmaPartonBalPhysio = fit_nlrob("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), umca2016physio, start = list(a1 = 15, a4 = -0.01, b1 = 0.1, b2 = -0.06, b3 = -0.06, b4 = 1.2, b4p = -0.22))
@@ -80,7 +83,7 @@ if (umcaOptions$fitHeight)
   umcaHeightFromDiameterGslNlsDefault$prodan = fit_gsl_nls("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016defaultWeight, start = list(a1 = 0.037, a1p = 0.020, a2 = 1.109, a2p = -0.472, a3 = 1.242))
   umcaHeightFromDiameterGslNlsDefault$power = fit_gsl_nls("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^b1, umca2016defaultWeight, start = list(a1 = 0.821, a1p = 0.206, b1 = 0.810))
   umcaHeightFromDiameterGslNlsDefault$ratkowsky = fit_gsl_nls("Ratkowsky", TotalHt ~ 1.37 + a1*exp((b1 + b1p * isPlantation)/(DBH + b2)), umca2016defaultWeight, start = list(a1 = 21.6, b1 = -16.5, b1p = 1.974, b2 = 3.629))
-  umcaHeightFromDiameterGslNlsDefault$richardsW = fit_gsl_nls("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016defaultWeight, start = list(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045))
+  umcaHeightFromDiameterGslNlsDefault$richardsW = fit_gsl_nls("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation) * (1 + ((1.37/(Ha + Hap * isPlantation))^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016defaultWeight, start = list(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045))
   umcaHeightFromDiameterGslNlsDefault$sharmaParton = fit_gsl_nls("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016defaultWeight, start = list(a1 = 23, b1 = -0.06, b2 = -0.045, b3 = 0.055, b4 = 1.1))
   umcaHeightFromDiameterGslNlsDefault$sharmaPartonBal = fit_gsl_nls("Sharma-Parton BA+L", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), umca2016defaultWeight, start = list(a1 = 14, b1 = 0.08, b2 = -0.05, b3 = 0.02, b4 = 1.2, b4p = -0.2))
   umcaHeightFromDiameterGslNlsDefault$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), umca2016defaultWeightPhysio, start = list(a1 = 12, a4 = -0.007, b1 = 0.13, b2 = -0.05, b3 = 0, b4 = 1.25, b4p = -0.25))
@@ -127,16 +130,16 @@ if (htDiaOptions$includeInvestigatory)
 
   
 ## Oregon myrtle height-diameter GNLS regressions
-if (htDiaOptions$fitGnls)
+if (umcaOptions$fitHeightGnls)
 {
-  umcaHeightFromDiameterGnls = list(chapmanRichards = fit_gnls("Chapman-Richards GNLS", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = umcaHeightFromDiameter$chapmanRichards$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001), folds = 1, repetitions = 1)) # step halving with plot correlation
-  umcaHeightFromDiameterGnls$chapmanRichardsBal = fit_gnls("Chapman-Richards BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, umca2016, start = umcaHeightFromDiameter$chapmanRichardsBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001), folds = 1, repetitions = 1) # corSymm viable but dropped
-  umcaHeightFromDiameterGnls$sharmaParton = fit_gnls("Sharma-Parton GNLS", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016, start = umcaHeightFromDiameter$sharmaParton$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001), folds = 1, repetitions = 1) # step halving with plot correlation
-  umcaHeightFromDiameterGnls$sharmaPartonBal = fit_gnls("Sharma-Parton BA+L GNLS", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), umca2016, start = umcaHeightFromDiameter$sharmaPartonBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001), folds = 1, repetitions = 1) # step halving with plot correlation
-  umcaHeightFromDiameterGnls$sharmaZhang = fit_gnls("Sharma-Zhang GNLS", TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), umca2016, start = umcaHeightFromDiameter$sharmaZhang$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001), folds = 1, repetitions = 1) # step halving with plot correlation
-  umcaHeightFromDiameterGnls$sharmaZhangBal = fit_gnls("Sharma-Zhang BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^b4, umca2016, start = umcaHeightFromDiameter$sharmaZhangBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.005, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1) # step halving with plot correlation or nlsTol = 0.001
-  umcaHeightFromDiameterGnls$weibull = fit_gnls("Weibull GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = umcaHeightFromDiameter$weibull$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001), folds = 1, repetitions = 1) # step halving with plot correlation
-  umcaHeightFromDiameterGnls$weibullBal = fit_gnls("Weibull BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = umcaHeightFromDiameter$weibullBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50), folds = 1, repetitions = 1) # corSymm viable but dropped
+  umcaHeightFromDiameterGnls = list(chapmanRichards = fit_gnls("Chapman-Richards GNLS", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = umcaHeightFromDiameter$chapmanRichards$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001))) # step halving with plot correlation
+  umcaHeightFromDiameterGnls$chapmanRichardsBal = fit_gnls("Chapman-Richards BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH))^b2, umca2016, start = umcaHeightFromDiameter$chapmanRichardsBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001)) # corSymm viable but dropped
+  umcaHeightFromDiameterGnls$sharmaParton = fit_gnls("Sharma-Parton GNLS", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016, start = umcaHeightFromDiameter$sharmaParton$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001)) # step halving with plot correlation
+  umcaHeightFromDiameterGnls$sharmaPartonBal = fit_gnls("Sharma-Parton BA+L GNLS", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^(b4 + b4p * isPlantation), umca2016, start = umcaHeightFromDiameter$sharmaPartonBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001)) # step halving with plot correlation
+  umcaHeightFromDiameterGnls$sharmaZhang = fit_gnls("Sharma-Zhang GNLS", TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), umca2016, start = umcaHeightFromDiameter$sharmaZhang$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001)) # step halving with plot correlation
+  umcaHeightFromDiameterGnls$sharmaZhangBal = fit_gnls("Sharma-Zhang BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^b4, umca2016, start = umcaHeightFromDiameter$sharmaZhangBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.005, maxIter = 250, nlsMaxIter = 50)) # step halving with plot correlation or nlsTol = 0.001
+  umcaHeightFromDiameterGnls$weibull = fit_gnls("Weibull GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = umcaHeightFromDiameter$weibull$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001)) # step halving with plot correlation
+  umcaHeightFromDiameterGnls$weibullBal = fit_gnls("Weibull BA+L GNLS", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a3*standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^b2)), umca2016, start = umcaHeightFromDiameter$weibullBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50)) # corSymm viable but dropped
 
   save(file = "trees/height-diameter/data/UMCA GNLS.rdata", umcaHeightFromDiameterGnls)
 }
@@ -172,6 +175,80 @@ if (htDiaOptions$includeInvestigatory)
     scale_color_manual(breaks = c("base", "ElliottWeibull", "ElliottBAL", "ElliottBALn", "ElliottBALp", "TemesgenWeibull"), labels = c(bquote("1.37 + b"[0]*"DBH"^{b[1]}), "Weibull", "Weibull with BA+L", "Weibull with BA+L, natural regeneration", "Weibull with BA+L, plantation", "Weibull, Temesgen et al. 2007"), values = c("#ac92eb", "#4dc1e8", "#a0d568", "#ffce54", "#ed5564", "grey65")) +
     scale_y_continuous(breaks = seq(0, 100, by = 20)) +
     theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
+}
+
+
+## other height-diameter nlme regressions
+if (umcaOptions$fitHeightMixed)
+{
+  umcaHeightFromDiameterMixed = list(chapmanRichards = fit_nlme("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1r) * (1 - exp(b1*DBH))^b2, umca2016, 
+                                                                fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                                start = list(fixed = c(a1 = 18, b1 = -0.05, b2 = 1.06))))
+  umcaHeightFromDiameterMixed$chapmanRichardsBal = fit_nlme("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger) * (1 - exp(b1*DBH))^b2, umca2016, 
+                                                            fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                            start = list(fixed = c(a1 = 18, a2 = 0.23, b1 = -0.04, b2 = 1.0)), significant = FALSE)
+  umcaHeightFromDiameterMixed$chapmanRichardsBalPhysio = fit_nlme("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger + a4 * elevation) * (1 - exp(b1*DBH))^b2, umca2016physio,
+                                                                  fixedFormula = a1 + a2 + a4 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                                  start = list(fixed = c(a1 = 20, a2 = 0.03, a4 = -0.012, b1 = -0.05, b2 = 1.06)), significant = FALSE)
+  umcaHeightFromDiameterMixed$chapmanRichardsPhysio = fit_nlme("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a1r + a4 * elevation) * (1 - exp(b1*DBH))^b2, umca2016physio,
+                                                               fixedFormula = a1 + a4 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                               start = list(fixed = c(a1 = 20, a4 = -0.014, b1 = -0.05, b2 = 1.1)), significant = FALSE)
+  umcaHeightFromDiameterMixed$curtis = fit_nlme("Curtis", TotalHt ~ 1.37 + (a1 + a1r) * DBH / (1 + DBH)^b1, umca2016, 
+                                                fixedFormula = a1 + b1 ~ 1, randomFormula = a1r ~ 1,
+                                                start = list(fixed = c(a1 = 1.6, b1 = 0.4)))
+  umcaHeightFromDiameterMixed$hossfeld = fit_nlme("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r) / (1 + (b1 + b1p * isPlantation) *DBH^b2), umca2016, 
+                                                  fixedFormula = a1 + a1p + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                  start = list(fixed = c(a1 = 21.4, a1p = -4.37, b1 = 43.8, b1p = -19.9, b2 = -1.27)))
+  #umcaHeightFromDiameterMixed$korf = fit_nlme("Korf", TotalHt ~ 1.37 + (a1 + a1r)*exp((b1 + b1p * isPlantation)*DBH^b2), umca2016, 
+  #                                            fixedFormula = a1 + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
+  #                                            start = list(fixed = c(a1 = 49.8, b1 = -5.02, b1p = 0.404, b2 = -0.386)), control = nlmeControl(maxIter = 500)) # >500 iterations
+  umcaHeightFromDiameterMixed$michaelisMenten = fit_nlme("Michaelis-Menten", TotalHt ~ 1.37 + (a1 + a1p*isPlantation + a1r)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), umca2016, 
+                                                         fixedFormula = a1 + a1p + a2 + a2p + b1 ~ 1, randomFormula = a1r ~ 1,
+                                                         start = list(fixed = c(a1 = 21.4, a1p = -4.37, a2 = 43.8, a2p = -20.0, b1 = 1.27)))
+  umcaHeightFromDiameterMixed$prodan = fit_nlme("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3 + a3r), umca2016, 
+                                                fixedFormula = a1 + a1p + a2 + a2p + a3 ~ 1, randomFormula = a3r ~ 1,
+                                                start = list(fixed = c(a1 = 0.037, a1p = 0.020, a2 = 1.109, a2p = -0.472, a3 = 1.242)))
+  umcaHeightFromDiameterMixed$power = fit_nlme("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*DBH^b1, umca2016,
+                                               fixedFormula = a1 + a1p + b1 ~ 1, randomFormula = a1r ~ 1,
+                                               start = list(fixed = c(a1 = 0.821, a1p = 0.206, b1 = 0.810)))
+  umcaHeightFromDiameterMixed$ratkowsky = fit_nlme("Ratkowsky", TotalHt ~ 1.37 + (a1 + a1r)*exp((b1 + b1p * isPlantation)/(DBH + b2)), umca2016,
+                                                   fixedFormula = a1 + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                   start = list(fixed = c(a1 = 21.6, b1 = -16.5, b1p = 1.974, b2 = 3.629)))
+  umcaHeightFromDiameterMixed$richardsW = fit_nlme("unified Richards", TotalHt ~ 1.37 + (Ha + Hap * isPlantation + Har) * (1 + ((1.37/(Ha + Hap * isPlantation + Har))^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), umca2016,
+                                                   fixedFormula = Ha + Hap + d + kU + kUp ~ 1, randomFormula = Har ~ 1,
+                                                   start = list(fixed = c(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045)), control = nlmeControl(maxIter = 100, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5)) # job step halving
+  #umcaHeightFromDiameterMixed$sharmaParton = fit_nlme("Sharma-Parton", TotalHt ~ 1.37 + (a1 + a1r)*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016,
+  #                                                    fixedFormula = a1 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                    start = list(fixed = c(a1 = 24, b1 = 0, b2 = -0.043, b3 = 0, b4 = 1.05))) # singularity in backsolve
+  #umcaHeightFromDiameterMixed$sharmaPartonBal = fit_nlme("Sharma-Parton BA+L", TotalHt ~ 1.37 + (a1 + a1r)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, umca2016,
+  #                                                       fixedFormula = a1 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                       start = list(fixed = c(a1 = 20, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.1))) # singularity in backsolve
+  #umcaHeightFromDiameterMixed$sharmaPartonBalPhysio = fit_nlme("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1r + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, umca2016physio,
+  #                                                             fixedFormula = a1 + a4 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                             start = list(fixed = c(a1 = 22, a4 = -0.013, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.05)), significant = FALSE) # singularity in backsolve
+  #umcaHeightFromDiameterMixed$sharmaPartonPhysio = fit_nlme("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a1r + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^(b4 + b4p * isPlantation), umca2016physio, 
+  #                                                          fixedFormula = a1 + a4 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
+  #                                                          start = list(fixed = c(a1 = 13, a4 = -0.01, b1 = 0.08, b2 = -0.05, b3 = 0.0, b4 = 1.2, b4p = -0.23))) # singularity in backsolve
+  #umcaHeightFromDiameterMixed$sharmaZhang = fit_nlme("Sharma-Zhang", TotalHt ~ 1.37 + (a1 + a1r)*standBasalAreaPerHectare^b1*(1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), umca2016, 
+  #                                                   fixedFormula = a1 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
+  #                                                   start = list(fixed = c(a1 = 13, b1 = 0.1, b2 = -0.06, b3 = 0.125, b4 = 1.1, b4p = -0.2))) # singularity in backsolve
+  #umcaHeightFromDiameterMixed$sharmaZhangBal = fit_nlme("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^b4, umca2016, 
+  #                                                      fixedFormula = a1 + a2 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
+  #                                                      start = list(fixed = c(a1 = 17, a2 = 0.04, b1 = 0, b2 = -0.03, b3 = 0.07, b4 = 1.05)), significant = FALSE) # singularity in backsolve
+  #umcaHeightFromDiameterMixed$sibbesen = fit_nlme("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, 
+  #                                                fixedFormula = a1 + a1p + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+  #                                                start = list(fixed = c(a1 = 0.3, a1p = 0.1, b1 = 2.0, b2 = -0.16, b2p = -0.03)), control = nlmeControl(maxIter = 100, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5)) # job step factor, job singularity in backsolve
+  umcaHeightFromDiameterMixed$weibull = fit_nlme("Weibull", TotalHt ~ 1.37 + (a1 + a1r)*(1 - exp(b1*DBH^b2)), umca2016, 
+                                                 fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                 start = list(fixed = c(a1 = 18, b1 = -0.04, b2 = 1.0)))
+  umcaHeightFromDiameterMixed$weibullBal = fit_nlme("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger) * (1 - exp(b1*DBH^b2)), umca2016, 
+                                                    fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                    start = list(fixed = c(a1 = 18, a2 = 0.03, b1 = -0.044, b2 = 1.0)), significant = FALSE)
+
+  umcaHeightFromDiameterMixed$gamm = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 11, pc = umca2016gamConstraint), data = umca2016, mixed = TRUE)
+  umcaHeightFromDiameterMixed$gammBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 15, pc = umca2016gamConstraint), data = umca2016, mixed = TRUE)
+  
+  save(file = "trees/height-diameter/data/UMCA TotalHt mixed.Rdata", umcaHeightFromDiameterMixed)
 }
 
   
@@ -313,38 +390,54 @@ if (htDiaOptions$includeInvestigatory)
     theme(legend.justification = c(1, 0), legend.position = c(0.99, 0.03))
 }
 
+if (umcaOptions$fitDbhMixed)
+{
+  umcaDiameterFromHeightMixed = list(gamm = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = umca2016gamConstraint), data = umca2016, mixed = TRUE))
+  umcaDiameterFromHeightMixed$gammAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 14, pc = umca2016gamConstraint), data = umca2016, mixed = TRUE)
+  umcaDiameterFromHeightMixed$gammRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 10, pc = umca2016gamConstraint), data = umca2016, mixed = TRUE)
+  
+  save(file = "trees/height-diameter/data/UMCA DBH mixed.Rdata", umcaDiameterFromHeightMixed)
+}
+
 
 ## collect model parameters
-if (umcaOptions$fitHeight & umcaOptions$fitDbh)
+if (umcaOptions$fitHeight & umcaOptions$fitHeightMixed & umcaOptions$fitDbh & umcaOptions$fitDbhMixed)
 {
   if (exists("umcaHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/UMCA TotalHt.Rdata") }
   #if (exists("umcaHeightFromDiameterGnls") == FALSE) { load("trees/height-diameter/data/UMCA TotalHt GNLS.Rdata") }
+  if (exists("umcaHeightFromDiameterMixed") == FALSE) { load("trees/height-diameter/data/UMCA TotalHt mixed.Rdata") }
   if (exists("umcaDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/UMCA DBH.Rdata") }
+  if (exists("umcaDiameterFromHeightMixed") == FALSE) { load("trees/height-diameter/data/UMCA DBH mixed.Rdata") }
   
   umcaCoefficients = bind_rows(bind_rows(bind_rows(lapply(umcaHeightFromDiameter, get_list_coefficients)),
+                                         #bind_rows(lapply(umcaHeightFromDiameterGnls, get_model_coefficients)),
                                          bind_rows(lapply(umcaHeightFromDiameterGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
+                                         bind_rows(lapply(umcaHeightFromDiameterMixed, get_list_coefficients, fitSet = "mixed")),
                                          bind_rows(lapply(umcaHeightFromDiameterNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
-                                         #bind_rows(lapply(umcaHeightFromDiameterGnls, get_model_coefficients))) %>%
                                  mutate(responseVariable = "height"),
                                bind_rows(bind_rows(lapply(umcaDiameterFromHeight, get_list_coefficients)),
                                          bind_rows(lapply(umcaDiameterFromHeightGslNlsDefault, get_list_coefficients, fitSet = "gsl_nls", fixedWeight = -1)),
+                                         bind_rows(lapply(umcaDiameterFromHeightMixed, get_list_coefficients, fitSet = "mixed")),
                                          bind_rows(lapply(umcaDiameterFromHeightNlrob, get_list_coefficients, fitSet = "nlrob"))) %>%
                                  mutate(responseVariable = "DBH")) %>%
     mutate(species = "UMCA")
   umcaResults = bind_rows(bind_rows(bind_rows(lapply(umcaHeightFromDiameter, get_list_stats)),
                                     bind_rows(lapply(umcaHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
+                                    bind_rows(lapply(umcaHeightFromDiameterMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(umcaHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
                                     #bind_rows(lapply(umcaHeightFromDiameterGnls, get_model_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(umcaDiameterFromHeight, get_list_stats)),
-                                    get_model_stats(name = "modified Sharma-Parton", fitting = "gsl_nls"),
+                                    create_model_stats(name = "modified Sharma-Parton", fitSet = "primary", fittingMethod = "gsl_nls"),
                                     bind_rows(lapply(umcaDiameterFromHeightGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
+                                    bind_rows(lapply(umcaDiameterFromHeightMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(umcaDiameterFromHeightNlrob, get_list_stats, fitSet = "nlrob"))) %>%
                             mutate(responseVariable = "DBH")) %>%
     mutate(species = "UMCA")
 
   save(file = "trees/height-diameter/data/UMCA results.Rdata", umcaCoefficients, umcaResults)
 }
+
 
 ## preferred forms identified (results.R, Figure 7)
 # Oregon myrtle     Prodan            Chapman-Richards physio        REML GAM                Chapman-Richards physio

@@ -22,7 +22,7 @@ setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")
-plan(multisession, workers = 4)
+plan(multisession, workers = 5)
 
 source("trees/height-diameter/PSME.R")
 warnings()

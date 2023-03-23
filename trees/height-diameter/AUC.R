@@ -29,8 +29,8 @@ with_progress({
     observations = bind_rows(samples$fit) %>% 
       pivot_longer(cols = c("distribution1", "distribution2"), names_to = "distribution", values_to = "sample") %>%
       mutate(distribution = as.factor(if_else(distribution == "distribution1", 0, 1)))
-    # AUC estimates the probability a sample from distribution 2 (distribution = 1) is greater than one from 
-    # distribution 1 (distribution = 0)
+    # WeightedROC() and WeightedAUC() estimate the probability a sample from distribution 2 (label = 1) is greater 
+    # than one from distribution 1 (label = 0)
     # The error rates of binary classification---deciding which distribution a sample is from based on its value---
     # are empirical probability measures. See, for example, https://mlu-explain.github.io/roc-auc/.
     roc = WeightedROC(guess = observations$sample, label = observations$distribution)

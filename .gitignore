@@ -52,6 +52,7 @@ Woodstock/
 # QGIS and RStudio user data
 Elliott.qgz
 Elliott.Rproj
+**/*.jpg
 **/*.png
 **/*.rdata
 .Rhistory
