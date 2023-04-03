@@ -15,7 +15,7 @@ if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other re
 # form regression summary
 heightDiameterCoefficients = bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients,
                                        umcaCoefficients, thplCoefficients, otherCoefficients) %>% 
-  relocate(responseVariable, species, fitSet, fixedWeight, name, fitting, repetition, fold, a0, a1, a1p, a2, a2p, a3, a3p, a4, a4p, a5, a6, a7, a8, a9, a9p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
+  relocate(responseVariable, species, fitSet, fixedWeight, name, fitting, repetition, fold, a0, a1, a1p, a2, a2p, a3, a3p, a4, a4p, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
 #write_xlsx(heightDiameterCoefficients, "trees/height-diameter/HtDia coefficients.xlsx")
 
 heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,

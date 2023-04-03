@@ -10,7 +10,7 @@ setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")
-plan(multisession, workers = 1) # THPL n is small enough single core is faster
+plan(multisession, workers = 2) # THPL n is small enough single core is likely faster but https://github.com/HenrikBengtsson/globals/issues/87
 
 source("trees/height-diameter/THPL.R")
 warnings()

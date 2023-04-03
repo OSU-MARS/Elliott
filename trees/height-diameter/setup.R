@@ -1,5 +1,6 @@
 #.libPaths(.libPaths()[2])
-#install.packages(c("dplyr", "furrr", "ggplot2", "gslnls", "magrittr", "mgcv", "nlme", "nls.multstart", "nlstools", "patchwork", "progressr", "readxl", "robustbase", "rsample", "scico", "sn", "stringr", "tibble", "tidyr", "writexl"))
+#install.packages(c("dplyr", "furrr", "ggplot2", "gslnls", "magrittr", "mgcv", "nls.multstart", "nlstools", "patchwork", "progressr", "readxl", "robustbase", "rsample", "scico", "sn", "stringr", "tibble", "tidyr", "writexl"))
+#remotes::install_github("bbolker/nlme")
 library(dplyr)
 library(forcats)
 library(furrr)
@@ -88,7 +89,7 @@ create_model_stats = function(name, fittingMethod, fitSet = NA_character_, fixed
 # This is a little fragile from a code maintenance perspective as the weights need to be column in data for R to flow them
 # correctly but the risk appears low and worth the simplification elsewhere.
 # future_map() sometimes works but doesn't reliably pass smooth parameters like constraints
-fit_gam = function(name, formula, data, start, control = gsl_nls_control(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, bam = FALSE, mixed = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
+fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, bam = FALSE, mixed = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
 {
   if (bam & mixed)
   {
@@ -103,6 +104,9 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using ", if_else(mixed, "gamm", if_else(bam, "bam", "gam")), "()..."))
   progressBar = progressor(steps = folds * repetitions)
   
+  # work around https://github.com/HenrikBengtsson/globals/issues/87 to enable GAM fitting using future_map()
+  localFormula = local({ gamConstraint = constraint
+                         formula(paste(deparse(formula), collapse = " ")) })
   if (responseVariable == "TotalHt()")
   {
     if (bam)
@@ -110,7 +114,7 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       if ((folds == 1) & (repetitions == 1))
       {
         startFit = Sys.time()
-        allFit = bam(formula = formula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+        allFit = bam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -120,7 +124,7 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       fitFunction = function(dataFold)
       {
         startFit = Sys.time()
-        model = bam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+        model = bam(formula = localFormula, data = analysis(dataFold), method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -134,9 +138,9 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
         startFit = Sys.time()
         if (mixed)
         {
-          allFit = gamm(formula = formula, data = data, method = "REML", weights = dbhWeight, verbosePQL = FALSE)
+          allFit = gamm(formula = localFormula, data = data, method = "REML", weights = dbhWeight, verbosePQL = FALSE)
         } else {
-          allFit = gam(formula = formula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+          allFit = gam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         }
         allFitStats = get_height_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
@@ -149,9 +153,9 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
         startFit = Sys.time()
         if (mixed)
         {
-          model = gamm(formula = formula, data = analysis(dataFold), method = "REML", weights = dbhWeight, verbosePQL = FALSE)
+          model = gamm(formula = localFormula, data = analysis(dataFold), method = "REML", weights = dbhWeight, verbosePQL = FALSE)
         } else {
-          model = gam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+          model = gam(formula = localFormula, data = analysis(dataFold), method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         }
         modelStats = get_height_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
@@ -172,7 +176,7 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       if ((folds == 1) & (repetitions == 1))
       {
         startFit = Sys.time()
-        allFit = bam(formula = formula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+        allFit = bam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -182,7 +186,7 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
       fitFunction = function(dataFold)
       {
         startFit = Sys.time()
-        model = bam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+        model = bam(formula = localFormula, data = analysis(dataFold), method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -196,9 +200,9 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
         startFit = Sys.time()
         if (mixed)
         {
-          allFit = gamm(formula = formula, data = data, method = "REML", weights = heightWeight, verbosePQL = FALSE)
+          allFit = gamm(formula = localFormula, data = data, method = "REML", weights = heightWeight, verbosePQL = FALSE)
         } else {
-          allFit = gam(formula = formula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+          allFit = gam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         }
         allFitStats = get_dbh_stats(name = name, model = allFit, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
@@ -211,9 +215,9 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
         startFit = Sys.time()
         if (mixed)
         {
-          model = gamm(formula = formula, data = analysis(dataFold), method = "REML", weights = heightWeight, verbosePQL = FALSE)
+          model = gamm(formula = localFormula, data = analysis(dataFold), method = "REML", weights = heightWeight, verbosePQL = FALSE)
         } else {
-          model = gam(formula = formula, data = analysis(dataFold), method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+          model = gam(formula = localFormula, data = analysis(dataFold), method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         }
         modelStats = get_dbh_stats(name = name, model = model, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
@@ -224,7 +228,7 @@ fit_gam = function(name, formula, data, start, control = gsl_nls_control(), fold
   }
   
   # use map() instead of future_map() since GAM constraints fail to flow with future_map()
-  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = map(splits, fitFunction))
+  splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction, .options = furrr_options(seed = TRUE)))
   return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
 
@@ -613,7 +617,7 @@ get_dbh_stats = function(name, model, validationData, validationWeights = valida
     nObservations = nobs(model)
     # see notes in get_height_stats()
     nlmeValidationData = left_join(bind_cols(validationData, bind_rows(model$coefficients$fixed)),
-                                   bind_cols(StandID = as.numeric(rownames(model$coefficients$random$StandID)), model$coefficients$random$StandID),
+                                   bind_cols(StandID = factor(as.numeric(rownames(model$coefficients$random$StandID)), levels = levels(validationData$StandID)), model$coefficients$random$StandID),
                                    by = "StandID")
     randomEffectsColumns = setdiff(names(nlmeValidationData), names(validationData))
     nlmeValidationData %<>% replace_na(setNames(as.list(rep(0, length(randomEffectsColumns))), randomEffectsColumns))
@@ -641,13 +645,17 @@ get_dbh_stats = function(name, model, validationData, validationWeights = valida
     filter(n >= 10) %>% # exclude height classes with few trees from bias consideration due to uncertainty
     mutate(minPlantationNaturalRegenN = if_else(minPlantationNaturalRegenN >= 10, minPlantationNaturalRegenN, as.integer(0))) # similarly, exclude plantation effects with limited n
   
-  effectiveDegreesOfFreedom = length(coef(model)) + 1 # for linear and nonlinear regressions assume one degree of freedom per model parameter
-  if (is.null(model$edf) == FALSE)
+  if (is(model, "gam"))
   {
     effectiveDegreesOfFreedom = sum(model$edf) + 1 # for GAMs use indicated effective degrees of freedom
+  } else if(is(model, "gamm")) {
+    effectiveDegreesOfFreedom = sum(model$gam$edf) + 1 # gamm effective degrees of freedom include random effect degrees of freedom from s(bs = "re) but not from random = list()
+  } else {
+    effectiveDegreesOfFreedom = length(coef(model)) + 1 # for linear and nonlinear regressions assume one degree of freedom per model parameter, coef(nlme()) is data.frame with length() returning the number of columns
   }
-
-  standardDeviation = sqrt(1/df.residual(model) * sum(validationWeights* valiationResiduals^2)) / sqrt(validationWeights)
+  residualDegreesOfFreedom = nObservations - effectiveDegreesOfFreedom # gamm() and nlme() don't implement df.residual(model), simplest just to calculate it here
+  
+  standardDeviation = sqrt(1/residualDegreesOfFreedom * sum(validationWeights* valiationResiduals^2)) / sqrt(validationWeights)
   logLikelihoodGaussian = sum(dnorm(valiationResiduals, sd = standardDeviation, log = TRUE))
   logLikelihoodT = sum(dt(valiationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
   
@@ -734,7 +742,7 @@ get_height_stats = function(name, model, validationData, validationWeights = val
   dbhClassSize = 10 # cm
   if (is(model, "gamm"))
   {
-    nObservations = nobs(model$lme)
+    nObservations = nobs(model$lme) # no gamm.nobs() implementation
     predictedHeight = predict(model$gam, validationData) 
   } else if (is(model, "nlme"))
   {
@@ -744,7 +752,7 @@ get_height_stats = function(name, model, validationData, validationWeights = val
     # To avoid predicting NAs, this code path bypasses predict.nlme() and replaceds unknown random effects with zeros.
     # It relies on the do.call() workaround to be able to retrieve the model formula to evaluate.
     nlmeValidationData = left_join(bind_cols(validationData, bind_rows(model$coefficients$fixed)),
-                                   bind_cols(StandID = as.numeric(rownames(model$coefficients$random$StandID)), model$coefficients$random$StandID),
+                                   bind_cols(StandID = factor(as.numeric(rownames(model$coefficients$random$StandID)), levels = levels(validationData$StandID)), model$coefficients$random$StandID),
                                    by = "StandID")
     randomEffectsColumns = setdiff(names(nlmeValidationData), names(validationData))
     nlmeValidationData %<>% replace_na(setNames(as.list(rep(0, length(randomEffectsColumns))), randomEffectsColumns))
@@ -772,12 +780,18 @@ get_height_stats = function(name, model, validationData, validationWeights = val
     filter(n >= 10) %>% # exclude diameter classes with few trees from bias consideration due to uncertainty
     mutate(minPlantationNaturalRegenN = if_else(minPlantationNaturalRegenN >= 10, minPlantationNaturalRegenN, as.integer(0))) # similarly, exclude plantation effects with limited n
 
-  effectiveDegreesOfFreedom = length(coef(model)) + 1
-  if (is.null(model$edf) == FALSE)
+  if (is(model, "gam"))
   {
     effectiveDegreesOfFreedom = sum(model$edf) + 1
+  } else if (is(model, "gamm"))
+  {
+    effectiveDegreesOfFreedom = sum(model$gam$edf) + 1
+  } else {
+    effectiveDegreesOfFreedom = length(coef(model)) + 1
   }
-  standardDeviation = sqrt(1/df.residual(model) * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
+  residualDegreesOfFreedom = nObservations - effectiveDegreesOfFreedom
+  
+  standardDeviation = sqrt(1/residualDegreesOfFreedom * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
   logLikelihoodGaussian = sum(dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
   logLikelihoodT = sum(dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
   
@@ -911,9 +925,19 @@ get_model_coefficients = function(model)
   {
     if (is(model, "gamm"))
     {
-      coefficients = bind_cols(tibble(!!!coefficients(model$gam)), tibble(!!!coefficients(model$lme)))
-    } else if (is.null(model$m) == FALSE)
-    {
+      # s(StandID, bs = "re")
+      coefficients = bind_cols(!!!coefficients(model$gam),
+                               !!!set_names(model$lme$coefficients$fixed, names(model$lme$coefficients$fixed)),
+                               model$lme$coefficients$random$g,
+                               model$lme$coefficients$random$g.0,
+                               model$lme$coefficients$random$g.1)
+      # random = list(StandID = ~1) is used
+      #coefficients = bind_cols(!!!coefficients(model$gam),
+      #                         !!!set_names(model$lme$coefficients$fixed, names(model$lme$coefficients$fixed)),
+      #                         model$lme$coefficients$random$g,
+      #                         model$lme$coefficients$random$g.0,
+      #                         !!!set_names(model$lme$coefficients$random$StandID, str_replace(rownames(model$lme$coefficients$random$StandID), "1/1/", "XrStand")))
+    } else if (is.null(model$m) == FALSE) {
       coefficients = tibble(!!!set_names(model$m$getPars(), names(model$m$getPars())))
     } else {
       stop(paste("Regression for", model$name, "lacks a both a coefficients property and an m property."))
@@ -930,7 +954,7 @@ get_model_coefficients = function(model)
     }
   }
 
-  if (is(model, "gam") | is(model, "gamm"))
+  if ("(Intercept)" %in% names(coefficients))
   {
     coefficients %<>% rename(a0 = `(Intercept)`)
   }
@@ -1247,7 +1271,8 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
                       plots2016 %>% select(STAND, PltInteger, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(PlotID = PltInteger),
                       by = c("PlotID")) %>%
   rename(standAge2020 = Age_2020) %>%
-  mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
+  mutate(StandID = as.factor(StandID),
+         speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
          BHAge = na_if(BHAge, 0), # years
          DBH = na_if(2.54 * DBH, 0), # inches to cm
          Dia1 = na_if(2.54 * Dia1, 0),
@@ -1279,7 +1304,9 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          measureTreeTphContribution = if_else((TreeCount == 0) | is.na(DBH), NA_real_, SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)), # trees per hectare, with trees not on measure plots NAed out
          meanTreesPerBafPlot = sum(TreeCount * (SamplingMethod == "BAF")) / plotsInStand,
          meanTreesPerBafMeasurePlot = sum(TreeCount * (SamplingMethod == "BAF") * (PlotType == "IP")) / measurePlotsInStand,
-         tph = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * sum(isLive * measureTreeTphContribution, na.rm = TRUE) / measurePlotsInStand) %>% # stand's total trees per hectare
+         tph = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * sum(isLive * measureTreeTphContribution, na.rm = TRUE) / measurePlotsInStand, # stand's total trees per hectare
+         qmd = sqrt(standBasalAreaPerHectare / (pi/4 * 0.01^2 * tph)), # quadratic mean diameter, cm
+         relativeDiameter = DBH / qmd) %>%
   arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
   mutate(topHeightTph = pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), # TPH total towards the H100 definition of top height, trees not measured for TotalHt are skipped
          topHeightWeight = pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
@@ -1349,6 +1376,13 @@ if (htDiaOptions$includeInvestigatory)
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
     theme(legend.justification = c(1, 1), legend.position = c(1, 1)) +
   ggplot() +
+    geom_segment(aes(x = 5.4, y = 0, xend = 5.4, yend = 3000), color = "grey80", linewidth = 0.3, linetype = "longdash") +
+    geom_histogram(aes(x = relativeDiameter, fill = speciesGroup), trees2016, binwidth = 0.05, na.rm = TRUE) +
+    coord_cartesian(xlim = c(0, 7.5), ylim = c(0, 2500)) +
+    labs(x = "relative diameter", y = "trees measured", fill = NULL) +
+    scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
+    theme(legend.position = "none") +
+  ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 125, yend = 125), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_point(aes(x = standBasalAreaPerHectare, y = basalAreaLarger, color = speciesGroup), trees2016, alpha = 0.2, shape = 16) +
     guides(color = "none") +
@@ -1361,7 +1395,27 @@ if (htDiaOptions$includeInvestigatory)
     labs(x = bquote("approximate stand basal area, m"^2*" ha"^-1), y = bquote("basal area taller, m"^2*" ha"^-1), color = NULL) +
     scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
   plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(design = c("12\n13"))
+  plot_layout(nrow = 2, ncol = 2)
+  
+  # correlations among predictors
+  predictorLabels = c("DBH", "height", "height:diameter", "stand age", "BA", "BAL", "ABA", "AAT", "elevation", "slope", "sin(aspect)", "cos(aspect)", "TSI", "H100", "RelHt", "QMD", "RelDbh")
+  predictorLevels = c("DBH", "TotalHt", "heightDiameterRatio", "standAge", "standBasalAreaPerHectare", "basalAreaLarger", "standBasalAreaApprox", "tallerApproxBasalArea", "elevation", "slope", "sinAspect", "cosAspect", "topographicShelterIndex", "topHeight", "relativeHeight", "qmd", "relativeDiameter")
+  predictorCorrelation = trees2016 %>% filter(isLiveUnbroken) %>% 
+    mutate(heightDiameterRatio = TotalHt / (0.01 * DBH), sinAspect = sin(pi/180 * aspect), cosAspect = cos(pi/180 * aspect)) %>% 
+    group_by(speciesGroup) %>%
+    group_modify(~as_tibble(cor(as.matrix(.x %>% mutate(standAge = standAge2020 - 4) %>% select(DBH, TotalHt, heightDiameterRatio, standAge, standBasalAreaPerHectare, basalAreaLarger, standBasalAreaApprox, tallerApproxBasalArea, elevation, slope, sinAspect, cosAspect, topographicShelterIndex, topHeight, relativeHeight, qmd, relativeDiameter) %>% drop_na())), rownames = "predictor1")) %>%
+    pivot_longer(-c(speciesGroup, predictor1), names_to = "predictor2", values_to = "correlation") %>%
+    mutate(predictor1 = factor(predictor1, labels = predictorLabels, levels = predictorLevels),
+           predictor2 = factor(predictor2, labels = predictorLabels, levels = predictorLevels))
+  ggplot(predictorCorrelation %>% filter(predictor1 %in% c("DBH", "height", "height:diameter"))) +
+    geom_raster(aes(x = predictor1, y = predictor2, fill = correlation)) +
+    labs(x = NULL, y = NULL, fill = "correlation") +
+    facet_wrap(vars(speciesGroup), nrow = 2, ncol = 4) +
+    scale_fill_scico(palette = "vik", limits = c(-1, 1)) +
+    scale_y_discrete(limits = rev) +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"))
+  print(predictorCorrelation %>% filter(predictor1 %in% c("DBH", "height", "height:diameter"), predictor2 %in% c("DBH", "height", "height:diameter")) %>%
+    pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
   
   # export tree data joined with plots in R for joining in GIS
   plotTreeProperties = trees2016 %>% group_by(PlotID) %>%
@@ -1609,7 +1663,7 @@ if (htDiaOptions$includeInvestigatory)
     labs(x = "other species TPH", y = "stands") +
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(nrow = 2, ncol = 4, guides = "collect")
-  # alternate TPH brakdown
+  # alternate TPH breakdown
   ggplot(speciesCountByStand2016) +
     geom_point(aes(x = totalTph - psmeTph, y = psmeTph, color = primarySpecies, shape = secondarySpecies), alpha = 0.5) +
     guides(color = guide_legend(order = 1), shape = guide_legend(order = 2)) +
