@@ -1,5 +1,5 @@
 #.libPaths(.libPaths()[2])
-#install.packages(c("dplyr", "furrr", "ggplot2", "gslnls", "magrittr", "mgcv", "nls.multstart", "nlstools", "patchwork", "progressr", "readxl", "robustbase", "rsample", "scico", "sn", "stringr", "tibble", "tidyr", "writexl"))
+#install.packages(c("dplyr", "forcats", "furrr", "ggplot2", "gslnls", "magrittr", "mgcv", "nlstools", "patchwork", "progressr", "ragg", "readxl", "remotes", "robustbase", "rsample", "scales", "scico", "sn", "stringr", "tibble", "tidyr", "WeightedROC", "writexl"))
 #remotes::install_github("bbolker/nlme")
 library(dplyr)
 library(forcats)
@@ -9,7 +9,6 @@ library(gslnls)
 library(magrittr)
 library(mgcv)
 library(nlme)
-library(nls.multstart)
 library(nlstools)
 library(patchwork)
 library(progressr)
@@ -1731,6 +1730,11 @@ if (htDiaOptions$includeInvestigatory)
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
   # ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10, width = 22, units = "cm", dpi = 200)
+  
+  # tree counts
+  trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%
+    summarize(areaInventoried = sum(standArea), treeCountInventoried = sum(standArea * tph)) %>%
+    mutate(totalArea = 33397.1, totalTrees = treeCountInventoried * totalArea / areaInventoried)
 }
 
 

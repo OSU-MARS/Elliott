@@ -1,11 +1,8 @@
 # runtimes with 10x10 cross validation and eight workers (AMD Zen 3, 4.6 GHz)
-# height primary: 7.2 hours, mostly GAMs
-#                 14.5 hours GAM ABA+T RelHt physio
-#        nlrob() + gsl_nls(): ~35 minutes
-# DBH primary: 16.5 hours (mostly GAM ABA+T physio and RelHt physio)
-#     nlrob() + gsl_nls(): ~21 minutes
+# height: primary fixed effects 7.2 hours, nlrob() + gsl_nls() ~16 minutes, mixed: 15 hours
+# DBH: 13.3 hours fixed, mixed ~30 hours?
 #
-# GAM fitting time with 10x10 cross validation: approximately O(k²)
+# single worker GAM fitting time with 10x10 cross validation: approximately O(k²)
 #    k     fit time, minutes
 #    15      1.2
 #    26      4.4
@@ -22,7 +19,7 @@ setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")
-plan(multisession, workers = 8)
+plan(multisession, workers = 8) # increase worker count for mixed effects DBH GAMs
 
 source("trees/height-diameter/PSME.R")
 warnings()

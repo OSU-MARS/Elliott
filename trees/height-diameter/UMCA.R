@@ -232,9 +232,9 @@ if (umcaOptions$fitHeightMixed)
   umcaHeightFromDiameterMixed$hossfeld = fit_nlme("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r) / (1 + (b1 + b1p * isPlantation) *DBH^b2), umca2016, 
                                                   fixedFormula = a1 + a1p + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
                                                   start = list(fixed = c(a1 = 21.4, a1p = -4.37, b1 = 43.8, b1p = -19.9, b2 = -1.27)))
-  #umcaHeightFromDiameterMixed$korf = fit_nlme("Korf", TotalHt ~ 1.37 + (a1 + a1r)*exp((b1 + b1p * isPlantation)*DBH^b2), umca2016, 
-  #                                            fixedFormula = a1 + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
-  #                                            start = list(fixed = c(a1 = 49.8, b1 = -5.02, b1p = 0.404, b2 = -0.386)), control = nlmeControl(maxIter = 500)) # >500 iterations
+  umcaHeightFromDiameterMixed$korf = fit_nlme("Korf", TotalHt ~ 1.37 + (a1 + a1r)*exp((b1 + b1p * isPlantation)*DBH^b2), umca2016, 
+                                              fixedFormula = a1 + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
+                                              start = list(fixed = c(a1 = 49.8, b1 = -5.02, b1p = 0.404, b2 = -0.386)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # max iterations
   umcaHeightFromDiameterMixed$michaelisMenten = fit_nlme("Michaelis-Menten", TotalHt ~ 1.37 + (a1 + a1p*isPlantation + a1r)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), umca2016, 
                                                          fixedFormula = a1 + a1p + a2 + a2p + b1 ~ 1, randomFormula = a1r ~ 1,
                                                          start = list(fixed = c(a1 = 21.4, a1p = -4.37, a2 = 43.8, a2p = -20.0, b1 = 1.27)))
@@ -252,25 +252,25 @@ if (umcaOptions$fitHeightMixed)
                                                    start = list(fixed = c(Ha = 14.6, Hap = -4.146, d = 2.198, kU = 0.048, kUp = 0.045)), control = nlmeControl(maxIter = 100, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5)) # job step halving
   #umcaHeightFromDiameterMixed$sharmaParton = fit_nlme("Sharma-Parton", TotalHt ~ 1.37 + (a1 + a1r)*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016,
   #                                                    fixedFormula = a1 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
-  #                                                    start = list(fixed = c(a1 = 24, b1 = 0, b2 = -0.043, b3 = 0, b4 = 1.05))) # singularity in backsolve
+  #                                                    start = list(fixed = c(a1 = 24, b1 = 0, b2 = -0.043, b3 = 0, b4 = 1.05)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # singularity in backsolve
   #umcaHeightFromDiameterMixed$sharmaPartonBal = fit_nlme("Sharma-Parton BA+L", TotalHt ~ 1.37 + (a1 + a1r)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, umca2016,
   #                                                       fixedFormula = a1 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
-  #                                                       start = list(fixed = c(a1 = 20, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.1))) # singularity in backsolve
+  #                                                       start = list(fixed = c(a1 = 20, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.1)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # singularity in backsolve
   #umcaHeightFromDiameterMixed$sharmaPartonBalPhysio = fit_nlme("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1r + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, umca2016physio,
   #                                                             fixedFormula = a1 + a4 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
-  #                                                             start = list(fixed = c(a1 = 22, a4 = -0.013, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.05)), significant = FALSE) # singularity in backsolve
+  #                                                             start = list(fixed = c(a1 = 22, a4 = -0.013, b1 = 0, b2 = -0.05, b3 = 0, b4 = 1.05)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # singularity in backsolve
   #umcaHeightFromDiameterMixed$sharmaPartonPhysio = fit_nlme("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a1r + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^(b4 + b4p * isPlantation), umca2016physio, 
   #                                                          fixedFormula = a1 + a4 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
-  #                                                          start = list(fixed = c(a1 = 13, a4 = -0.01, b1 = 0.08, b2 = -0.05, b3 = 0.0, b4 = 1.2, b4p = -0.23))) # singularity in backsolve
+  #                                                          start = list(fixed = c(a1 = 13, a4 = -0.01, b1 = 0.08, b2 = -0.05, b3 = 0.0, b4 = 1.2, b4p = -0.23)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 1E-3)) # singularity in backsolve
   #umcaHeightFromDiameterMixed$sharmaZhang = fit_nlme("Sharma-Zhang", TotalHt ~ 1.37 + (a1 + a1r)*standBasalAreaPerHectare^b1*(1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), umca2016, 
   #                                                   fixedFormula = a1 + b1 + b2 + b3 + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
-  #                                                   start = list(fixed = c(a1 = 13, b1 = 0.1, b2 = -0.06, b3 = 0.125, b4 = 1.1, b4p = -0.2))) # singularity in backsolve
+  #                                                   start = list(fixed = c(a1 = 13, b1 = 0.1, b2 = -0.06, b3 = 0.125, b4 = 1.1, b4p = -0.2)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # singularity in backsolve
   #umcaHeightFromDiameterMixed$sharmaZhangBal = fit_nlme("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a1r + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^b4, umca2016, 
   #                                                      fixedFormula = a1 + a2 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1,
-  #                                                      start = list(fixed = c(a1 = 17, a2 = 0.04, b1 = 0, b2 = -0.03, b3 = 0.07, b4 = 1.05)), significant = FALSE) # singularity in backsolve
+  #                                                      start = list(fixed = c(a1 = 17, a2 = 0.04, b1 = 0, b2 = -0.03, b3 = 0.07, b4 = 1.05)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 1E-3), significant = FALSE) # singularity in backsolve
   #umcaHeightFromDiameterMixed$sibbesen = fit_nlme("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, 
   #                                                fixedFormula = a1 + a1p + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
-  #                                                start = list(fixed = c(a1 = 0.3, a1p = 0.1, b1 = 2.0, b2 = -0.16, b2p = -0.03)), control = nlmeControl(maxIter = 100, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5)) # job step factor, job singularity in backsolve
+  #                                                start = list(fixed = c(a1 = 0.3, a1p = 0.1, b1 = 2.0, b2 = -0.16, b2p = -0.03)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # job step factor, job singularity in backsolve
   umcaHeightFromDiameterMixed$weibull = fit_nlme("Weibull", TotalHt ~ 1.37 + (a1 + a1r)*(1 - exp(b1*DBH^b2)), umca2016, 
                                                  fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
                                                  start = list(fixed = c(a1 = 18, b1 = -0.04, b2 = 1.0)))
@@ -436,7 +436,110 @@ if (htDiaOptions$includeInvestigatory)
 
 if (umcaOptions$fitDbhMixed)
 {
-  umcaDiameterFromHeightMixed = list(gamm = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9) + s(StandID, bs = "re"), data = umca2016, mixed = TRUE))
+  #umcaDiameterFromHeightMixed = list(chapmanReplace = fit_nlme("Chapman-Richards replace", DBH ~ (a1 + a1r)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, 
+  #                                                             fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                             start = list(fixed = c(a1 = 20, b1 = 0.1, b2 = 0.6))), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 1E-3)) # singularity in backsolve
+  #umcaDiameterFromHeightMixed = list(chapmanReplaceAbat = fit_nlme("Chapman-Richards replace ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016,
+  #                                                                 fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                                 start = list(fixed = c(a1 = 18, a2 = 0, b1 = 0.1, b2 = 0.6)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE)) # singularity in backsolve
+  #umcaDiameterFromHeightMixed$chapmanReplaceBal = fit_nlme("Chapman-Richards replace BA+L", DBH ~ (a1 + a1r + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, 
+  #                                                         fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                         start = list(fixed = c(a1 = 1, a2 = -0.005, b1 = 1.9, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
+  #umcaDiameterFromHeightMixed$chapmanReplaceBalRelHt = fit_nlme("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a1r + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, 
+  #                                                              fixedFormula = a1 + a2 + a3 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                              start = list(fixed = c(a1 = 0.4, a2 = -0.012, a3 = 0.01, a9 = -0.3, b1 = 2.7, b2 = 0.23)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 1E-3)) # step halving
+  #umcaDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, 
+  #                                                           fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                           start = list(fixed = c(a1 = 0.9, a9 = -0.6, b1 = 1.8, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001))
+  umcaDiameterFromHeightMixed = list(chapmanRichards = fit_nlme("Chapman-Richards inverse", DBH ~ (a1 + a1r)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, 
+                                                                fixedFormula = a1 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1, 
+                                                                start = list(fixed = c(a1 = 34, b1 = -0.047, b2 = 1.43, b2p = -0.15)), control = nlmeControl(maxiter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001))) # step halving
+  #umcaDiameterFromHeightMixed$chapmanRichardsAbat = fit_nlme("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, 
+  #                                                           fixedFormula = a1 + a2 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1, 
+  #                                                           start = list(fixed = c(a1 = 35, a2 = -3, b1 = -0.01, b2 = 0.9, b2p = -0.2)), control = nlmeControl(maxiter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # singularity in backsolve
+  #umcaDiameterFromHeightMixed$chapmanRichardsPhysio = fit_nlme("Chapman-Richards inverse physio", DBH ~ (a1 + a1r + a5 * sin(3.14159/180 * slope))*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), umca2016physio, 
+  #                                                             fixedFormula = a1 + a5 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                             start = list(fixed = c(a1 = 58.6, a5 = -52.7, b1 = -0.0637, b2 = 0.9)), control = nlmeControl(maxiter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # singular precision, singularity in backsolve
+  #umcaDiameterFromHeightMixed$chapmanRichardsRelHt = fit_nlme("Chapman-Richards inverse RelHt", DBH ~ (a1 + a1r + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), umca2016, 
+  #                                                            fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                            start = list(fixed = c(a1 = 35, a9 = -15, b1 = -0.03, b2 = 0.9)), control = nlmeControl(maxiter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
+  #umcaDiameterFromHeightMixed$michaelisMentenReplace = fit_nlme("Michaelis-Menten replace", DBH ~ (a1 + a1r) * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), umca2016, 
+  #                                                              fixedFormula = a1 + a2 + b1 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                              start = list(fixed = c(a1 = 100, a2 = 100, b1 = 1)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving, job step halving
+  umcaDiameterFromHeightMixed$naslund = fit_nlme("Näslund inverse", DBH ~ (a1 + a1r + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + a2*sqrt(TotalHt - 1.37)), umca2016,
+                                                 fixedFormula = a1 + a1p + a2 ~ 1, randomFormula = a1r ~ 1, 
+                                                 start = list(fixed = c(a1 = 3.9, a1p = -1.0, a2 = -0.14)))
+  umcaDiameterFromHeightMixed$power = fit_nlme("power", DBH ~ (a1 + a1r + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, 
+                                               fixedFormula = a1 + a1p + b1 + b1p ~ 1, randomFormula = a1r ~ 1, 
+                                               start = list(fixed = c(a1 = 3.28, a1p = -2.10, b1 = 0.917, b1p = 0.332)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # job max iterations
+  #umcaDiameterFromHeightMixed$powerAbat = fit_nlme("power ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016,
+  #                                                 fixedFormula = a1 + a2 + b1 + b1p ~ 1, randomFormula = a1r ~ 1, 
+  #                                                 start = list(fixed = c(a1 = 2.71, a2 = 0.00054, b1 = 0.975, b1p = -0.0696)))
+  #umcaDiameterFromHeightMixed$powerPhysio = fit_nlme("power physio", DBH ~ (a1 + a1r + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^b1, umca2016physio, 
+  #                                                   fixedFormula = a1 + a1p + a4 + a5 + a6 + a8 + b1 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                   start = list(fixed = c(a1 = 4, a1p = -0.95, a4 = 0.002, a5 = -2.8, a6 = 0.4, a8 = 0.05, b1 = 0.94)))
+  #umcaDiameterFromHeightMixed$powerRelHt = fit_nlme("power RelHt", DBH ~ (a1 + a1r + a1p * isPlantation + (a9 + a9p * isPlantation) * relativeHeight)*(TotalHt - 1.37)^b1, umca2016, 
+  #                                                  fixedFormula = a1 + a1p + a9 + a9p + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                  start = list(fixed = c(a1 = 2.37, a1p = -0.887, a9 = -1.508, a9p = 1513, b1 = 1.123)))
+  umcaDiameterFromHeightMixed$ruark = fit_nlme("Ruark", DBH ~ (a1 + a1r)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016, 
+                                               fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                               start = list(fixed = c(a1 = 3.95, b1 = 0.45, b2 = 0.06)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # job step halving
+  umcaDiameterFromHeightMixed$ruarkAbat = fit_nlme("Ruark ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016, 
+                                                   fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                   start = list(fixed = c(a1 = 4.0, a2 = 0, b1 = 0.55, b2 = 0.045)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # job max iterations
+  umcaDiameterFromHeightMixed$ruarkAbatPhysio = fit_nlme("Ruark ABA+T physio", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, 
+                                                         fixedFormula = a1 + a2 + a5 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                         start = list(fixed = c(a1 = 5.5, a2 = 0, a5 = -1, b1 = 0.5, b2 = 0.04)), control = nlmeControl(maxIter = 250), significant = FALSE)
+  umcaDiameterFromHeightMixed$ruarkAbatPhysioRelHt = fit_nlme("Ruark ABA+T RelHt physio", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, 
+                                                              fixedFormula = a1 + a2 + a5 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                              start = list(fixed = c(a1 = 5.5, a2 = -0.02, a5 = 0, a9 = -4, b1 = 0.6, b2 = 0.07)), control = nlmeControl(maxIter = 500))
+  umcaDiameterFromHeightMixed$ruarkAbatRelHt = fit_nlme("Ruark ABA+T RelHt", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016, 
+                                                        fixedFormula = a1 + a2 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                        start = list(fixed = c(a1 = 4.7, a2 = -0.03, a9 = -5.5, b1 = 0.55, b2 = 0.079)))
+  umcaDiameterFromHeightMixed$ruarkPhysio = fit_nlme("Ruark physio", DBH ~ (a1 + a1r + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, 
+                                                     fixedFormula = a1 + a5 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                     start = list(fixed = c(a1 = 6, a5 = 0, b1 = 0.6, b2 = 0.04)), control = nlmeControl(maxIter = 500, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5), significant = FALSE) # job max iterations
+  umcaDiameterFromHeightMixed$ruarkRelHt = fit_nlme("Ruark RelHt", DBH ~ (a1 + a1r + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), umca2016, 
+                                                    fixedFormula = a1 + a9 + b1 + b1p + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
+                                                    start = list(fixed = c(a1 = 4, a9 = -2, b1 = 0.7, b1p = -0.5, b2 = 0.04, b2p = 0.08)), control = nlmeControl(maxIter = 500, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4), significant = FALSE) # job max iterations
+  umcaDiameterFromHeightMixed$ruarkRelHtPhysio = fit_nlme("Ruark RelHt physio", DBH ~ (a1 + a1r + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, 
+                                                          fixedFormula = a1 + a5 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                          start = list(fixed = c(a1 = 6, a5 = -2, a9 = -2, b1 = 0.6, b2 = 0.05)))
+  #umcaDiameterFromHeightMixed$schnute = fit_nlme("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/((Ha + Har)^b1 - 1.3^b1)), umca2016, 
+  #                                               fixedFormula = a1 + a2 + b1 + Ha ~ 1, randomFormula = Har ~ 1, 
+  #                                               start = list(fixed = c(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 177)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # singularity in backsolve
+  #umcaDiameterFromHeightMixed$sharmaParton = fit_nlme("modified Sharma-Parton", DBH ~ (a1 + a1r)*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, umca2016, 
+  #                                                    fixedFormula = a1 + b1 + b2 + b3 + b4 ~ 1, randomFormula = a1r ~ 1, 
+  #                                                    start = list(fixed = c(a1 = 0.2, b1 = 1.05, b2 = 0.000003, b3 = 0.9, b4 = -0.3)), control = nlmeControl(maxiter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving, false convergence
+  umcaDiameterFromHeightMixed$sibbesenReplace = fit_nlme("Sibbesen replace", DBH ~ (a1 + a1r)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, 
+                                                         fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                         start = list(fixed = c(a1 = 0.43, b1 = 2.45, b2 = -0.15)))
+  umcaDiameterFromHeightMixed$sibbesenReplaceAbat = fit_nlme("Sibbesen replace ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, 
+                                                             fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                             start = list(fixed = c(a1 = 4.0, a2 = 0, b1 = 0.5, b2 = 0.18)), significant = FALSE)
+  umcaDiameterFromHeightMixed$sibbesenReplaceAbatPhysio = fit_nlme("Sibbesen replace ABA+T physio", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea + a4 * elevation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, 
+                                                                   fixedFormula = a1 + a2 + a4 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                                   start = list(fixed = c(a1 = 4.1, a2 = 0, a4 = 0, b1 = 0.49, b2 = 0.19)), control = nlmeControl(tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5), significant = FALSE) # step halving
+  umcaDiameterFromHeightMixed$sibbesenReplaceAbatPhysioRelHt = fit_nlme("Sibbesen replace ABA+T RelHt physio", DBH ~ (a1 + a1r + a3 * standBasalAreaApprox + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, 
+                                                                        fixedFormula = a1 + a3 + a4 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                                        start = list(fixed = c(a1 = 5.0, a3 = -0.014, a4 = -0.001, a9 = -5.3, b1 = 0.53, b2 = 0.22)))
+  umcaDiameterFromHeightMixed$sibbesenReplaceAbatRelHt = fit_nlme("Sibbesen replace ABA+T RelHt", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, 
+                                                                  fixedFormula = a1 + a2 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                                  start = list(fixed = c(a1 = 4.4, a2 = -0.025, a9 = -5, b1 = 0.53, b2 = 0.22)))
+  umcaDiameterFromHeightMixed$sibbesenReplacePhysio = fit_nlme("Sibbesen replace physio", DBH ~ (a1 + a1r + a4 * elevation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, 
+                                                               fixedFormula = a1 + a4 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                               start = list(fixed = c(a1 = 3.3, a4 = 0.002, b1 = 0.48, b2 = 0.21)), significant = FALSE)
+  umcaDiameterFromHeightMixed$sibbesenReplaceRelHt = fit_nlme("Sibbesen replace RelHt", DBH ~ (a1 + a1r + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, 
+                                                              fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                              start = list(fixed = c(a1 = 0.496, a9 = -0.188, b1 = 2.31, b2 = -0.12)), significant = FALSE)
+  umcaDiameterFromHeightMixed$sibbesenReplaceRelHtPhysio = fit_nlme("Sibbesen replace RelHt physio", DBH ~ (a1 + a1r + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, 
+                                                                    fixedFormula = a1 + a4 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+                                                                    start = list(fixed = c(a1 = 4.2, a4 = 0, a9 = -3, b1 = 0.53, b2 = 0.20)))
+  #umcaDiameterFromHeightMixed$weibull = fit_nlme("Weibull inverse", DBH ~ ((a1 + a1r)*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, umca2016, 
+  #                                               fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
+  #                                               start = list(fixed = c(a1 = -200, b1 = 0.027, b2 = 0.8)), control = nlmeControl(maxiter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # singularity in backsolve
+  
+  umcaDiameterFromHeightMixed$gamm = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9) + s(StandID, bs = "re"), data = umca2016, mixed = TRUE)
   umcaDiameterFromHeightMixed$gammAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 14) + s(StandID, bs = "re"), data = umca2016, mixed = TRUE)
   umcaDiameterFromHeightMixed$gammRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 10) + s(StandID, bs = "re"), data = umca2016, mixed = TRUE)
   
@@ -489,17 +592,13 @@ if (umcaOptions$fitHeight & umcaOptions$fitHeightMixed & umcaOptions$fitDbh & um
 #                   REML GAM                                         parabolic
 if (umcaOptions$fitHeight & umcaOptions$fitDbh)
 {
-  umcaHeightFromDiameterPreferred = list(chapmanRichardsBalPhysio = fit_nlrob("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation + a7 * cos(3.14159/180 * aspect)) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 19, a2 = 0.05, a4 = -0.015, a7 = -1.2, b1 = -0.05, b2 = 1.15, b2p = -0.19), folds = 1, repetitions = 1))
-  umcaHeightFromDiameterPreferred$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a4 * elevation + a6 * cos(3.14159/180 * aspect)) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016physio, start = list(a1 = 20, a4 = -0.014, a6 = -1.2, b1 = -0.05, b2 = 1.15, b2p = -0.16), folds = 1, repetitions = 1)
-  umcaHeightFromDiameterPreferred$gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 11, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint, folds = 1, repetitions = 1)
-  umcaHeightFromDiameterPreferred$prodan = fit_nlrob("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.040, a1p = 0.017, a2 = 1.01, a2p = -0.40, a3 = 1.46), folds = 1, repetitions = 1)
-  umcaHeightFromDiameterPreferred$sibbesen = fit_nlrob("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.30, a1p = 0.13, b1 = 1.96, b2 = -0.165, b2p = -0.034), folds = 1, repetitions = 1)
+  umcaHeightFromDiameterPreferred = list(prodan = fit_gsl_nls("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.040, a1p = 0.017, a2 = 1.01, a2p = -0.40, a3 = 1.46), folds = 1, repetitions = 1))
+  umcaHeightFromDiameterPreferred$sharmaPartonPhysio = fit_gsl_nls("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^(b4 + b4p * isPlantation), umca2016physio, start = list(a1 = 13, a4 = -0.01, b1 = 0.08, b2 = -0.05, b3 = 0.0, b4 = 1.2, b4p = -0.23), folds = 1, repetitions = 1)
+  umcaHeightFromDiameterPreferred$sibbesen = fit_gsl_nls("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.30, a1p = 0.13, b1 = 1.96, b2 = -0.165, b2p = -0.034), folds = 1, repetitions = 1)
   
-  umcaDiameterFromHeightPreferred = list(chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), umca2016physio, start = list(a1 = 60, a5 = -52.7, b1 = -0.01, b2 = 0.9), control = gsl_nls_control(maxiter = 250, xtol = 1E-5), folds = 1, repetitions = 1))
-  umcaDiameterFromHeightPreferred$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint, folds = 1, repetitions = 1)
-  umcaDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), umca2016, significant = FALSE, folds = 1, repetitions = 1)
-  umcaDiameterFromHeightPreferred$power = fit_nlrob("power", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), umca2016, start = list(a1 = 3.28, a1p = -2.10, b1 = 0.917, b1p = 0.332), folds = 1, repetitions = 1)
-  umcaDiameterFromHeightPreferred$sibbesenReplacePhysio = fit_nlrob("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a4 * elevation + a5 * sin(3.14159/180 * slope) + a6 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 1.53, a1p = -0.38, a4 = 0.001, a5 = -1.15, a6 = 0.14, a8 = 0.02, b1 = 1.95, b2 = -0.15), folds = 1, repetitions = 1)
+  umcaDiameterFromHeightPreferred = list(gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint, folds = 1, repetitions = 1))
+  umcaDiameterFromHeightPreferred$gamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, slope, sin(3.14159/180 * aspect), relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 57, pc = gamConstraint), data = umca2016physio, constraint = umca2016gamConstraint, folds = 1, repetitions = 1)
+  umcaDiameterFromHeightPreferred$linear = fit_lm("linear", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), umca2016, folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/UMCA preferred models.Rdata", umcaHeightFromDiameterPreferred, umcaDiameterFromHeightPreferred)
 }

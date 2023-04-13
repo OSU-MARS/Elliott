@@ -1,6 +1,6 @@
 # ~TBD minutes with 10x10 cross validation and one worker(AMD Zen 3, 4.6 GHz)
-#   ~12 minutes fixed effect heights (gsl_nls, nlrob, gsl_nls default weight)
-#   ~33 minutes mixed effect heights
+#  height: ~12 minutes fixed effect (gsl_nls, nlrob, gsl_nls default weight), ~33 minutes mixed effect
+#  DBH: ~18 minutes fixed, ~TBD mixed effect
 setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)

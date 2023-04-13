@@ -1,5 +1,6 @@
-# ~26 minutes with 10x10 cross validation and one worker(AMD Zen 3, 4.6 GHz)
-# ~8 minutes height fits, ~TBD minutes DBH fits
+# ~TBD minutes with 10x10 cross validation and two workers (AMD Zen 3, 4.6 GHz)
+#  height: ~TBD fixed, ~20 minutes mixed
+#  DBH: ~14 minutes fixed, ~30 mixed
 setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
