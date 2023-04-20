@@ -8,6 +8,7 @@
 #
 # change working directory back to project root
 # RStudio defaults background jobs' working directory to the directory the .R file is in.
+jobStartTime = Sys.time()
 setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
@@ -16,3 +17,4 @@ plan(multisession, workers = 2) # THPL n is small enough single core is likely f
 
 source("trees/height-diameter/THPL.R")
 warnings()
+print(paste0("THPL job ran for ", format(Sys.time() - jobStartTime), "."))

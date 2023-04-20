@@ -1,26 +1,26 @@
 # load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
 
 ## Douglas-fir height-diameter regression form sweep
-psme2016 = trees2016 %>% filter(Species == "DF", isLiveUnbroken, TotalHt > 0) %>% # live Douglas-firs measured for height
-  mutate(dbhWeight = pmin(1/(1.84*DBH^(0.71 - 0.048*isPlantation)), 5), # residuals.R::varianceForHeight$psme
-         heightWeight = pmin(1/((5.74 - 5.73*isPlantation)*(TotalHt - 1.37)^(1.08 + 1.79*isPlantation)), 5)) # residuals.R:varianceForDbh$psme
+psme2016 = trees2016 %>% filter(Species == "DF", isLiveUnbroken, is.na(TotalHt) == FALSE) %>% # live Douglas-firs measured for height
+  mutate(dbhWeight = pmin(TreeCount/(1.62*DBH^(0.73 - 0.041*isPlantation)), 5*TreeCount), # residuals.R::varianceForHeight$psme
+         heightWeight = pmin(TreeCount/((5.661 - 5.655*isPlantation)*(TotalHt - 1.37)^(1.09 + 1.79*isPlantation)), 5*TreeCount)) # residuals.R:varianceForDbh$psme
 psme2016physio = psme2016 %>% filter(is.na(elevation) == FALSE)
 psme2016gamConstraint = c(DBH = -1.2240/0.6566, TotalHt = 1.37, standBasalAreaPerHectare = median(psme2016$standBasalAreaPerHectare), basalAreaLarger = median(psme2016$basalAreaLarger), standBasalAreaApprox = median(psme2016$standBasalAreaApprox), tallerApproxBasalArea = median(psme2016$tallerApproxBasalArea), elevation = median(psme2016physio$elevation), slope = median(psme2016physio$slope), aspect = median(psme2016physio$aspect), topographicShelterIndex = median(psme2016physio$topographicShelterIndex), relativeHeight = median(psme2016$relativeHeight), relativeDiameter = median(psme2016$relativeDiameter)) # point constraint for mgcv::s() where response variable is ignored, zero crossing of height from DBH from fit_lm(TotalHt ~ DBH, data = psme2016 %>% filter(DBH < 6))
 
-psme2016defaultWeight = psme2016 %>% mutate(dbhWeight = pmin(1/DBH, 5),
-                                            heightWeight = pmin(1/TotalHt, 5))
+psme2016defaultWeight = psme2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*TreeCount),
+                                            heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 psme2016defaultWeightPhysio = psme2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
 psmeOptions = tibble(fitHeightPrimary = FALSE,
-                     fitHeightNlrobAndFixedWeight = FALSE,
+                     fitHeightNlrobAndFixedWeight = fitHeightPrimary,
                      fitHeightGnls = FALSE,
-                     fitHeightMixed = TRUE,
+                     fitHeightMixed = fitHeightPrimary,
                      fitDbhPrimary = FALSE,
-                     fitDbhGslNlsAndGams = FALSE,
-                     fitDbhNlrobAndFixedWeight = FALSE,
-                     fitDbhMixed = TRUE,
-                     fitAbatRelHtPhysioGam = FALSE,
-                     fitPhysioGams = FALSE)
+                     fitDbhGslNlsAndGams = fitDbhPrimary,
+                     fitDbhNlrobAndFixedWeight = fitDbhPrimary,
+                     fitDbhMixed = fitDbhPrimary,
+                     fitAbatRelHtPhysioGam = TRUE,
+                     fitPhysioGams = TRUE)
 
 if (psmeOptions$fitHeightPrimary)
 {
@@ -120,8 +120,8 @@ if (psmeOptions$fitHeightNlrobAndFixedWeight)
   psmeHeightFromDiameterNlrob$sibbesen = fit_nlrob("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 0.0006, a1p = 0.17, b1 = 5.8, b1p = -3.5, b2 = -0.182, b2p = 0.050))
   psmeHeightFromDiameterNlrob$weibull = fit_nlrob("Weibull", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), psme2016, start = list(a1 = 64, a1p = -20, b1 = -0.005, b1p = -0.006, b2 = 1.3, b2p = -0.1))
   psmeHeightFromDiameterNlrob$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), psme2016, start = list(a1 = 58, a2 = 0, a2p = 0.72, a3 = 0.08, b1 = -0.005, b1p = -0.004, b2 = 1.3, b2p = -0.22), control = nls.control(maxiter = 100, tol = 1E-4)) # a2, a3 debatably significant, job step factor
-  #psmeHeightFromDiameterNlrob$chapmanRichardsBalRelHt = fit_nlrob("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 8.8, a1p = 11.0, a2 = 0.18, a2p = 0.42, a3 = -0.0083, a3p = 0.070, a4 = 54.0, a4p = -28.3, b1 = -0.021, b2 = 0.65, b2p = 0.37))
-  #psmeHeightFromDiameterNlrob$weibullBalRelHt = fit_nlrob("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare + a4 * pmin(relativeHeight, 1.5)) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), psme2016, start = list(a1 = 3.0, a2 = 0.22, a2p = 0.95, a3 = 0.12, a4 = 53, b1 = -0.06, b1p = 0.04, b2 = 0.75, b2p = 0.1)) # a3p, a4p not significant
+  #psmeHeightFromDiameterNlrob$chapmanRichardsBalRelHt = fit_nlrob("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a9 + a9p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 8.8, a1p = 11.0, a2 = 0.18, a2p = 0.42, a3 = -0.0083, a3p = 0.070, a9 = 54.0, a9p = -28.3, b1 = -0.021, b2 = 0.65, b2p = 0.37))
+  #psmeHeightFromDiameterNlrob$weibullBalRelHt = fit_nlrob("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * pmin(relativeHeight, 1.5)) * (1 - exp((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation))), psme2016, start = list(a1 = 3.0, a2 = 0.22, a2p = 0.95, a3 = 0.12, a9 = 53, b1 = -0.06, b1p = 0.04, b2 = 0.75, b2p = 0.1)) # a3p, a9p not significant
   #lapply(psmeHeightFromDiameter$sharmaPartonBalPhysio$fit, confint_nlrob)
   
   # gsl_nls(weights = default)
@@ -358,7 +358,7 @@ if (psmeOptions$fitHeightMixed)
                                                   start = list(fixed = c(a1 = 75.4, a1p = -11.4, b1 = 462, b1p = -322, b2 = -1.54, b2p = 0.28)))
   psmeHeightFromDiameterMixed$korf = fit_nlme("Korf", TotalHt ~ 1.37 + (a1 + a1r)*exp(b1*DBH^(b2 + b2p * isPlantation)), psme2016, 
                                               fixedFormula = a1 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
-                                              start = list(fixed = c(a1 = 320, b1 = -7.83, b2 = -0.323, b2p = 0.084)), control = nlmeControl(maxIter = 500, tolerance = 1E-4, pnlsTol = 0.001, msTol = 1E-4)) # max iterations
+                                              start = list(fixed = c(a1 = 320, b1 = -7.83, b2 = -0.323, b2p = 0.084)), control = nlmeControl(maxIter = 500, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4)) # max iterations, job max iterations
   psmeHeightFromDiameterMixed$michaelisMenten = fit_nlme("Michaelis-Menten", TotalHt ~ 1.37 + (a1 + a1p*isPlantation + a1r)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), psme2016, 
                                                          fixedFormula = a1 + a1p + a2 + a2p + b1 ~ 1, randomFormula = a1r ~ 1,
                                                          start = list(fixed = c(a1 = 87.8, a1p = -26.9, a2 = 236, a2p = -92.0, b1 = 1.30)))
@@ -391,7 +391,7 @@ if (psmeOptions$fitHeightMixed)
   #                                                   start = list(fixed = c(a1 = 54, a1p = -33, b1 = 0.05, b1p = 0.2, b2 = -0.03, b2p = -0.05, b3 = -0.04, b3p = -0.16, b4 = 1.56, b4p = -0.48)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving, singularity in backsolve
   psmeHeightFromDiameterMixed$sharmaZhangBal = fit_nlme("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a1r + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^(b4 + b4p * isPlantation), psme2016, 
                                                         fixedFormula = a1 + a2 + a2p + a3 + a3p + b1 + b2 + b3 + b3p + b4 + b4p ~ 1, randomFormula = a1r ~ 1,
-                                                        start = list(fixed = c(a1 = 60, a2 = 0.026, a2p = 0.65, a3 = 0.09, a3p = -0.07, b1 = 0.05, b2 = -0.017, b3 = 0.02, b3p = -0.05, b4 = 1.35, b4p = -0.22)), control = nlmeControl(maxIter = 500, tolerance = 1E-4, pnlsTol = 0.001, msTol = 1E-5)) # job max iterations
+                                                        start = list(fixed = c(a1 = 60, a2 = 0.026, a2p = 0.65, a3 = 0.09, a3p = -0.07, b1 = 0.05, b2 = -0.017, b3 = 0.02, b3p = -0.05, b4 = 1.35, b4p = -0.22)), control = nlmeControl(maxIter = 500, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4)) # job max iterations
   #psmeHeightFromDiameterMixed$sibbesen = fit_nlme("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r)*DBH^((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), psme2016, 
   #                                                fixedFormula = a1 + a1p + b1 + b1p + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
   #                                                start = list(fixed = c(a1 = 0.0006, a1p = 0.17, b1 = 5.8, b1p = -3.5, b2 = -0.182, b2p = 0.050)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
@@ -591,16 +591,16 @@ if (psmeOptions$fitDbhNlrobAndFixedWeight)
   #psmeDiameterFromHeightNlrob$chapmanReplaceBal = fit_nlrob("Chapman-Richards replace BA+L", DBH ~ (a1 + a1p * isPlantation + a2 * basalAreaLarger) * (exp((b1 + b1p * isPlantation)*(TotalHt - 1.37)) - 1)^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 135, a1p = -37.5, a2 = -1.2, b1 = 0.010, b1p = 0.002, b2 = 0.756, b2p = 0.064), control = nls.control(maxiter = 500)) # a2p not significant, fit_nlrob() step factor with a3 * BA
   #psmeDiameterFromHeightNlrob$chapmanReplaceBalRelHt = fit_nlrob("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a1p * isPlantation + a2 * basalAreaLarger + (a9 + a9p * isPlantation) * relativeHeight) * (exp((b1 + b1p * isPlantation)*(TotalHt - 1.37)) - 1)^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 139, a1p = -38.5, a2 = -1.2, a9 = -5.5, a9p = 0.22, b1 = 0.012, b1p = 0.003, b2 = 0.796, b2p = 0.066), control = nls.control(maxiter = 500)) # a2p not significant, fit_nlrob() step factor with a9 * BA
   psmeDiameterFromHeightNlrob$chapmanReplaceRelHt = fit_nlrob("Chapman-Richards replace RelHt", DBH ~ (a1 + a1p * isPlantation + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)) - 1), psme2016, start = list(a1 = 40, a1p = -9.2, a9 = 5.5, b1 = 0.08, b2 = 0.66, b2p = 0.019)) # a9p not significant
-  psmeDiameterFromHeightNlrob$chapmanRichards = fit_nlrob("Chapman-Richards inverse", DBH ~ (a1 + a1p * isPlantation)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016, start = list(a1 = -110, a1p = 40, b1 = 0.009, b1p = 0.0036, b2 = 0.77)) # b2p not significant
+  psmeDiameterFromHeightNlrob$chapmanRichards = fit_nlrob("Chapman-Richards inverse", DBH ~ (a1 + a1p * isPlantation)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016, start = list(a1 = -110, a1p = 40, b1 = 0.009, b1p = 0.0036, b2 = 0.77), control = nls.control(maxiter = 250)) # b2p not significant
   psmeDiameterFromHeightNlrob$chapmanRichardsAbat = fit_nlrob("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016, start = list(a1 = -160, a1p = 80, a2 = 1.2, a3 = 0.12, b1 = 0.007, b1p = 0.005, b2 = 0.79)) # a2p, a3p, b2p not significant
-  psmeDiameterFromHeightNlrob$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016physio, start = list(a1 = -13, a1p = -45, a8 = 0.05, b1 = 0.0198, b1p = -0.0057, b2 = 0.74), control = nls.control(maxiter = 250)) # a4, a5, a6, a7 not significant
+  psmeDiameterFromHeightNlrob$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*log(1 - pmin(((b1 + b1p * isPlantation)*(TotalHt - 1.37))^b2, 0.9999)), psme2016physio, start = list(a1 = -13, a1p = -45, a8 = 0.05, b1 = 0.0198, b1p = -0.0057, b2 = 0.74), control = nls.control(maxiter = 500)) # a4, a5, a6, a7 not significant
   psmeDiameterFromHeightNlrob$chapmanRichardsRelHt = fit_nlrob("Chapman-Richards inverse RelHt", DBH ~ (a1 + a9 * relativeHeight)*log(1 - pmin((b1*(TotalHt - 1.37))^(b2 + b2p * isPlantation), 0.9999)), psme2016, start = list(a1 = -3.4, a9 = -8.7, b1 = 0.026, b2 = 0.022, b2p = 0.14)) # a1p, b1p not significant
   psmeDiameterFromHeightNlrob$michaelisMentenReplace = fit_nlrob("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^b1 / (a2 + a2p * isPlantation - (TotalHt - 1.37)^b1), psme2016, start = list(a1 = 140, a1p = -55, a2 = 50, a2p = -11, b1 = 0.74))
   psmeDiameterFromHeightNlrob$naslund = fit_nlrob("Näslund inverse", DBH ~ (a1 + a1p * isPlantation) * sqrt(TotalHt - 1.37) / (1 + (a2 + a2p * isPlantation) * sqrt(TotalHt - 1.37)), psme2016, start = list(a1 = 4.95, a1p = -2.05, a2 = -0.085, a2p = -0.03), control = nls.control(maxiter = 250))
   psmeDiameterFromHeightNlrob$power = fit_nlrob("power", DBH ~ (a1 + a1p*isPlantation)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.2, a1p = 1.0, b1 = 1.1, b1p = -0.23))
   #psmeDiameterFromHeightNlrob$powerAbat = fit_nlrob("power ABA+T", DBH ~ (a1 + a1p * isPlantation + (a2 + a2p * isPlantation) * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p*isPlantation), psme2016, start = list(a1 = 1.5, a1p = 0.9, a2 = -0.003, a2p = -0.008, b1 = 1.05, b1p = -0.17))
   #psmeDiameterFromHeightNlrob$powerPhysio = fit_nlrob("power physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation), psme2016physio, start = list(a1 = 1.2, a1p = 1.0, a6 = -0.03, b1 = 1.1, b1p = -0.22))
-  #psmeDiameterFromHeightNlrob$powerRelHt = fit_nlrob("power RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), psme2016, start = list(a1 = 2.2, a9 = 0.6, b1 = 0.89, b1p = -0.09)) # a1p, a4p not significant
+  #psmeDiameterFromHeightNlrob$powerRelHt = fit_nlrob("power RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation), psme2016, start = list(a1 = 2.2, a9 = 0.6, b1 = 0.89, b1p = -0.09)) # a1p, a9p not significant
   psmeDiameterFromHeightNlrob$ruark = fit_nlrob("Ruark", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.42, b1 = 0.82, b1p = -0.08, b2 = 0.0069, b2p = 0.005))
   psmeDiameterFromHeightNlrob$ruarkAbat = fit_nlrob("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.4, a2 = -0.027, b1 = 0.91, b1p = -0.15, b2 = 0.0015, b2p = 0.01))
   psmeDiameterFromHeightNlrob$ruarkAbatPhysio = fit_nlrob("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016defaultWeightPhysio, start = list(a1 = 2.7, a2 = -0.017, a3 = -0.0042, a6 = -0.04, b1 = 0.89, b1p = -0.19, b2 = 0.0025, b2p = 0.012))
@@ -611,7 +611,7 @@ if (psmeOptions$fitDbhNlrobAndFixedWeight)
   psmeDiameterFromHeightNlrob$ruarkRelHtPhysio = fit_nlrob("Ruark RelHt physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.4, a6 = -0.05, a9 = 0.4, b1 = 0.83, b1p = -0.13, b2 = 0.0042, b2p = 0.008))
   #psmeDiameterFromHeightNlrob$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), psme2016, start = list(a1 = 0.002, a2 = 0.055, b1 = 1.05, Ha = 18.6)) # converges from red alder values but fails to reconverge (singular gradient or NaN-inf with nls())
   #psmeDiameterFromHeightNlrob$sharmaParton = fit_nlrob("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation)*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^(b4 + b4p * isPlantation), psme2016, start = list(a1 = 9, b1 = 0.4, b1p = -0.14, b2 = 0.04, b3 = -0.06, b4 = 0.3, b4p = 0.13), control = nls.control(maxiter = 500)) # b3p not significant, a1p NaN-inf (not significant?), b4p significance debatable, singular gradient with all relative height forms attempted, >1000 iterations with nlrob()
-  psmeDiameterFromHeightNlrob$sibbesenReplace = fit_nlrob("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 2.9, a1p = -0.2, b1 = 0.64, b2 = 0.08, b2p = -0.005))
+  psmeDiameterFromHeightNlrob$sibbesenReplace = fit_nlrob("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 2.9, a1p = -0.2, b1 = 0.64, b2 = 0.08, b2p = 0), control = nls.control(tol = 1E-4)) # b2p not significant, job step factor
   psmeDiameterFromHeightNlrob$sibbesenReplaceAbat = fit_nlrob("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 2.63, a2 = -0.007, a3 = -0.005, b1 = 0.67, b2 = 0.08, b2p = -0.014))
   psmeDiameterFromHeightNlrob$sibbesenReplaceAbatPhysio = fit_nlrob("Sibbesen replace ABA+T physio", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016defaultWeightPhysio, start = list(a1 = 3.2, a1p = -0.5, a2 = -0.010, a3 = -0.0068, a6 = -0.06, b1 = 0.63, b2 = 0.088))
   psmeDiameterFromHeightNlrob$sibbesenReplaceAbatRelHt = fit_nlrob("Sibbesen replace ABA+T RelHt", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 4.0, a1p = -1.3, a2 = -0.03, a3 = -0.005, a9 = 0.25, b1 = 0.62, b2 = 0.063, b2p = 0.013), significant = FALSE)
@@ -811,6 +811,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitH
                             mutate(responseVariable = "DBH")) %>%
     mutate(species = "PSME")
 
+  check_plot_results(psmeResults)
   save(file = "trees/height-diameter/data/PSME results.Rdata", psmeCoefficients, psmeResults)
 }
 
@@ -823,6 +824,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & ps
   psmeHeightFromDiameterPreferred$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b3 + b3p * isPlantation)*DBH))^(b4 + b4p * isPlantation), psme2016physio, start = list(a1 = 52.6, a1p = -0.10, a4 = 0.00004, a5 = 0, a6 = 0.0090, a7 = 0.0032, a8 = 0.0040, b1 = 0.53, b2 = -0.025, b2p = -0.0090, b3 = 0.036, b3p = -0.19, b4 = 1.57, b4p = -0.51), folds = 1, repetitions = 1)
   psmeHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh = fit_gsl_nls("Sharma-Parton BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex + (a10 + a10p * isPlantation) * relativeDiameter)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b3 + b3p * isPlantation)*DBH))^(b4 + b4p * isPlantation), psme2016physio, start = list(a1 = 22, a1p = -7.6, a4 = -0.0020, a5 = -0.03, a6 = 0.14, a7 = 0.14, a8 = 0.06, a10 = -0.35, a10p = 0.79, b1 = 0.28, b2 = -0.021, b2p = -0.026, b3 = 0.02, b3p = -0.17, b4 = 1.53, b4p = -0.40), folds = 1, repetitions = 1)
   psmeHeightFromDiameterPreferred$sibbesen = fit_gsl_nls("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^((b1 + b1p * isPlantation)*DBH^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 0.0006, a1p = 0.17, b1 = 5.8, b1p = -3.5, b2 = -0.182, b2p = 0.050), folds = 1, repetitions = 1)
+  #AIC(psmeHeightFromDiameterPreferred$prodan, psmeHeightFromDiameterPreferred$sibbesen)
   
   psmeDiameterFromHeightPreferred = list(chapmanReplace = fit_gsl_nls("Chapman-Richards replace", DBH ~ (a1 + a1p * isPlantation)*(exp((b1 + b1p * isPlantation)*(TotalHt - 1.37)) - 1)^(b2 + b2p * isPlantation), psme2016, start = list(a1 = 75.6, a1p = -47.4, b1 = 0.016, b1p = 0.020, b2 = 0.792, b2p = -0.0780), folds = 1, repetitions = 1))
   psmeDiameterFromHeightPreferred$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 10, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, nthreads = 2, folds = 1, repetitions = 1)
@@ -874,11 +876,9 @@ if (htDiaOptions$includeInvestigatory)
 # Chapman-Richards has the wrong curvature
 if (htDiaOptions$includeInvestigatory)
 {
-  #psmeBasalAreaFromHeightKorf = fit_gsl_nls(basalArea ~ a1*exp((b1 + b1p * isPlantation)*(imputedHeight - 1.37)^(b2 + b2p * isPlantation)) - 1, psme2016, start = list(a1 = 1, a1p = 0, b1 = 0.00009, b1p = 0, b2 = 2.2, b2p = 0), weights = pmin(1/basalArea, 1E4)) # a1p not significant
-  #psmeBasalAreaFromHeightPower = fit_gsl_nls(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^(b1 + b1p * isPlantation), psme2016, start = list(a1 = 0.25 * pi * 0.01^2, a1p = 0, b1 = 2.4, b1p = 0), weights = pmin(1/basalArea, 1E4)) # 0.25 * pi * (1/height-diameter ratio)²
-  psmeBasalAreaFromHeightKorf = fit_nlrob(basalArea ~ (a1 + a1p*isPlantation)*(exp((b1 + b1p * isPlantation)*(imputedHeight - 1.37)^(b2 + b2p * isPlantation)) - 1), psme2016, start = list(a1 = 0.689, a1p = -0.413, b1 = 0.0003, b1p = 0.0005, b2 = 1.91, b2p = -0.10), weights = pmin(1/basalArea, 1E4)) # a1p not significant
-  psmeBasalAreaFromHeightPower = fit_nlrob(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^(b1 + b1p * isPlantation), psme2016, start = list(a1 = 4/7 * 0.25 * pi * 0.01^2, a1p = 0.00005, b1 = 2.41, b1p = -0.248), weights = pmin(1/basalArea, 1E4)) # 0.25 * pi * (1/height-diameter ratio)²
-  #confint_nlrob(psmeBasalAreaFromHeightKorf, level = 0.99, weights = 1/psme2016$basalArea)
+  psmeBasalAreaFromHeightKorf = gsl_nls(basalArea ~ a1*(exp(b1*(imputedHeight - 1.37)^(b2 + b2p * isPlantation)) - 1), psme2016, start = list(a1 = 0.5, b1 = 0.0008, b2 = 1.8, b2p = -0.07), weights = heightWeight^2) # a1p, b1p not significant
+  psmeBasalAreaFromHeightPower = gsl_nls(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^(b1 + b1p * isPlantation), psme2016, start = list(a1 = 0.0001, a1p = 0.0002, b1 = 2.2, b1p = -0.5), weights = heightWeight^2)
+  #confint2(psmeBasalAreaFromHeightKorf, level = 0.99)
   
   tribble(~method, ~aic, ~biasCm2, ~maeM2, ~nse,
           "Korf", AIC(psmeBasalAreaFromHeightKorf), 100^2 * mean(-residuals(psmeBasalAreaFromHeightKorf)), mean(abs(residuals(psmeBasalAreaFromHeightKorf))), 1 - sum(residuals(psmeBasalAreaFromHeightKorf)^2) / sum((psme2016$basalArea - mean(psme2016$basalArea)^2)),
@@ -890,7 +890,8 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = imputedHeight, y = 0.25*pi*(0.01*DBH)^2), alpha = 0.1, color = "grey25", shape = 16) +
     geom_line(aes(x = imputedHeight, y = predict(psmeBasalAreaFromHeightKorf), color = "Korf", group = isPlantation)) +
     geom_line(aes(x = imputedHeight, y = predict(psmeBasalAreaFromHeightPower), color = "power", group = isPlantation)) +
-    #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
+    #geom_line(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
+    #geom_line(aes(x = imputedHeight, y = 1*(exp((0.01 + 0*isPlantation)*(imputedHeight - 1.37)^(1 + 0*isPlantation)) - 1) - 0, color = "Korf")) +
     labs(x = "measured or imputed Douglas-fir height, m", y = "basal area, m²", color = NULL) +
     theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))
   

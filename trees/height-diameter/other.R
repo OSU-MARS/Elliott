@@ -6,21 +6,23 @@
 #otherHeightFromDiameter$chapmanRichardsBal = gsl_nls(TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 89.3, a2 = 1.166, a2p = 0, a3 = -0.039, a3p = 0, b1 = -0.00544, b2 = 0.873), weights = dbhWeight) # a2p, a3p not significant
 #otherHeightFromDiameter$sharmaZhang = gsl_nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*standBasalAreaPerHectare^(a2 + a2p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*tph^(b2 + b2p * isPlantation)*DBH))^(b3 + b3p * isPlantation), other2016, start = list(a1 = 58.1, a1p = -47.4, a2 = 0.162, a2p = 0.032, b1 = -0.021, b1p = -0.222, b2 = -0.292, b2p = 0.036, b3 = 0.818, b3p = 0.165), weights = dbhWeight)
 #otherHeightFromDiameter$sibbesen = gsl_nls(TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.714, a1p = 0.088, b1 = 1.172, b2 = -0.074, b2p = -0.0040), weights = dbhWeight) # a1p, b2p not significant
-other2016 = trees2016 %>% filter((Species %in% c("DF", "RA", "WH", "BM", "OM", "RC")) == FALSE, isLiveUnbroken, TotalHt > 0) %>%
-  mutate(dbhWeight = pmin(1/(1.13*DBH^0.87), 5),
-         heightWeight = pmin(1/(1.31*(TotalHt - 1.37)^1.82), 5))
+other2016 = trees2016 %>% filter((Species %in% c("DF", "RA", "WH", "BM", "OM", "RC")) == FALSE, isLiveUnbroken, is.na(TotalHt) == FALSE) %>%
+  mutate(dbhWeight = pmin(TreeCount/(0.81*DBH^0.94), 5*TreeCount),
+         heightWeight = pmin(TreeCount/(0.98*(TotalHt - 1.37)^1.90), 5*TreeCount))
 other2016physio = other2016 %>% filter(is.na(elevation) == FALSE)
 other2016gamConstraint = c(DBH = -1.4359/0.8154, TotalHt = 1.37, standBasalAreaPerHectare = median(other2016$standBasalAreaPerHectare), basalAreaLarger = median(other2016$basalAreaLarger), standBasalAreaApprox = median(other2016$standBasalAreaApprox), tallerApproxBasalArea = median(other2016$tallerApproxBasalArea), elevation = median(other2016physio$elevation), slope = median(other2016physio$slope), aspect = median(other2016physio$aspect), topographicShelterIndex = median(other2016physio$topographicShelterIndex), relativeHeight = median(other2016$relativeHeight), relativeDiameter = median(other2016$relativeDiameter)) # point constraint for mgcv::s()
 
-other2016defaultWeight = other2016 %>% mutate(dbhWeight = pmin(1/DBH, 5),
-                                              heightWeight = pmin(1/TotalHt, 5))
+other2016defaultWeight = other2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*TreeCount),
+                                              heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 other2016defaultWeightPhysio = other2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
 otherOptions = tibble(fitHeight = FALSE, 
+                      fitHeightNlrob = fitHeight,
                       fitHeightGnls = FALSE,
-                      fitHeightMixed = TRUE,
+                      fitHeightMixed = fitHeight,
                       fitDbh = FALSE,
-                      fitDbhMixed = TRUE)
+                      fitDbhNlrob = fitDbh,
+                      fitDbhMixed = fitDbh)
 
 if (otherOptions$fitHeight)
 {
@@ -57,13 +59,13 @@ if (otherOptions$fitHeight)
   otherHeightFromDiameter$sibbesen = fit_gsl_nls("Sibbesen", TotalHt ~ 1.37 + a1*DBH^(b1*DBH^b2), other2016, start = list(a1 = 0.8, b1 = 1.1, b2 = -0.05)) # a1p, b1p, b2p not significant
   otherHeightFromDiameter$weibull = fit_gsl_nls("Weibull", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^b2)), other2016, start = list(a1 = 75, b1 = -0.02, b2 = 0.85)) # a1p, b1p, b2p not significant
   otherHeightFromDiameter$weibullBal = fit_gsl_nls("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH^b2)), other2016, start = list(a1 = 100, a2 = 0, b1 = -0.01, b2 = 0.8), significant = FALSE) # a1p, a2, a2p, a3, a3p, b1p, b2p not significant, step factor with nlrob()
-  otherHeightFromDiameter$weibullBalRelHt = fit_gsl_nls("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a3 * standBasalAreaPerHectare + a9 * pmin(relativeHeight, 1.5)) * (1 - exp(b1*DBH^b2)), other2016, start = list(a1 = 0, a3 = 0.14, a9 = 50, b1 = -0.13, b2 = 0.6), control = gsl_nls_control(maxiter = 250)) # a1, a2, a3, a3p, a4p, b2p not significant, a4 debatable
+  otherHeightFromDiameter$weibullBalRelHt = fit_gsl_nls("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a3 * standBasalAreaPerHectare + a9 * pmin(relativeHeight, 1.5)) * (1 - exp(b1*DBH^b2)), other2016, start = list(a1 = 0, a3 = 0.14, a9 = 50, b1 = -0.13, b2 = 0.6), control = gsl_nls_control(maxiter = 250)) # a1, a2, a3, a3p, a4p, b2p not significant, a9 debatable
   
   if (otherOptions$fitHeightNlrob)
   {
     otherHeightFromDiameterNlrob = list(chapmanRichards = fit_nlrob("Chapman-Richards", TotalHt ~ 1.37 + a1*(1 - exp(b1 * DBH))^b2, other2016, start = list(a1 = 50, b1 = -0.01, b2 = 0.8)))
     otherHeightFromDiameterNlrob$chapmanRichardsBal = fit_nlrob("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 65, a2 = 0.4, a3 = 0.05, b1 = -0.006, b2 = 0.8), control = nls.control(tol = 1E-4)) # step factor
-    otherHeightFromDiameterNlrob$chapmanRichardsBalPhysio = fit_nlrob("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation) * (1 - exp(b1*DBH))^b2, other2016physio, start = list(a1 = 80, a2 = 0.3, a4 = -0.02, b1 = -0.005, b2 = 0.8), significant = FALSE) # NaN-inf
+    otherHeightFromDiameterNlrob$chapmanRichardsBalPhysio = fit_nlrob("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation) * (1 - exp(b1*DBH))^b2, other2016physio, start = list(a1 = 80, a2 = 1.0, a4 = -0.05, b1 = -0.005, b2 = 0.80), control = nls.control(maxiter = 500, tol = 0.1), significant = FALSE) # NaN-inf, job step factor
     otherHeightFromDiameterNlrob$chapmanRichardsBalRelHt = fit_nlrob("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a9 + a9p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = -0.8, a3 = 0.034, a3p = 0.06, a9 = 58, a9p = -28, b1 = -0.06, b2 = 0.48))
     #otherHeightFromDiameterNlrob$chapmanRichardsBalPhysioRelDbh = fit_nlrob("Chapman-Richards BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, other2016physio, start = list(a1 = 130, a2 = 0.8, a4 = 0, a10 = -5, b1 = -0.01, b2 = 0.8), control = nls.control(maxiter = 100, tol = 0.1), significant = FALSE) # NaN-inf
     #otherHeightFromDiameterNlrob$chapmanRichardsBalRelDbh = fit_nlrob("Chapman-Richards BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, other2016, start = list(a1 = 70, a2 = 0, a10 = -4, b1 = -0.006, b2 = 0.84), control = nls.control(maxiter = 100, tol = 0.1), significant = FALSE) # NaN-inf
@@ -78,16 +80,16 @@ if (otherOptions$fitHeight)
     otherHeightFromDiameterNlrob$power = fit_nlrob("power", TotalHt ~ 1.37 + a1*DBH^b1, other2016, start = list(a1 = 0.99, b1 = 0.84))
     otherHeightFromDiameterNlrob$ratkowsky = fit_nlrob("Ratkowsky", TotalHt ~ 1.37 + a1*exp(b1/(DBH + b2)), other2016, start = list(a1 = 40, b1 = -32, b2 = 9))
     otherHeightFromDiameterNlrob$richardsW = fit_nlrob("unified Richards", TotalHt ~ 1.37 + Ha * (1 + ((1.37/Ha)^(1 - d) - 1) * exp((-kU * DBH)/d^(d/(1 - d))))^(1/(1 - d)), other2016, start = list(Ha = 50, d = 0.2, kU = 0.01))
-    otherHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, other2016, start = list(a1 = 150, b1 = -0.15, b2 = -0.01, b3 = -0.3, b4 = 0.77))
+    #otherHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, other2016, start = list(a1 = 500, b1 = -0.35, b2 = -0.01, b3 = -0.25, b4 = 0.75), control = nls.control(maxiter = 500, tol = 0.1)) # NaN-inf, step factor
     #otherHeightFromDiameterNlrob$sharmaPartonBal = fit_nlrob("Sharma-Parton BA+L", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016, start = list(a1 = 200, b1 = -0.15, b2 = -0.003, b3 = -0.33, b4 = 0.77), control = nls.control(maxiter = 250, tol = 1E-4)) # NaN-inf
     #otherHeightFromDiameterNlrob$sharmaPartonBalPhysio = fit_nlrob("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016physio, start = list(a1 = 300, a4 = 0.0, b1 = -0.2, b2 = -0.003, b3 = -0.34, b4 = 0.76), control = nls.control(maxiter = 500, xtol = 1E-5), significant = FALSE) # NaN-inf
     #otherHeightFromDiameterNlrob$sharmaPartonBalPhysioRelDbh = fit_nlrob("Sharma-Parton BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a4 * elevation + a10 * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016physio, start = list(a1 = 200, a4 = -0.2, a10 = -5, b1 = -0.3, b2 = -0.006, b3 = -0.15, b4 = 0.8), control = nls.control(maxiter = 250, tol = 0.1), significant = FALSE) # step factor, NaN-inf
-    otherHeightFromDiameterNlrob$sharmaPartonBalRelDbh = fit_nlrob("Sharma-Parton BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a10 * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016, start = list(a1 = 150, a10 = -10, b1 = -0.35, b2 = -0.005, b3 = -0.16, b4 = 0.80), control = nls.control(maxiter = 250, tol = 0.001), significant = FALSE) # step factor, NaN-inf
+    otherHeightFromDiameterNlrob$sharmaPartonBalRelDbh = fit_nlrob("Sharma-Parton BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a10 * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, other2016, start = list(a1 = 150, a10 = -10, b1 = -0.35, b2 = -0.005, b3 = -0.16, b4 = 0.80), control = nls.control(maxiter = 500, tol = 1), significant = FALSE) # step factor, NaN-inf
     #otherHeightFromDiameterNlrob$sharmaPartonPhysio = fit_nlrob("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, other2016physio, start = list(a1 = 140, a4 = -0.2, b1 = -0.4, b2 = -0.01, b3 = -0.22, b4 = 0.77), control = nls.control(maxiter = 250, tol = 0.1), significant = FALSE) # always NaN-inf
-    otherHeightFromDiameterNlrob$sharmaPartonRelDbh = fit_nlrob("Sharma-Parton RelDbh", TotalHt ~ 1.37 + (a1 + a10 * relativeDiameter)*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, other2016, start = list(a1 = 150, a10 = -6, b1 = -0.33, b2 = -0.01, b3 = -0.18, b4 = 0.80), significant = FALSE)
+    otherHeightFromDiameterNlrob$sharmaPartonRelDbh = fit_nlrob("Sharma-Parton RelDbh", TotalHt ~ 1.37 + (a1 + a10 * relativeDiameter)*topHeight^b1*(1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, other2016, start = list(a1 = 250, a10 = -20, b1 = -0.35, b2 = -0.01, b3 = -0.18, b4 = 0.77), control = nls.control(maxiter = 500, tol = 0.1), significant = FALSE) # NaN-inf, step factor
     #otherHeightFromDiameterNlrob$sharmaPartonRelDbhPhysio = fit_nlrob("Sharma-Parton RelDbh physio", TotalHt ~ 1.37 + (a1 + a4 * elevation + a10 * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, other2016physio, start = list(a1 = 140, a4 = -0.01, a10 = -10, b1 = -0.33, b2 = -0.007, b3 = -0.17, b4 = 0.81), control = nls.control(tol = 0.1), significant = FALSE) # always NaN-inf
     #otherHeightFromDiameterNlrob$sharmaZhang = fit_nlrob("Sharma-Zhang", TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), other2016, start = list(a1 = 30, b1 = 0.23, b2 = -0.023, b3 = -0.25, b4 = 0.9, b4p = -0.08), control = nls.control(tol = 0.1)) # always NaN-inf
-    otherHeightFromDiameterNlrob$sharmaZhangBal = fit_nlrob("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^b4, other2016, start = list(a1 = 100, a2 = 0.5, b1 = 0.0, b2 = -0.13, b3 = -0.3, b3p = 0.03, b4 = 0.8), control = nls.control(maxiter = 500, tol = 1E-6)) # always NaN-inf
+    #otherHeightFromDiameterNlrob$sharmaZhangBal = fit_nlrob("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^(b3 + b3p * isPlantation)*DBH))^b4, other2016, start = list(a1 = 100, a2 = 0.5, b1 = 0.0, b2 = -0.13, b3 = -0.3, b3p = 0.03, b4 = 0.8), control = nls.control(maxiter = 500, tol = 1E-6)) # always NaN-inf
     otherHeightFromDiameterNlrob$sibbesen = fit_nlrob("Sibbesen", TotalHt ~ 1.37 + a1*DBH^(b1*DBH^b2), other2016, start = list(a1 = 0.8, b1 = 1.1, b2 = -0.05), control = nls.control(tol = 1E-4)) # job step factor
     otherHeightFromDiameterNlrob$weibull = fit_nlrob("Weibull", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^b2)), other2016, start = list(a1 = 75, b1 = -0.02, b2 = 0.85))
     otherHeightFromDiameterNlrob$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH^b2)), other2016, start = list(a1 = 100, a2 = 0.6, b1 = -0.01, b2 = 0.8), control = nls.control(maxiter = 250, tol = 0.001), significant = FALSE) # step factor
@@ -100,7 +102,7 @@ if (otherOptions$fitHeight)
   otherHeightFromDiameterGslNlsDefault = list(chapmanRichards = fit_gsl_nls("Chapman-Richards", TotalHt ~ 1.37 + a1*(1 - exp(b1 * DBH))^b2, other2016defaultWeight, start = list(a1 = 50, b1 = -0.01, b2 = 0.8)))
   otherHeightFromDiameterGslNlsDefault$chapmanRichardsBal = fit_gsl_nls("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, other2016defaultWeight, start = list(a1 = 60, a2 = 0.3, a3 = 0.1, b1 = -0.006, b2 = 0.82))
   otherHeightFromDiameterGslNlsDefault$chapmanRichardsBalPhysio = fit_gsl_nls("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation) * (1 - exp(b1*DBH))^b2, other2016defaultWeightPhysio, start = list(a1 = 80, a2 = 0.3, a4 = 0, b1 = -0.005, b2 = 0.8), significant = FALSE)
-  otherHeightFromDiameterGslNlsDefault$chapmanRichardsBalRelHt = fit_gsl_nls("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a4 + a4p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^b2, other2016defaultWeight, start = list(a1 = -1.0, a3 = 0.04, a3p = 0.05, a4 = 57, a4p = -28, b1 = -0.05, b2 = 0.5))
+  otherHeightFromDiameterGslNlsDefault$chapmanRichardsBalRelHt = fit_gsl_nls("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + (a9 + a9p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^b2, other2016defaultWeight, start = list(a1 = -1.0, a3 = 0.04, a3p = 0.05, a9 = 57, a9p = -28, b1 = -0.05, b2 = 0.5))
   otherHeightFromDiameterGslNlsDefault$chapmanRichardsBalPhysioRelDbh = fit_gsl_nls("Chapman-Richards BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, other2016defaultWeightPhysio, start = list(a1 = 90, a2 = 0.3, a4 = 0, a10 = -5, b1 = -0.01, b2 = 0.8), control = gsl_nls_control(maxiter = 500), significant = FALSE)
   otherHeightFromDiameterGslNlsDefault$chapmanRichardsBalRelDbh = fit_gsl_nls("Chapman-Richards BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, other2016defaultWeight, start = list(a1 = 70, a2 = 0, a10 = -4, b1 = -0.006, b2 = 0.84), control = gsl_nls_control(maxiter = 500), significant = FALSE) # a1-b1 divergence
   otherHeightFromDiameterGslNlsDefault$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a4 * elevation) * (1 - exp(b1*DBH))^b2, other2016defaultWeightPhysio, start = list(a1 = 70, a4 = -0.01, b1 = -0.006, b2 = 0.81), control = gsl_nls_control(maxiter = 250), significant = FALSE)
@@ -345,8 +347,8 @@ if (otherOptions$fitDbh)
   
   if (otherOptions$fitDbhNlrob)
   {
-    otherDiameterFromHeightNlrob = list(michaelisMentenReplace = fit_nlrob("Michaelis-Menten replace", DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016, start = list(a1 = 17, a2 = 7, b1 = 0.4), maxit = 80, control = nls.control(maxiter = 250)))
-    otherDiameterFromHeightNlrob$power = fit_nlrob("power", DBH ~ a1*(TotalHt - 1.37)^b1, other2016, maxit = 80, start = list(a1 = 3.15, b1 = 0.4))
+    #otherDiameterFromHeightNlrob = list(michaelisMentenReplace = fit_nlrob("Michaelis-Menten replace", DBH ~ a1 * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016, start = list(a1 = 1.4, a2 = 1.4, b1 = 0.1), maxit = 80, control = nls.control(maxiter = 250, tol = 0.1))) # step factor
+    otherDiameterFromHeightNlrob = list(power = fit_nlrob("power", DBH ~ a1*(TotalHt - 1.37)^b1, other2016, maxit = 80, start = list(a1 = 3.15, b1 = 0.4)))
     #otherDiameterFromHeightNlrob$powerAbat = fit_nlrob("power ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 2.8, a2 = 0.02, b1 = 0.4))
     #otherDiameterFromHeightNlrob$powerPhysio = fit_nlrob("power physio", DBH ~ (a1 + a4 * elevation)*(TotalHt - 1.37)^b1, other2016physio, start = list(a1 = 2.7, a4 = -0.001, b1 = 0.8), significant = FALSE)
     #otherDiameterFromHeightNlrob$powerRelHt = fit_nlrob("power RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 3.0, a9 = 2.3, b1 = 0.4), maxit = 80, significant = FALSE)
@@ -354,7 +356,7 @@ if (otherOptions$fitDbh)
     otherDiameterFromHeightNlrob$ruarkAbat = fit_nlrob("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.6, a2 = 0.025, b1 = 0.25, b2 = 0.07), significant = FALSE)
     otherDiameterFromHeightNlrob$ruarkAbatPhysio = fit_nlrob("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a4 * elevation)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016physio, start = list(a1 = 3.0, a2 = 0.02, a4 = -0.001, b1 = 0.25, b2 = 0.07), significant = FALSE)
     otherDiameterFromHeightNlrob$ruarkAbatPhysioRelHt = fit_nlrob("Ruark ABA+T RelHt physio", DBH ~ (a1 + a3 * standBasalAreaApprox + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016physio, start = list(a1 = 3.0, a3 = 0, a4 = -0.001, a9 = 0, b1 = 0.22, b2 = 0.0066), control = nls.control(maxiter = 100, tol = 1E-4), significant = FALSE) # job step factor
-    otherDiameterFromHeightNlrob$ruarkAbatRelHt = fit_nlrob("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.5, a2 = 0.035, a9 = 1.7, b1 = 0.22, b2 = 0.07), control = nls.control(maxiter = 250), significant = FALSE) # job max iterations
+    otherDiameterFromHeightNlrob$ruarkAbatRelHt = fit_nlrob("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.2, a2 = 0.03, a9 = 0, b1 = 0.2, b2 = 0.08), control = nls.control(maxiter = 250, tol = 1E-4), significant = FALSE) # job max iterations, job step factor
     otherDiameterFromHeightNlrob$ruarkPhysio = fit_nlrob("Ruark physio", DBH ~ (a1 + a4 * elevation)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016physio, start = list(a1 = 2.67, a4 = 0, b1 = 0.813, b2 = 0.0067), significant = FALSE)
     otherDiameterFromHeightNlrob$ruarkRelHt = fit_nlrob("Ruark RelHt", DBH ~ (a1 + (a9 + a9p * isPlantation) * relativeHeight)*(TotalHt - 1.37)^b1 * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), other2016, start = list(a1 = 2.67, a9 = 17, a9p = -15, b1 = 0.3, b2 = 0.01, b2p = 0.06))
     otherDiameterFromHeightNlrob$ruarkRelHtPhysio = fit_nlrob("Ruark RelHt physio", DBH ~ (a1 + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016physio, start = list(a1 = 3.2, a4 = -0.002, a9 = 0, b1 = 0.25, b2 = 0.007), control = nls.control(maxiter = 100, tol = 1E-4), significant = FALSE) # job step factor
@@ -404,8 +406,8 @@ if (otherOptions$fitDbh)
   otherDiameterFromHeightGslNlsDefault$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), other2016defaultWeightPhysio, start = list(a1 = 1.7, a8 = 0, b1 = 0.9, b2 = 0.0), significant = FALSE)
   otherDiameterFromHeightGslNlsDefault$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), other2016defaultWeight, start = list(a1 = 3.0, a9 = -0.7, b1 = 0.3, b2 = 0.348), significant = FALSE)
   otherDiameterFromHeightGslNlsDefault$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a8 * topographicShelterIndex + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), other2016defaultWeightPhysio, start = list(a1 = 2.0, a8 = 0.005, a9 = 0.2, b1 = 1.0, b2 = 0), significant = FALSE)
-  otherDiameterFromHeightGslNlsDefault$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016defaultWeight, start = list(a1 = -100, b1 = 0.09, b2 = 0.5))
-  
+  otherDiameterFromHeightGslNlsDefault$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016defaultWeight, start = list(a1 = -25, b1 = 0.1, b2 = 0.63))
+
   otherDiameterFromHeight$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint)
   otherDiameterFromHeight$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint)
   otherDiameterFromHeight$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, slope, bs = "ts", by = as.factor(isPlantation), k = 21, pc = gamConstraint), data = other2016physio, constraint = other2016gamConstraint)
@@ -497,21 +499,21 @@ if (htDiaOptions$includeInvestigatory)
 
 if (otherOptions$fitDbhMixed)
 {
-  otherDiameterFromHeightMixed = list(chapmanReplace = fit_nlme("Chapman-Richards replace", DBH ~ (a1 + a1r)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016,
-                                                                fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
-                                                                start = list(fixed = c(a1 = 4, b1 = 0.3, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001))) # singularity in backsolve, step halving
-  otherDiameterFromHeightMixed$chapmanReplaceAbat = fit_nlme("Chapman-Richards replace ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016,
-                                                             fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
-                                                             start = list(fixed = c(a1 = 10, a2 = 0.05, b1 = 0.10, b2 = 0.5)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # singularity in backsolve
-  otherDiameterFromHeightMixed$chapmanReplaceBal = fit_nlme("Chapman-Richards replace BA+L", DBH ~ (a1 + a1r + a3 * standBasalAreaPerHectare) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016,
-                                                            fixedFormula = a1 + a3 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
-                                                            start = list(fixed = c(a1 = 1.0, a3 = 0.001, b1 = 1.3, b2 = 0.33)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
+  #otherDiameterFromHeightMixed = list(chapmanReplace = fit_nlme("Chapman-Richards replace", DBH ~ (a1 + a1r)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016,
+  #                                                              fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+  #                                                              start = list(fixed = c(a1 = 4, b1 = 0.3, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001))) # singularity in backsolve, step halving
+  otherDiameterFromHeightMixed = list(chapmanReplaceAbat = fit_nlme("Chapman-Richards replace ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, other2016,
+                                                                    fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+                                                                    start = list(fixed = c(a1 = 10, a2 = 0.05, b1 = 0.10, b2 = 0.5)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE)) # singularity in backsolve
+  #otherDiameterFromHeightMixed$chapmanReplaceBal = fit_nlme("Chapman-Richards replace BA+L", DBH ~ (a1 + a1r + a3 * standBasalAreaPerHectare) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016,
+  #                                                          fixedFormula = a1 + a3 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+  #                                                          start = list(fixed = c(a1 = 1.0, a3 = 0.001, b1 = 1.3, b2 = 0.33)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
   #otherDiameterFromHeightMixed$chapmanReplaceBalRelHt = fit_nlme("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a1r + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), other2016,
   #                                                               fixedFormula = a1 + a3 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
   #                                                               start = list(fixed = c(a1 = 0.9, a3 = 0.003, a9 = 0, b1 = 1.3, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving, job step halving
-  otherDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, 
-                                                              fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
-                                                              start = list(fixed = c(a1 = 1.0, a9 = 0.0, b1 = 1.3, b2 = 0.35)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
+  #otherDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)^b2) - 1), other2016, 
+  #                                                            fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
+  #                                                            start = list(fixed = c(a1 = 1.0, a9 = 0.0, b1 = 1.3, b2 = 0.35)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving, signularity in backsolve
   otherDiameterFromHeightMixed$chapmanRichards = fit_nlme("Chapman-Richards inverse", DBH ~ (a1 + a1r)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, 
                                                           fixedFormula = a1 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
                                                           start = list(fixed = c(a1 = -7, b1 = 0.36, b2 = 0.35, b2p = -0.04)), control = nlmeControl(maxIter = 500, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4)) # job max iterations
@@ -523,13 +525,13 @@ if (otherOptions$fitDbhMixed)
                                                                 start = list(fixed = c(a1 = -5.5, a8 = 0.02, b1 = 0.4, b2 = 0.28)), control = nlmeControl(maxIter = 500, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4), significant = FALSE) # step halving, job max iterations
   otherDiameterFromHeightMixed$chapmanRichardsRelHt = fit_nlme("Chapman-Richards inverse RelHt", DBH ~ (a1 + a1r + a9 * relativeHeight)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), other2016, 
                                                                fixedFormula = a1 + a9 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1,
-                                                               start = list(fixed = c(a1 = -12, a9 = 0, b1 = 0.23, b2 = 0.43, b2p = 0.02)), control = nlmeControl(maxIter = 250, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4), significant = FALSE) # step halving
+                                                               start = list(fixed = c(a1 = -12, a9 = 0, b1 = 0.23, b2 = 0.43, b2p = 0.02)), control = nlmeControl(maxIter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
   otherDiameterFromHeightMixed$michaelisMentenReplace = fit_nlme("Michaelis-Menten replace", DBH ~ (a1 + a1r) * (TotalHt - 1.37)^b1 / (a2 - (TotalHt - 1.37)^b1), other2016,
                                                                  fixedFormula = a1 + a2 + b1 ~ 1, randomFormula = a1r ~ 1,
                                                                  start = list(fixed = c(a1 = 17, a2 = 7, b1 = 0.4)), control = nlmeControl(maxIter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
   otherDiameterFromHeightMixed$naslund = fit_nlme("Näslund inverse", DBH ~ (a1 + a1r)*sqrt(TotalHt - 1.37) / (1 + a2*sqrt(TotalHt - 1.37)), other2016,
                                                   fixedFormula = a1 + a2 ~ 1, randomFormula = a1r ~ 1,
-                                                  start = list(fixed = c(a1 = 2.3, a2 = -0.13)), control = nlmeControl(maxIter = 500, tolerance = 1E-4, pnlsTol = 0.01, msTol = 1E-5)) # job step factor
+                                                  start = list(fixed = c(a1 = 2.3, a2 = -0.13)), control = nlmeControl(maxIter = 500, tolerance = 0.001, pnlsTol = 0.1, msTol = 1E-4)) # job step factor
   otherDiameterFromHeightMixed$power = fit_nlme("power", DBH ~ (a1 + a1r)*(TotalHt - 1.37)^b1, other2016, 
                                                 fixedFormula = a1 + b1 ~ 1, randomFormula = a1r ~ 1, 
                                                 start = list(fixed = c(a1 = 3.15, b1 = 0.4)))
@@ -647,6 +649,7 @@ if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh &
                              mutate(responseVariable = "DBH")) %>%
     mutate(species = "other")
   
+  check_plot_results(otherResults)
   save(file = "trees/height-diameter/data/other results.Rdata", otherCoefficients, otherResults)
 }
 
@@ -658,7 +661,8 @@ if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh &
 if (otherOptions$fitHeight & otherOptions$fitDbh)
 {
   otherHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 7, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1))
-  otherHeightFromDiameterPreferred$gamBalPhysio = fit_gam("REML GAM BA+L physio", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 23, pc = gamConstraint), data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  otherHeightFromDiameterPreferred$gamBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  #otherHeightFromDiameterPreferred$gamBalPhysio = fit_gam("REML GAM BA+L physio", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 23, pc = gamConstraint), data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
   otherHeightFromDiameterPreferred$parabolic = fit_lm("parabolic", TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I(isPlantation*DBH^2), other2016, folds = 1, repetitions = 1)
   
   otherDiameterFromHeightPreferred = list(gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1))
@@ -673,11 +677,11 @@ if (otherOptions$fitHeight & otherOptions$fitDbh)
 ## basal area from height
 if (htDiaOptions$includeInvestigatory)
 {
-  otherBasalAreaFromHeightKorf = gsl_nls(basalArea ~ a1*(exp(b1*(imputedHeight - 1.37)^(b2 + b2p*isPlantation)) - 1), other2016, start = list(a1 = 1.36, b1 = 0.0002, b2 = 2.06, b2p = -0.27), weights = pmin(1/basalArea, 1E4)) # a1p, b1p not significant, step factor with nlrob()
-  otherBasalAreaFromHeightPower = fit_nlrob(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^(b1 + b1p*isPlantation), other2016, start = list(a1 = 4/7 * 0.25 * pi * 0.01^2, a1p = -0.00001, b1 = 2.53, b1p = -0.435), maxit = 70, weights = pmin(1/basalArea, 1E4))
-  #confint2(otherBasalAreaFromHeightKorf, level = 0.99)
-  #confint_nlrob(otherBasalAreaFromHeightPower, level = 0.99, weights = pmin(1/other2016$basalArea, 1E4))
-  
+  otherBasalAreaFromHeightKorf = gsl_nls(basalArea ~ a1*(exp(b1*(imputedHeight - 1.37)^(b2 + b2p*isPlantation)) - 1), other2016, start = list(a1 = 1.36, b1 = 0.0002, b2 = 2.06, b2p = -0.27), weights = heightWeight^2) # a1p, b1p not significant, step factor with nlrob()
+  otherBasalAreaFromHeightPower = gsl_nls(basalArea ~ (a1 + a1p*isPlantation)*(imputedHeight - 1.37)^b1, other2016, start = list(a1 = 4/7 * 0.25 * pi * 0.01^2, a1p = -0.00001, b1 = 2.53), weights = heightWeight^2) # b1p not significant
+  #confint2(otherBasalAreaFromHeightPower, level = 0.99)
+  #coefficients(otherBasalAreaFromHeightPower)
+
   tribble(~method, ~aic, ~biasCm2, ~maeM2, ~nse,
           "Korf", AIC(otherBasalAreaFromHeightKorf), 100^2 * mean(residuals(otherBasalAreaFromHeightKorf)), mean(abs(residuals(otherBasalAreaFromHeightKorf))), 1 - sum(residuals(otherBasalAreaFromHeightKorf)^2) / sum((other2016$basalArea - mean(other2016$basalArea)^2)),
           "power", AIC(otherBasalAreaFromHeightPower), 100^2 * mean(residuals(otherBasalAreaFromHeightPower)), mean(abs(residuals(otherBasalAreaFromHeightPower))), 1 - sum(residuals(otherBasalAreaFromHeightPower)^2) / sum((other2016$basalArea - mean(other2016$basalArea)^2))) %>%

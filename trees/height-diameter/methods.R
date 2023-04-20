@@ -49,11 +49,15 @@ with_progress({
         # better than models in the primary fit set. Thus, labeling is reversed from this code's equivalent in results.R.
         lowerIsBetter = factor(c(rep(1, nrow(primaryFitSetResults)), rep(0, nrow(otherFitSetResults))), levels = c(0, 1))
         higherIsBetter = factor(c(rep(0, nrow(primaryFitSetResults)), rep(1, nrow(otherFitSetResults))), levels = c(0, 1))
+        #if ((length(lowerIsBetter) < 2) | (length(higherIsBetter) < 2) | (n_distinct(lowerIsBetter) < 2) | (n_distinct(higherIsBetter) < 2))
+        #{
+        #  stop(paste0("ROC label formation error with name = ", otherModelName, " for ", fitResults$species[1], " ", fitResults$responseVariable[1], ".  nrow(fitResults) = ", nrow(fitResults), ", nrow(otherFitResults) = ", nrow(otherFitResults), "."))
+        #}
         
         # estimate AUC for bias based on what data is available, which is potentially none for species with few measurements
         availableMabData = tibble(guess = c(primaryFitSetResults$mab, otherFitSetResults$mab), label = lowerIsBetter) %>% drop_na()
         aucMab = NA_real_
-        if (nrow(availableMabData) > 0)
+        if ((nrow(availableMabData) > 1) & (n_distinct(availableMabData$label) > 1))
         {
           aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
         }

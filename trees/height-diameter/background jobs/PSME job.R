@@ -1,6 +1,6 @@
 # runtimes with 10x10 cross validation and eight workers (AMD Zen 3, 4.6 GHz)
 # height: primary fixed effects 7.2 hours, nlrob() + gsl_nls() ~16 minutes, mixed: 15 hours
-# DBH: 13.3 hours fixed, mixed ~30 hours?
+# DBH: 13.3 hours fixed, mixed 25 hours
 #
 # single worker GAM fitting time with 10x10 cross validation: approximately O(k²)
 #    k     fit time, minutes
@@ -15,6 +15,7 @@
 # splits  models  file size      file size                   file size      file size
 # yes     no                                                 4.43 GB        5.74 GB
 # no      no      1.89 MB        1.28 MB                     2.79 MB        1.23 MB
+jobStartTime = Sys.time()
 setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
@@ -23,3 +24,4 @@ plan(multisession, workers = 8) # increase worker count for mixed effects DBH GA
 
 source("trees/height-diameter/PSME.R")
 warnings()
+print(paste0("PSME job ran for ", format(Sys.time() - jobStartTime), "."))
