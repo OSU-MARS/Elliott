@@ -27,6 +27,8 @@ GIS/**/*.lyr
 GIS/**/*.mxd
 GIS/**/*.ovr
 GIS/**/*.prj
+GIS/**/*.qgz
+GIS/**/*.qix
 GIS/**/*.rrd
 GIS/**/*.sbn
 GIS/**/*.sbx

@@ -338,40 +338,146 @@ for layerName in weatherCellLayerNames:
 # use within as join predicate for bufferDist to avoid exact rounding issues with integer truncation to resource unit indices
 # temporarily: create x = $x and y = $y fields as XTOP and YTOP aren't set correctly
 # https://docs.qgis.org/3.22/en/docs/user_manual/processing_algs/qgis/vectorgeneral.html#join-attributes-by-location
-coosTileIndex = QgsProject.instance().mapLayersByName('Coos_County_Tile_Index')[0]
-elliottTrees = QgsProject.instance().mapLayersByName('ESRF_TreesD_H10Cr20h10A50MD7s')[0]
-gridIDparameters = { 'INPUT': elliottTrees, 
-                     'JOIN': coosTileIndex,
-                     'JOIN_FIELDS': 'gridID',
-                     'PREDICATE': 5, # within
-                     'METHOD': 1, # first matching (one to one)
-                     'OUTPUT': QgsProject.instance().readPath('.') + '/GIS/Trees/ESRF_TreesD_H10Cr20h10A50MD7s with grid ID.gpkg' }
-gridIDresult = processing.run("qgis:joinattributesbylocation", gridIDparameters) # ~8 minutes
-elliottTreesWithGridID = QgsVectorLayer(gridIDparameters['OUTPUT'], 'ESRF_TreesD_H10Cr20h10A50MD7s with grid ID')
-
-elliottStands = QgsProject.instance().mapLayersByName('Elliott Stand Data Feb2022 EPSG6556')[0]
-standIDparameters = { 'INPUT': elliottTreesWithGridID, 
-                      'JOIN': elliottStands,
+#coosTileIndex = QgsProject.instance().mapLayersByName('Coos_County_Tile_Index')[0]
+#elliottTrees = QgsProject.instance().mapLayersByName('ESRF_Trees2021')[0]
+#elliottTrees.selectAll()
+#elliottTreesWithStandID = processing.run("native:saveselectedfeatures", {'INPUT': elliottTrees, 'OUTPUT': 'memory:'})['OUTPUT'] # clone tree layer for modification
+#elliottTrees.removeSelection()
+standIDparameters = { 'INPUT': QgsProject.instance().mapLayersByName('ESRF_Trees2021')[0],
+                      'JOIN': QgsProject.instance().mapLayersByName('Elliott Stand Data Feb2022 EPSG6556')[0],
                       'JOIN_FIELDS': 'StandID',
-                      'PREDICATE': 5, # within
-                      'METHOD': 1, # first matching (one to one)
-                      'OUTPUT': QgsProject.instance().readPath('.') + '/GIS/Trees/ESRF_TreesD_H10Cr20h10A50MD7s with stand ID.gpkg' }
-standIDresult = processing.run("qgis:joinattributesbylocation", standIDparameters)
-elliottTreesWithStandID = QgsVectorLayer(standIDresult['OUTPUT'], 'ESRF_TreesD_H10Cr20h10A50MD7s with stand ID')
+                      'METHOD': 1, # 1:1, take first matching feature
+                      'OUTPUT': 'TEMPORARY_OUTPUT' }
+standIDresult = processing.run("native:joinattributesbylocation", standIDparameters)
+elliottTreesWithStandID = standIDresult['OUTPUT']
 
-resourceUnits = QgsProject.instance().mapLayersByName('iLand 100 m')[0]
-resourceUnitParameters = { 'INPUT': elliottTreesWithStandID, 
-                           'JOIN': resourceUnits,
-                           'JOIN_FIELDS': ['id', 'bufferDist'],
-                           'PREFIX': 'resourceUniT',
-                           'PREDICATE': 5, # within
-                           'METHOD': 1, # first matching (one to one)
-                           'OUTPUT': QgsProject.instance().readPath('.') + '/GIS/Trees/ESRF_TreesD_H10Cr20h10A50MD7s with IDs.gpkg' }
-resourceUnitResult = processing.run("qgis:joinattributesbylocation", resourceUnitParameters) # ~8 minutes
-elliottTreesWithIDs = QgsVectorLayer(resourceUnitResult['OUTPUT'], 'ESRF_TreesD_H10Cr20h10A50MD7s with IDs')
+treeProvider = elliottTreesWithStandID.dataProvider()
+standIDindex = treeProvider.fieldNameIndex('StandID_2') # rename newly joined StandID to standID2016 for clarity
+renameResult = treeProvider.renameAttributes({ standIDindex: 'standID2016' })
 
-QgsProject.instance().addMapLayer(elliottTreesWithIDs, False)
-QgsProject.instance().layerTreeRoot().findGroup("TreesD_H10Cr20h10A50MD7s").addLayer(elliottTreesWithIDs)
+
+# drop unused inventory values
+deleteResult = treeProvider.deleteAttributes(list((treeProvider.fieldNameIndex('DBH'),
+                                                   treeProvider.fieldNameIndex('BA'),
+                                                   treeProvider.fieldNameIndex('H2BC'),
+                                                   treeProvider.fieldNameIndex('CVTS'),
+                                                   treeProvider.fieldNameIndex('CV4'),
+                                                   treeProvider.fieldNameIndex('CV6'),
+                                                   treeProvider.fieldNameIndex('BFint'),
+                                                   treeProvider.fieldNameIndex('TARIF'),
+                                                   treeProvider.fieldNameIndex('BFScrib16'),
+                                                   treeProvider.fieldNameIndex('BFScrib32')))) # several seconds
+
+# add x and y fields since 1) terra::vect(keepgeom = TRUE) is documented but not implemented, and 2) terra::as.data.frame(xy = TRUE) results in a data frame with an xy column whose values are TRUE rather than x and y columns with the points' coordinates
+if treeProvider.fieldNameIndex('x') == -1:
+    nameResult = treeProvider.addAttributes([QgsField('x', QVariant.Double)])
+    nameResult = elliottTreesWithStandID.updateFields()
+
+if treeProvider.fieldNameIndex('y') == -1:
+    nameResult = treeProvider.addAttributes([QgsField('y', QVariant.Double)])
+    nameResult = elliottTreesWithStandID.updateFields()
+
+elliottTreesWithStandID.updateFields()
+
+xColumnIndex = treeProvider.fieldNameIndex('x')
+yColumnIndex = treeProvider.fieldNameIndex('y')
+treeCoordinateUpdates = {}
+for tree in elliottTreesWithStandID.getFeatures():
+    treePosition = tree.geometry().asPoint()
+    treeCoordinateUpdates[tree.id()] = { xColumnIndex: treePosition.x(), 
+                                         yColumnIndex: treePosition.y() }
+
+xyResult = treeProvider.changeAttributeValues(treeCoordinateUpdates)
+
+# get physiographic predictor variables (stand level predictors are calculated in R and joined in)
+# Point samples of elevation, Gaussian smoothed slope, Gaussian smoothed aspect
+# Gaussian smooths in Orfeo (https://www.orfeo-toolbox.org/CookBook/QGISInterface.html) with σ = 3.02 cells (3σ radius = 10 m) and max kernel width = 32 cells (29.3 m)
+elevationParameters = { 'INPUT': elliottTreesWithStandID,
+                        'RASTERCOPY': QgsProject.instance().mapLayersByName('2009+2015 OLC Bare_Earth')[0],
+                        'COLUMN_PREFIX': 'elevation',
+                        'OUTPUT': 'TEMPORARY_OUTPUT' }
+elevationResult = processing.run('native:rastersampling', elevationParameters)
+
+slopeParameters = { 'INPUT': elevationResult['OUTPUT'],
+                    'RASTERCOPY': QgsProject.instance().mapLayersByName('bare earth slope Gaussian 10 m EPSG6557')[0], 
+                    'COLUMN_PREFIX': 'slope',
+                    'OUTPUT': 'TEMPORARY_OUTPUT' }
+slopeResult = processing.run('native:rastersampling', slopeParameters)
+
+sinAspectParameters = { 'INPUT': slopeResult['OUTPUT'],
+                        'RASTERCOPY': QgsProject.instance().mapLayersByName('bare earth sin(aspect) Gaussian 10 m EPSG6557')[0], 
+                        'COLUMN_PREFIX': 'sinAspect',
+                        'OUTPUT': 'TEMPORARY_OUTPUT' }
+sinAspectResult = processing.run('native:rastersampling', sinAspectParameters)
+
+cosAspectParameters = { 'INPUT': sinAspectResult['OUTPUT'],
+                        'RASTERCOPY': QgsProject.instance().mapLayersByName('bare earth cos(aspect) Gaussian 10 m EPSG6557')[0], 
+                        'COLUMN_PREFIX': 'cosAspect',
+                        'OUTPUT': 'TEMPORARY_OUTPUT' }
+cosAspectResult = processing.run('native:rastersampling', cosAspectParameters)
+
+treeProvider = cosAspectResult['OUTPUT'].dataProvider()
+if treeProvider.fieldNameIndex('aspect') == -1:
+    nameResult = treeProvider.addAttributes([QgsField('aspect', QVariant.Double)])
+    nameResult = elliottTreesWithStandID.updateFields()
+
+cosAspectResult['OUTPUT'].updateFields()
+
+# field calculator equivalent (after renaming below): if(atan2(sinAspect, cosAspect) >= 0, 180 / pi() * atan2(sinAspect, cosAspect), 360 + 180 / pi() * atan2(sinAspect, cosAspect))
+sinAspectColumnIndex = treeProvider.fieldNameIndex('sinAspect1')
+cosAspectColumnIndex = treeProvider.fieldNameIndex('cosAspect1')
+aspectColumnIndex = treeProvider.fieldNameIndex('aspect')
+aspectUpdates = {}
+for tree in cosAspectResult['OUTPUT'].getFeatures():
+    aspect = 180 / math.pi * math.atan2(tree.attributes()[sinAspectColumnIndex], tree.attributes()[cosAspectColumnIndex])
+    if aspect < 0:
+        aspect = 360 + aspect
+    
+    aspectUpdates[tree.id()] = { aspectColumnIndex: aspect }
+
+aspectResult = treeProvider.changeAttributeValues(aspectUpdates)
+
+tsiParameters = { 'INPUT': cosAspectResult['OUTPUT'],
+                  'RASTERCOPY': QgsProject.instance().mapLayersByName('topgraphic shelter Gaussian 10 m')[0], 
+                  'COLUMN_PREFIX': 'topographicShelterIndex',
+                  'OUTPUT': 'TEMPORARY_OUTPUT' }
+tsiResult = processing.run('native:rastersampling', tsiParameters)
+
+elliottTreesWithPhysiography = tsiResult['OUTPUT']
+treeProvider = elliottTreesWithPhysiography.dataProvider()
+renameResult = treeProvider.renameAttributes({ treeProvider.fieldNameIndex('elevation1'): 'elevation',
+                                               treeProvider.fieldNameIndex('slope1'): 'slope', 
+                                               treeProvider.fieldNameIndex('sinAspect1'): 'sinAspect', # TODO: drop sine and cosine components of aspect once fully verified (left in for checking for now)
+                                               treeProvider.fieldNameIndex('cosAspect1'): 'cosAspect',
+                                               treeProvider.fieldNameIndex('topographicShelterIndex1'): 'topographicShelterIndex' })
+elliottTreesWithPhysiography.updateFields()
+
+QgsProject.instance().addMapLayer(elliottTreesWithPhysiography, False)
+QgsProject.instance().layerTreeRoot().findGroup('2021 OLC Coos County').addLayer(elliottTreesWithPhysiography)
+
+
+#gridIDparameters = { 'INPUT': elliottTrees, 
+#                     'JOIN': coosTileIndex,
+#                     'JOIN_FIELDS': 'gridID',
+#                     'PREDICATE': 5, # within
+#                     'METHOD': 1, # first matching (one to one)
+#                     'OUTPUT': QgsProject.instance().readPath('.') + '/GIS/Trees/ESRF_Trees2021 with grid ID.gpkg' }
+#gridIDresult = processing.run("qgis:joinattributesbylocation", gridIDparameters) # ~8 minutes
+#elliottTreesWithGridID = QgsVectorLayer(gridIDparameters['OUTPUT'], 'ESRF_Trees2021 with gridID')
+
+#resourceUnits = QgsProject.instance().mapLayersByName('iLand 100 m')[0]
+#resourceUnitParameters = { 'INPUT': elliottTreesWithStandID, 
+#                           'JOIN': resourceUnits,
+#                           'JOIN_FIELDS': ['id', 'bufferDist'],
+#                           'PREFIX': 'resourceUniT',
+#                           'PREDICATE': 5, # within
+#                           'METHOD': 1, # first matching (one to one)
+#                           'OUTPUT': QgsProject.instance().readPath('.') + '/GIS/Trees/ESRF_Trees2021 with IDs.gpkg' }
+#resourceUnitResult = processing.run("qgis:joinattributesbylocation", resourceUnitParameters) # ~8 minutes
+#elliottTreesWithIDs = QgsVectorLayer(resourceUnitResult['OUTPUT'], 'ESRF_Trees2021 with IDs')
+
+#QgsProject.instance().addMapLayer(elliottTreesWithIDs, False)
+#QgsProject.instance().layerTreeRoot().findGroup("2021 OLC Coos County").addLayer(elliottTreesWithIDs)
 
 ## individual tree tile reprojection to EPSG:6556, field updates, and export to .csv
 # Coos County 2021 LiDAR tiles are 3000 x 3000 feet in an 87 x 60 grid (north-south x east-west).

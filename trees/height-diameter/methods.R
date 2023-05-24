@@ -29,7 +29,7 @@ with_progress({
       # get all other cross-validation results for this response variable, species, and model
       # Assumes no names are shared across fittings in the results set.
       matchingFitResults = heightDiameterResults %>% filter(fitSet != "primary", responseVariable == primaryFitSetResults$responseVariable[1], species == primaryFitSetResults$species[1]) %>%
-        mutate(deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) %>%
+        mutate(deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>%
         filter(name == primaryFitSetResults$name[1])
       matchingFitSets = unique(matchingFitResults$fitSet)
       pairwiseAucs = bind_rows(lapply(matchingFitSets, function(otherFitSet) 

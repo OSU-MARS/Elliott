@@ -29,7 +29,8 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
                              legend.key.height = unit(0.85, "line"),
                              legend.spacing.y = unit(0, "line"),
                              legend.title = element_text(size = 10),
-                             panel.border = element_blank(), title = element_text(size = 8)))
+                             panel.border = element_blank(), 
+                             plot.title = element_text(size = 10)))
 htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
                       includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
@@ -126,7 +127,8 @@ create_model_stats = function(name, fittingMethod, fitSet = NA_character_, fixed
     stop("Name and fittingMethod must be specified if modelStats is NULL.")
   }
   return(tibble(fitSet = fitSet, fitting = fittingMethod, fixedWeight = fixedWeight, name = name, 
-                n = NA_real_,  isConverged = NA_real_, significant = NA_real_,
+                nNonPhysical = NA_real_, nObservations = NA_real_, nTaperImplausible = NA_real_, nValidation = NA_real_,
+                isConverged = NA_real_, significant = NA_real_,
                 aic = NA_real_, aict = NA_real_,
                 bias = NA_real_, biasNaturalRegen = NA_real_, biasPlantation = NA_real_,
                 bic = NA_real_, bict = NA_real_,
@@ -143,7 +145,7 @@ create_model_stats = function(name, fittingMethod, fitSet = NA_character_, fixed
 # This is a little fragile from a code maintenance perspective as the weights need to be column in data for R to flow them
 # correctly but the risk appears low and worth the simplification elsewhere.
 # future_map() sometimes works but doesn't reliably pass smooth parameters like constraints
-fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, bam = FALSE, mixed = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
+fit_gam = function(name, formula, data, constraint = c(), family = gaussian(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, bam = FALSE, mixed = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
 {
   if (bam & mixed)
   {
@@ -168,7 +170,7 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
       if ((folds == 1) & (repetitions == 1))
       {
         startFit = Sys.time()
-        allFit = bam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+        allFit = bam(formula = localFormula, data = data, family = family, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         allFitStats = get_height_stats(name = name, model = allFit, trainingData = data, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -179,7 +181,7 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
       {
         startFit = Sys.time()
         trainingData = analysis(dataFold)
-        model = bam(formula = localFormula, data = trainingData, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+        model = bam(formula = localFormula, data = trainingData, family = family, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         modelStats = get_height_stats(name = name, model = model, trainingData = trainingData, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -193,9 +195,9 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
         startFit = Sys.time()
         if (mixed)
         {
-          allFit = gamm(formula = localFormula, data = data, method = "REML", weights = dbhWeight, verbosePQL = FALSE)
+          allFit = gamm(formula = localFormula, data = data, family = family, method = "REML", weights = dbhWeight, verbosePQL = FALSE)
         } else {
-          allFit = gam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+          allFit = gam(formula = localFormula, data = data, family = family, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         }
         allFitStats = get_height_stats(name = name, model = allFit, trainingData = data, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
@@ -209,9 +211,9 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
         trainingData = analysis(dataFold)
         if (mixed)
         {
-          model = gamm(formula = localFormula, data = trainingData, method = "REML", weights = dbhWeight, verbosePQL = FALSE)
+          model = gamm(formula = localFormula, data = trainingData, family = family, method = "REML", weights = dbhWeight, verbosePQL = FALSE)
         } else {
-          model = gam(formula = localFormula, data = trainingData, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
+          model = gam(formula = localFormula, data = trainingData, family = family, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         }
         modelStats = get_height_stats(name = name, model = model, trainingData = trainingData, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
@@ -232,7 +234,7 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
       if ((folds == 1) & (repetitions == 1))
       {
         startFit = Sys.time()
-        allFit = bam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+        allFit = bam(formula = localFormula, data = data, family = family, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         allFitStats = get_dbh_stats(name = name, model = allFit, trainingData = data, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -243,7 +245,7 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
       {
         startFit = Sys.time()
         trainingData = analysis(dataFold)
-        model = bam(formula = localFormula, data = trainingData, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+        model = bam(formula = localFormula, data = trainingData, family = family, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         modelStats = get_dbh_stats(name = name, model = model, trainingData = trainingData, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
         progressBar()
@@ -257,9 +259,9 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
         startFit = Sys.time()
         if (mixed)
         {
-          allFit = gamm(formula = localFormula, data = data, method = "REML", weights = heightWeight, verbosePQL = FALSE)
+          allFit = gamm(formula = localFormula, data = data, family = family, method = "REML", weights = heightWeight, verbosePQL = FALSE)
         } else {
-          allFit = gam(formula = localFormula, data = data, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+          allFit = gam(formula = localFormula, data = data, family = family, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         }
         allFitStats = get_dbh_stats(name = name, model = allFit, trainingData = data, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
@@ -273,9 +275,9 @@ fit_gam = function(name, formula, data, constraint = c(), folds = htDiaOptions$f
         trainingData = analysis(dataFold)
         if (mixed)
         {
-          model = gamm(formula = localFormula, data = trainingData, method = "REML", weights = heightWeight, verbosePQL = FALSE)
+          model = gamm(formula = localFormula, data = trainingData, family = family, method = "REML", weights = heightWeight, verbosePQL = FALSE)
         } else {
-          model = gam(formula = localFormula, data = trainingData, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
+          model = gam(formula = localFormula, data = trainingData, family = family, method = "REML", select = TRUE, weights = heightWeight, nthreads = nthreads)
         }
         modelStats = get_dbh_stats(name = name, model = model, trainingData = trainingData, validationData = assessment(dataFold), significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         modelStats$fitTimeInS = get_elapsed_time(startFit)
@@ -727,6 +729,8 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   logLikelihoodGaussian = sum(validationData$TreeCount * dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
   logLikelihoodT = sum(validationData$TreeCount * (dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation)))
 
+  heightDiameterRatio = validationData$TotalHt / (0.01 * predictedDbh)
+  speciesLimits = get_species_limits(validationData)
   validationTreeCountTotal = sum(validationData$TreeCount)
   dbhModelStats$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # calculate AIC and BIC manually because nlrob objects implement weighting differently from nls and gslnls
   dbhModelStats$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
@@ -739,7 +743,10 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   dbhModelStats$mape = 100 * sum(validationData$TreeCount * abs(validationResiduals / validationData$DBH)) / validationTreeCountTotal
   dbhModelStats$meanAbsolutePlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffect), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
   dbhModelStats$meanAbsolutePercentPlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffectPct), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
-  dbhModelStats$n = nObservations
+  dbhModelStats$nNonPhysical = sum(is.na(predictedDbh) | (predictedDbh < speciesLimits$dbhMin) | (predictedDbh > speciesLimits$dbhMax))
+  dbhModelStats$nObservations = nObservations
+  dbhModelStats$nTaperImplausible = sum((heightDiameterRatio < speciesLimits$heightDiameterRatioMin) | (heightDiameterRatio > speciesLimits$heightDiameterRatioMax), na.rm = TRUE)
+  dbhModelStats$nValidation = validationTreeCountTotal
   dbhModelStats$nse = 1 - sum(validationData$TreeCount * validationResiduals^2) / sum(validationData$TreeCount * (validationData$DBH - sum(validationData$TreeCount * validationData$DBH) / validationTreeCountTotal)^2)
   dbhModelStats$rmse = sqrt(sum(validationData$TreeCount * validationResiduals^2) / validationTreeCountTotal)
   dbhModelStats$rmspe = 100 * sqrt(sum(validationData$TreeCount * (validationResiduals / validationData$DBH)^2) / validationTreeCountTotal)
@@ -858,6 +865,8 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   logLikelihoodGaussian = sum(validationData$TreeCount * dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
   logLikelihoodT = sum(validationData$TreeCount * dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
   
+  heightDiameterRatio = predictedHeight / (0.01 * validationData$DBH)
+  speciesLimits = get_species_limits(validationData)
   validationTreeCountTotal = sum(validationData$TreeCount)
   heightModelStats$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # see get_dbh_stats(): same nlrob issue
   heightModelStats$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
@@ -870,7 +879,10 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   heightModelStats$mape = 100 * sum(validationData$TreeCount * abs(validationResiduals / validationData$TotalHt)) / validationTreeCountTotal
   heightModelStats$meanAbsolutePlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffect), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
   heightModelStats$meanAbsolutePercentPlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffectPct), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
-  heightModelStats$n = nObservations
+  heightModelStats$nNonPhysical = sum(is.na(predictedHeight) | (predictedHeight < speciesLimits$heightMin) | (predictedHeight > speciesLimits$heightMax))
+  heightModelStats$nObservations = nObservations
+  heightModelStats$nTaperImplausible = sum((heightDiameterRatio < speciesLimits$heightDiameterRatioMin) | (heightDiameterRatio > speciesLimits$heightDiameterRatioMax), na.rm = TRUE)
+  heightModelStats$nValidation = validationTreeCountTotal
   heightModelStats$nse = 1 - sum(validationData$TreeCount * validationResiduals^2) / sum((validationData$TreeCount * validationData$TotalHt - sum(validationData$TreeCount * validationData$TotalHt) / validationTreeCountTotal)^2)
   heightModelStats$rmse = sqrt(sum(validationData$TreeCount * validationResiduals^2) / validationTreeCountTotal)
   heightModelStats$rmspe = 100 * sqrt(sum(validationData$TreeCount * (validationResiduals / validationData$TotalHt)^2) / validationTreeCountTotal)
@@ -1076,6 +1088,35 @@ get_model_stats = function(modelOrStats)
     modelStats = modelOrStats$stats
   }
   return(modelStats)
+}
+
+get_species_limits = function(trees)
+{
+  return(tibble(speciesGroup = trees$speciesGroup, DBH = trees$DBH) %>% 
+           mutate(heightMax = case_when(speciesGroup == "DF" ~ 85,
+                                        speciesGroup == "RA" ~ 60,
+                                        speciesGroup == "WH" ~ 80,
+                                        speciesGroup == "BM" ~ 50,
+                                        speciesGroup == "OM" ~ 45,
+                                        speciesGroup == "RC" ~ 80,
+                                        speciesGroup == "other" ~ 85), # m
+                  heightMin = 1.37,
+                  dbhMax = case_when(speciesGroup == "DF" ~ 250,
+                                     speciesGroup == "RA" ~ 150,
+                                     speciesGroup == "WH" ~ 200,
+                                     speciesGroup == "BM" ~ 200,
+                                     speciesGroup == "OM" ~ 250,
+                                     speciesGroup == "RC" ~ 250,
+                                     speciesGroup == "other" ~ 225), # cm
+                  dbhMin = 0.3, # cm, for simplicity assume a minimum leader diameter of 3 mm and a maximum DBH of 3 m though, for some species, the minimum is larger and the maximum smaller (could also consider broken top increases in Sitka spruce, though those aren't predicted here
+                  heightDiameterRatioMax = case_when(speciesGroup == "DF" ~ 1 + 1000 * DBH^-0.51,
+                                                     speciesGroup == "RA" ~ 1 + 1400 * DBH^-0.65,
+                                                     speciesGroup == "WH" ~ 5 + 1000 * DBH^-0.56,
+                                                     speciesGroup == "BM" ~ 1 + 1000 * DBH^-0.63,
+                                                     speciesGroup == "OM" ~ 1 + 800 * DBH^-0.60,
+                                                     speciesGroup == "RC" ~ 5 + 1000 * DBH^-0.59,
+                                                     speciesGroup == "other" ~ 10 + 1000 * DBH^-0.61),
+                  heightDiameterRatioMin = 2))
 }
 
 impute_basal_area = function(Species, heightInM, isPlantation)
@@ -1328,18 +1369,19 @@ stands2022 = read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>%
          siteSpecies = if_else(startsWith(ODSL_VEG_L, "1W") | startsWith(ODSL_VEG_L, "WX"), "hemlock", 
                                if_else(startsWith(ODSL_VEG_L, "1H") | startsWith(ODSL_VEG_L, "HX"), "hardwood",
                                        if_else(startsWith(ODSL_VEG_L, "OT"), "other",
-                                               "Douglas-fir"))))
+                                               "Douglas-fir"))),
+         standAge2016 = pmax(if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4), 0),
+         standArea = 0.404686 * GrossAc,  # ac to ha
+         isPlantation = standAge2016 < 70)
 
 plots2016 = read_xlsx("GIS/Trees/2015-16 cruise/CruisePlots_All_20151211.xlsx") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
 
 trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 2015-16.xlsx", sheet = "CRUISERECS"),
-                                stands2022 %>% mutate(standAge2016 = if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4)) %>% select(StandID, standAge2016, GrossAc, Age_2020, Cruised_Si, Elev_Mean, SlopeMean, AspectSin, AspectCos),
+                                stands2022 %>% select(StandID, standAge2016, standArea, isPlantation),
                                 by = c("StandID")),
                       plots2016 %>% select(STAND, PltInteger, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(PlotID = PltInteger),
                       by = c("PlotID")) %>%
-  rename(standAge2020 = Age_2020) %>%
-  mutate(StandID = as.factor(StandID),
-         speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
+  mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
          BHAge = na_if(BHAge, 0), # years
          DBH = na_if(2.54 * DBH, 0), # inches to cm
          Dia1 = na_if(2.54 * Dia1, 0),
@@ -1347,7 +1389,6 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          Ht1 = na_if(0.3048 * Ht1, 0), # feet to m
          Ht2 = na_if(0.3048 * Ht2, 0),
          isConifer = Species %in% c("DF", "WH", "RC", "SS", "CX", "PC", "PY", "GF", "LP"),
-         isPlantation = standAge2020 < 75,
          isLive = (CompCode %in% c("D.", "SN")) == FALSE,
          isLiveUnbroken = isLive & (CompCode != "BT"),
          SampleFactor = 2.47105 * if_else(SamplingMethod == "BAF", 0.092903, 1) * SampleFactor, # convert BAF from ft²/ac to m²/ha and TPA to TPH, BAF conversion is BAF ft²/ac * 2.47105 ac/ha * 0.092903 m²/ft² = 0.229568 m²/ha / ft²/ac
@@ -1358,10 +1399,8 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          heightDiameterRatio = TotalHt / (0.01 * DBH), # (DBH conversion from cm to m)
          imputedBasalArea = if_else(is.na(TotalHt) == FALSE, impute_basal_area(Species, TotalHt, isPlantation), basalArea), # m², imputed whenever height is available to impute
          imputedHeight = if_else(is.na(TotalHt) == FALSE, TotalHt, if_else(is.na(DBH) == FALSE, impute_height(Species, DBH, isPlantation), NA_real_)), # where possible, perform basic height imputation
-         standArea = 0.404686 * GrossAc,  # ac to ha
          treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea), # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
          treeBasalAreaPerHectareApprox = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", if_else(is.na(basalArea) == FALSE, imputedBasalArea / basalArea, 1), imputedBasalArea)) %>% # m²/ha, stack basal area regression on height regression when possible; BAF has to be used with prism trees but imputed basal area is used where possible to introduce estimation error
-  select(-GrossAc) %>%
   group_by(StandID) %>%
   arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>% # put largest diameter live trees first in each stand for calculating BAL (numbers sort before NA)
   mutate(plotsInStand = length(unique(PlotID)), # nested fixed radius and BAF plots share same plot ID
@@ -1525,6 +1564,30 @@ if (htDiaOptions$includeInvestigatory)
     rename(PltInteger = PlotID) # for GIS joins
   plotTreeProperties %>% summarize(plots = n(), measure = sum(stemsWithDbh > 0), count = n() - measure)
   #writer::write_csv(plotTreeProperties, "GIS/Trees/2015-16 cruise/CruisePlots_All_20151211 treeProperties.csv")
+  
+  # export stand properties, including 2016 inventory where available
+  # trees.R needs areas for all stands, so join cruised stands with all stands defined for 2016 inventory.
+  write_xlsx(list(stands = left_join(stands2022 %>% mutate(StandID = as.integer(StandID)) %>% select(StandID, standAge2016, standArea, isPlantation),
+                                     trees2016 %>% group_by(StandID) %>%
+                                       summarize(standAge2016 = standAge2016[1], 
+                                                 isPlantation = isPlantation[1], 
+                                                 standArea = standArea[1], 
+                                                 plotsInStand = plotsInStand[1], 
+                                                 measurePlotsInStand = measurePlotsInStand[1],
+                                                 tph = tph[1], 
+                                                 topHeight = topHeight[1], 
+                                                 qmd = qmd[1], 
+                                                 standBasalAreaPerHectare = standBasalAreaPerHectare[1], 
+                                                 standBasalAreaApprox = standBasalAreaApprox[1]) %>%
+                                       mutate(StandID = as.integer(StandID)),
+                                     by = "StandID") %>%
+                            mutate(standAge2016 = if_else(is.na(standAge2016.x), standAge2016.y, standAge2016.x),
+                                   standArea = if_else(is.na(standArea.x), standArea.y, standArea.x),
+                                   isPlantation = if_else(is.na(isPlantation.x), isPlantation.y, isPlantation.x)) %>%
+                            select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
+                            rename(standID2016 = StandID) %>%
+                            relocate(standID2016, standAge2016, standArea,	isPlantation)),
+             "GIS/Trees/2015-16 cruise.xlsx")
 }
 
 
@@ -1647,6 +1710,28 @@ if (htDiaOptions$includeInvestigatory)
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout() &
     coord_cartesian(ylim = c(0, 10))
+  
+  # sizes of trees
+  treeStemLimits = get_species_limits(trees2016)
+  ggplot(trees2016) +
+    geom_histogram(aes(x = TotalHt, y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), fill = speciesGroup), binwidth = 2, na.rm = TRUE) +
+    facet_wrap(vars(speciesGroup)) +
+    labs(x = "height, m", y = "percentage of trees") +
+  ggplot(trees2016) +
+    geom_histogram(aes(x = DBH, y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), fill = speciesGroup), binwidth = 2.5, na.rm = TRUE) +
+    facet_wrap(vars(speciesGroup)) +
+    labs(x = "DBH, cm", y = NULL) +
+  ggplot() +
+    geom_line(aes(x = DBH, y = heightDiameterRatioMin), treeStemLimits, color = "grey70", linetype = "longdash", na.rm = TRUE) +
+    geom_point(aes(x = DBH, y = TotalHt / (0.01 * DBH), color = speciesGroup), trees2016, alpha = 0.1, na.rm = TRUE, shape = 16) +
+    geom_line(aes(x = DBH, y = heightDiameterRatioMax), treeStemLimits, color = "grey70", linetype = "longdash", na.rm = TRUE) +
+    facet_wrap(vars(speciesGroup)) +
+    coord_cartesian(ylim = c(1, 400)) +
+    labs(x = "DBH, cm", y = "height-diameter ratio") +
+  plot_layout(guides = "collect") &
+    guides(color = "none", fill = "none") &
+    scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
+    scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65"))
 }
 
 

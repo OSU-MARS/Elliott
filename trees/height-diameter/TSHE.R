@@ -604,7 +604,7 @@ if (tsheOptions$fitHeight & tsheOptions$fitDbh)
   tsheDiameterFromHeightPreferred$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
   tsheDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
   tsheDiameterFromHeightPreferred$linear = fit_lm("linear", DBH ~ 0 + I(TotalHt - 1.37), tshe2016, folds = 1, repetitions = 1)
-  tsheDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), tshe2016, tshe2016, folds = 1, repetitions = 1)
+  tsheDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), tshe2016, folds = 1, repetitions = 1)
   tsheDiameterFromHeightPreferred$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016, start = list(a1 = 2.32, b1 = 0.750, b2 = 0.057), folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/TSHE preferred models.Rdata", tsheHeightFromDiameterPreferred, tsheDiameterFromHeightPreferred)

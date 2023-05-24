@@ -17,7 +17,11 @@ if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other re
 heightDiameterCoefficients = bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients,
                                        umcaCoefficients, thplCoefficients, otherCoefficients) %>% 
   relocate(responseVariable, species, fitSet, fixedWeight, name, fitting, repetition, fold, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
-#write_xlsx(heightDiameterCoefficients %>% select(-a0, -starts_with("a1r"), -starts_with("a3r"), -starts_with("Har"), -X, -starts_with("Xr"), -starts_with("s(")) %>% filter(fitSet == "primary", is.na(fixedWeight), fitting != "gam"), "trees/height-diameter/data/height-diameter model coefficients.xlsx") # slow on full results (74+ MB .xlsx), suppress GAM coefficients since 1) they're not meaningful outside of mgcv and 2) doing so reduces the primary fit set's .xlsx from 20+ MB to 4.6 MB, trim empty GAM and nlme() columns
+write_xlsx(heightDiameterCoefficients %>% 
+             filter(fitSet == "primary", is.na(fixedWeight), fitting != "gam") %>%
+             select(-fitSet, -fixedWeight, -a0, -starts_with("a1r"), -starts_with("a3r"), -starts_with("Har"), -X, -starts_with("Xr"), -starts_with("s(")) %>%
+             relocate(responseVariable, species, name, fitting, significant),
+           "trees/height-diameter/data/height-diameter model coefficients.xlsx") # slow on full results (74+ MB .xlsx), suppress GAM coefficients since 1) they're not meaningful outside of mgcv and 2) doing so reduces the primary fit set's .xlsx from 20+ MB to 4.6 MB, trim empty GAM and nlme() columns
 
 heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
                                   umcaResults, thplResults, otherResults) %>%
@@ -42,7 +46,8 @@ primaryResults = heightDiameterResults %>%
          (responseVariable != "height") | (str_detect(name, "RelHt") == FALSE), # exclude height control forms using relative height
          (responseVariable != "DBH") | (str_detect(name, "BA\\+L") == FALSE)) %>% # exclude diameter control forms using basal area
   group_by(responseVariable, species) %>%
-  mutate(deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
+  mutate(nValidation = n / (htDiaOptions$folds - 1), # not quite exact correction until results are recalculated with nValidation
+         deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
   ungroup()
 #print(primaryResults %>% group_by(fitSet, responseVariable) %>% reframe(n = n(), names = unique(name)), n = 60)
 #primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na(deltaAicN)), mab = sum(is.na(mab)), mae = sum(is.na(mae)), nse = sum(is.na(nse)), rmse = sum(is.na(rmse)))
@@ -285,7 +290,7 @@ predictorVariableStats = predictorVariableResults %>%
 heightDiameterResults %>% 
   filter(fitting %in% c("gsl_nls", "nlrob"), (responseVariable != "height") | (str_detect(name, "RelHt") == FALSE), significant) %>% 
   mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name)),
-         deltaAicN = aic/n - min(aic / n, na.rm = TRUE)) %>% # unrestricted ΔAICn
+         deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # unrestricted ΔAICn
   filter(baseName %in% c("Chapman-Richards", "Ruark", "Sharma-Parton", "Sharma-Zhang", "Sibbesen", "Weibull")) %>% # remove base forms which weren't generalized
   group_by(responseVariable, species, baseName) %>%
   mutate(nseBase = median(if_else(isBaseForm | (baseName == "Sharma-Parton") | (baseName == "Sharma-Zhang"), nse, NA_real_), na.rm = TRUE),
@@ -418,9 +423,9 @@ heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel = "conifer", maxTreesMeasured = 170, omitLegends = TRUE, omitXlabels = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxTreesMeasured = 170, plotLetters = c("d)", "e)", "f)")) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure 03 height-diameter distribution.png", height = 13, width = 22, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 03 height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)
 #plot_exploratory(trees2016) + plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure 03 height-diameter distribution.png", height = 10, width = 22, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 03 height-diameter distribution.png", height = 10, width = 20, units = "cm", dpi = 150)
 
 
 ## Figure 4: height-diameter AUCs
@@ -494,13 +499,13 @@ ggplot(primaryResults %>% filter(responseVariable == "DBH", significant)) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasBasalArea)) +
   geom_count(aes(x = nBasalAreaSignificant, y = species, color = species)) + 
   coord_cartesian(xlim = c(-0.2, 2.2)) +
-  labs(x = "predictor variables\nretained", y = NULL, fill = NULL, title = "j) ABA+T") +
+  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = "j) ABA+T") +
   scale_x_continuous(breaks = seq(0, 2), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasPhysio)) +
   geom_count(aes(x = nPhysioSignificant, y = species, color = species)) + 
   coord_cartesian(xlim = c(-0.3, 5.3)) +
-  labs(x = "predictor variables\nretained", y = NULL, fill = NULL, title = "k) DBH physiographic") +
+  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = "k) DBH physiographic") +
   scale_x_continuous(breaks = seq(0, 5), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasRelHt)) +
@@ -510,7 +515,7 @@ ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasRelHt))
   scale_x_continuous(breaks = c(0, 1), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(nrow = 2, ncol = 6, widths = c(1.8, 1.8, 2, 1.8, 2.6, 1.2), guides = "collect") &
+plot_layout(nrow = 2, ncol = 6, widths = c(1.7, 1.7, 2.2, 1.7, 2.7, 1.2), guides = "collect") &
   scale_color_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults$species), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
   scale_fill_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
   scale_size_area(max_size = 5.5) &
@@ -527,28 +532,36 @@ smallTreeEfficiency = left_join(trees2016 %>% filter(isLiveUnbroken, is.na(Total
                                 primaryResults,
                                 by = c("species"))
 
-ggplot(primaryResults %>% filter(responseVariable == "height")) +
+ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  annotate("text", x = 0, y = 21, label = "a) height prediction", hjust = 0, size = 3.5) +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 21)) +
-  labs(x = "model efficiency", y = "fraction of models, %", fill = NULL) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  labs(x = NULL, y = "fraction of fits, %", fill = NULL, title = "a) base height prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
-ggplot(primaryResults %>% filter(responseVariable == "DBH")) +
+ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  annotate("text", x = 0, y = 21, label = "b) DBH prediction", hjust = 0, size = 3.5) +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 21)) +
-  labs(x = "model efficiency", y = NULL, fill = NULL) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  labs(x = NULL, y = NULL, fill = NULL, title = "b) base DBH prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(smallTreeEfficiency) + 
   #geom_violin(aes(x = pctSmall, y = nse, color = species, group = species), draw_quantiles = c(0.25, 0.50, 0.75), fill = alpha("white", 0.5), position = position_identity(), width = 2) + # too stretched to be useful due to tail of negative model efficiencies
   geom_boxplot(aes(x = pctSmall, y = nse, color = species, group = species), fill = alpha("white", 0.5), position = position_identity(), na.rm = TRUE, outlier.alpha = 0.1, outlier.size = 0.1, width = 4) +
-  annotate("text", x = 0, y = 21.5/20, label = "c) lack of small stem effect", hjust = 0, size = 3.5) +
-  coord_cartesian(xlim = c(0, 100), ylim = c(0, 21.5/20)) +
-  labs(x = "stems less than 20 cm DBH, %", y = "model efficiency", color = NULL) +
+  coord_equal(ratio = 60, xlim = c(0, 100), ylim = c(0, 21.5/20)) +
+  labs(x = "stems less than 20 cm DBH, %", y = "model efficiency", color = NULL, title = "c) lack of small stem effect") +
   scale_x_continuous(breaks = seq(0, 100, by = 20)) +
   scale_y_continuous(breaks = seq(0, 1, by = 0.2)) +
+  theme(plot.title = element_text(vjust = -27)) +
+ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm == FALSE)) +
+  geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  labs(x = "model efficiency", y = "fraction of fits, %", fill = NULL, title = "d) generalized height prediction") +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
+ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm == FALSE)) +
+  geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  labs(x = "model efficiency", y = NULL, fill = NULL, title = "e) generalized DBH prediction") +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
-plot_layout(nrow = 1, ncol = 3, guides = "collect") &
+plot_layout(nrow = 3, ncol = 3, design = "123\n453", guides = "collect") &
   guides(color = "none", fill = guide_legend(ncol = 7)) &
   scale_color_manual(breaks = levels(primaryResults$species), limits = levels(primaryResults$species), values = speciesGroupColors) &
   scale_fill_manual(breaks = levels(primaryResults$species), limits = levels(primaryResults$species), values = speciesGroupColors) &
@@ -556,7 +569,7 @@ plot_layout(nrow = 1, ncol = 3, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.6, "line"), legend.position = "bottom", legend.text = element_text(margin = margin(l = -2.5, r = 6.5)))
-#ggsave("trees/height-diameter/figures/Figure 07 model efficiency.png", height = 7, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 07 model efficiency.png", height = 10, width = 20, units = "cm")
 
 
 ## Figure 8: Douglas-fir and red alder preferred models
@@ -789,33 +802,55 @@ plot_layout(design = "12\n33", heights = c(1, 0)) &
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitXlabels = TRUE) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S01 PSME-ALRU2.png", height = 13, width = 22, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S01 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 150)
 
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, plotLetters = c("g)", "h)", "i)"), omitLegends = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S02 TSHE-ACMA3.png", height = 13, width = 22, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S02 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 150)
   
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), omitXlabels = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("g)", "h)", "i)"), omitLegends = TRUE) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S03 UMCA-THPL.png", height = 13, width = 22, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S03 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 150)
 
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S04 other species.png", height = 1/3*(18 - 1) + 1, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 1 Douglas-fir.png", height = 10, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 2 red alder.png", height = 10, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 3 western hemlock.png", height = 10, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 4 bigleaf maple.png", height = 10, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 5 Oregon myrtle.png", height = 10, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 6 western redcedar.png", height = 10, width = 22, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/exploratory 7 minority species.png", height = 10, width = 22, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S04 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 150)
 
 
 # Figure S5 in residuals.R
 
-# Figure S6: height prediction accuracy
+## Figure S6: comparison of accuracy metrics
+accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(responseVariable == "height") %>% 
+                                                    select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
+                                  rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
+                                  mutate(responseVariable = "height"),
+                                as.data.frame(cor(primaryResults %>% filter(responseVariable == "DBH") %>% 
+                                                    select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
+                                  rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
+                                  mutate(responseVariable = "DBH")) %>%
+  mutate(metricX = factor(metricX, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB,\n%", "MAE,\n%", "RMSE", "normalized\nΔAIC", "model\nefficiency")),
+         metricY = factor(metricY, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB, %", "MAE, %", "RMSE", "normalized ΔAIC", "model efficiency")))
+
+ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) + 
+  coord_equal() +
+  geom_raster(aes(x = metricX, y = metricY, fill = correlation)) +
+  labs(x = NULL, y = NULL, fill = "correlation", title = "a) height prediction") +
+  scale_y_discrete(limits = rev) +
+  ggplot(accuracyCorrelation %>% filter(responseVariable == "DBH")) + 
+  geom_raster(aes(x = metricX, y = metricY, fill = correlation)) +
+  coord_equal() +
+  labs(x = NULL, y = NULL, fill = "correlation", title = "b) DBH prediction") +
+  scale_y_discrete(labels = NULL, limits = rev) +
+  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
+  plot_layout(nrow = 1, ncol = 2, guides = "collect") &
+  scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
+  theme(legend.spacing.y = unit(0.5, "line"))
+#ggsave("trees/height-diameter/figures/Figure S06 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
+
+
+# Figure S7: height prediction accuracy
 # If axis limits, vertical dodges, or aesthetics are changed Figure S6 should be updated.
 heightFromDiameterAccuracyLevels = primaryResults %>% 
   filter(responseVariable == "height") %>%
@@ -887,10 +922,10 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
-#ggsave("trees/height-diameter/figures/Figure S06 height accuracy.png", height = 16, width = 22, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S07 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
 
 
-# Figure S7: DBH prediction accuracy
+# Figure S8: DBH prediction accuracy
 # If axis limits, vertical dodges, or aesthetics are changed Figure S4 should be updated.
 diameterFromHeightAccuracyLevels = primaryResults %>% 
   filter(responseVariable == "DBH") %>%
@@ -963,33 +998,28 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
-#ggsave("trees/height-diameter/figures/Figure S07 DBH accuracy.png", height = 16, width = 22, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S08 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
 
 
-## Figure S08: comparison of accuracy metrics
-accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(responseVariable == "height") %>% 
-                                                    select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
-                                  rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
-                                  mutate(responseVariable = "height"),
-                                as.data.frame(cor(primaryResults %>% filter(responseVariable == "DBH") %>% 
-                                                    select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
-                                  rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
-                                  mutate(responseVariable = "DBH")) %>%
-  mutate(metricX = factor(metricX, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB,\n%", "MAE,\n%", "RMSE", "normalized\nΔAIC", "model\nefficiency")),
-         metricY = factor(metricY, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB, %", "MAE, %", "RMSE", "normalized ΔAIC", "model efficiency")))
+# Table S1 in setup.R
 
-ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) + 
-  coord_equal() +
-  geom_raster(aes(x = metricX, y = metricY, fill = correlation)) +
-  labs(x = NULL, y = NULL, fill = "correlation", title = "a) height prediction") +
-  scale_y_discrete(limits = rev) +
-  ggplot(accuracyCorrelation %>% filter(responseVariable == "DBH")) + 
-  geom_raster(aes(x = metricX, y = metricY, fill = correlation)) +
-  coord_equal() +
-  labs(x = NULL, y = NULL, fill = "correlation", title = "b) DBH prediction") +
-  scale_y_discrete(labels = NULL, limits = rev) +
-  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
-  plot_layout(nrow = 1, ncol = 2, guides = "collect") &
-  scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
-  theme(legend.spacing.y = unit(0.5, "line"))
-#ggsave("trees/height-diameter/figures/Figure S08 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
+
+# Tables S2-15
+# Top 10 height and DBH model forms by species.
+preferredModelForms = heightDiameterModelRanking %>% filter(significant) %>% 
+  mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
+  group_by(responseVariable, species) %>% 
+  slice_max(aucBlended, n = 10, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
+  mutate(rank = row_number()) %>% 
+  arrange(desc(responseVariable), species, isBaseForm, rank) %>%
+  select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
+  relocate(responseVariable, species, rank, name, aucMab, aucMae, aucRmse, aucDeltaAicN, aucNse)
+preferredModelFormsInitialDbh = heightDiameterModelRanking %>% filter(significant, hasStand == FALSE) %>% 
+  mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
+  group_by(responseVariable, species) %>% 
+  slice_max(aucBlended, n = 10, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
+  mutate(rank = row_number()) %>% 
+  arrange(desc(responseVariable), species, isBaseForm, rank) %>%
+  select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
+  relocate(responseVariable, species, rank, name, aucMab, aucMae, aucRmse, aucDeltaAicN, aucNse)
+write_xlsx(list(preferred = preferredModelForms, initialDbh = preferredModelFormsInitialDbh), "trees/height-diameter/figures/Tables S02-15 model AUCs.xlsx")
