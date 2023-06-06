@@ -46,8 +46,7 @@ primaryResults = heightDiameterResults %>%
          (responseVariable != "height") | (str_detect(name, "RelHt") == FALSE), # exclude height control forms using relative height
          (responseVariable != "DBH") | (str_detect(name, "BA\\+L") == FALSE)) %>% # exclude diameter control forms using basal area
   group_by(responseVariable, species) %>%
-  mutate(nValidation = n / (htDiaOptions$folds - 1), # not quite exact correction until results are recalculated with nValidation
-         deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
+  mutate(deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
   ungroup()
 #print(primaryResults %>% group_by(fitSet, responseVariable) %>% reframe(n = n(), names = unique(name)), n = 60)
 #primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na(deltaAicN)), mab = sum(is.na(mab)), mae = sum(is.na(mae)), nse = sum(is.na(nse)), rmse = sum(is.na(rmse)))
@@ -333,7 +332,7 @@ heightDiameterModelAucs %>% filter(name != "REML GAM", otherModelName == "REML G
 
 primaryResults %>% group_by(responseVariable, species) %>% 
   reframe(quantiles = c(0.05, 0.50, 0.95), pFx = quantile(meanAbsolutePlantationEffect, probs = quantiles, na.rm = TRUE), pFxPct = quantile(meanAbsolutePercentPlantationEffect, probs = quantiles, na.rm = TRUE)) %>%
-  pivot_wider(id_cols = c("responseVariable", "species"), names_from = "quantiles", values_from = c("pFx", "pFxPct"))
+  pivot_wider(id_cols = c("responseVariable", "species"), names_from = "quantiles", values_from = c("pFx", "pFxPct")) %>%
   arrange(desc(responseVariable))
 
 # AIC selection of generalizing predictors based on ΔAICn AUC
@@ -518,7 +517,7 @@ plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 2, ncol = 6, widths = c(1.7, 1.7, 2.2, 1.7, 2.7, 1.2), guides = "collect") &
   scale_color_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults$species), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
   scale_fill_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
-  scale_size_area(max_size = 5.5) &
+  scale_size_area(max_size = 5.0) &
   theme(legend.position = "none")
 #ggsave("trees/height-diameter/figures/Figure 06 predictor variables.png", height = 10, width = 20, units = "cm", dpi = 150)
 
@@ -534,12 +533,12 @@ smallTreeEfficiency = left_join(trees2016 %>% filter(isLiveUnbroken, is.na(Total
 
 ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
   labs(x = NULL, y = "fraction of fits, %", fill = NULL, title = "a) base height prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
   labs(x = NULL, y = NULL, fill = NULL, title = "b) base DBH prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(smallTreeEfficiency) + 
@@ -552,12 +551,12 @@ ggplot(smallTreeEfficiency) +
   theme(plot.title = element_text(vjust = -27)) +
 ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm == FALSE)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
   labs(x = "model efficiency", y = "fraction of fits, %", fill = NULL, title = "d) generalized height prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm == FALSE)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 22)) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
   labs(x = "model efficiency", y = NULL, fill = NULL, title = "e) generalized DBH prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
@@ -579,7 +578,7 @@ if (exists("psmeHeightFromDiameterPreferred") == FALSE) { load("trees/height-dia
 if (exists("alruHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ALRU2 preferred models.Rdata") }
 
 ggplot() +
-  geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = psme2016physio$DBH, y = predict(psmeHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh), color = "Sharma-Parton BA+L RelDbh physio", group = psme2016physio$isPlantation, linetype = psme2016physio$isPlantation), alpha = 0.4) +
   geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterPreferred$gam), color = "REML GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterPreferred$sibbesen), color = "Sibbesen", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
@@ -591,7 +590,7 @@ ggplot() +
   scale_color_manual(breaks = c("REML GAM", "Sibbesen", "Sharma-Parton BA+L RelDbh physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey60")) +
   theme(legend.key = element_rect(fill = alpha("white", 0.5)), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
-  geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$gamAbatPhysio), y = psme2016physio$TotalHt, color = "REML GAM ABA+T physio", group = psme2016physio$isPlantation, linetype = psme2016physio$isPlantation), alpha = 0.4, orientation = "y") +
   geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$gam), y = psme2016$TotalHt, color = "REML GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$ruark), y = psme2016$TotalHt, color = "Ruark", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
@@ -603,28 +602,28 @@ ggplot() +
   scale_color_manual(breaks = c("REML GAM", "Ruark", "REML GAM ABA+T physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
-  geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.10, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = alru2016physio$DBH, y = predict(alruHeightFromDiameterPreferred$sharmaPartonBalPhysio), color = "Sharma-Parton BA+L physio", group = alru2016physio$isPlantation, linetype = alru2016physio$isPlantation), alpha = 0.4) +
   geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterPreferred$gam), color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
-  geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterPreferred$weibull), color = "Weibull", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterPreferred$ratkowsky), color = "Ratkowsky", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) red alder height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = "DBH, cm", y = "height, m", color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("REML GAM", "Weibull", "Sharma-Parton BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
+  scale_color_manual(breaks = c("REML GAM", "Ratkowsky", "Sharma-Parton BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
-  geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gamAbatPhysioRelHt), y = alru2016physio$TotalHt, color = "REML GAM ABA+T RelHt physio", group = alru2016physio$isPlantation, linetype = alru2016physio$isPlantation), alpha = 0.4, orientation = "y") +
-  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$chapmanRichards), y = alru2016$TotalHt, color = "Chapman-Richards inverse", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$ruark), y = alru2016$TotalHt, color = "Ruark", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gam), y = alru2016$TotalHt, color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "d) red alder DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = "DBH, cm", y = NULL, color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("REML GAM", "Chapman-Richards inverse", "REML GAM ABA+T RelHt physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
+  scale_color_manual(breaks = c("REML GAM", "Ruark", "REML GAM ABA+T RelHt physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 get_preferred_model_linetype_legend() +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
@@ -640,43 +639,43 @@ if (exists("tsheHeightFromDiameterPreferred") == FALSE) { load("trees/height-dia
 if (exists("acmaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ACMA3 preferred models.Rdata") }
 
 ggplot() +
-  geom_point(aes(x = tshe2016$DBH, y = tshe2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = tshe2016$DBH, y = tshe2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterPreferred$gamBalRelDbh), color = "REML GAM BA+L RelDbh", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation), alpha = 0.4) +
   geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterPreferred$gam), color = "REML GAM", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
-  geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterPreferred$sibbesen), color = "Sibbesen", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
+  geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterPreferred$sibbesen), color = "Prodan", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "a) western hemlock height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = NULL, y = "height, m", color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("REML GAM", "Sibbesen", "REML GAM BA+L RelDbh", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
+  scale_color_manual(breaks = c("REML GAM", "Prodan", "REML GAM BA+L RelDbh", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
-  geom_point(aes(x = tshe2016$DBH, y = tshe2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$gamAbat), y = tshe2016$TotalHt, color = "REML GAM ABA+T", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation), alpha = 0.4, orientation = "y") +
-  geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$linear), y = tshe2016$TotalHt, color = "parabolic", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
+  geom_point(aes(x = tshe2016$DBH, y = tshe2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
+  geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$gamAbatPhysio), y = tshe2016physio$TotalHt, color = "REML GAM ABA+T physio", group = tshe2016physio$isPlantation, linetype = tshe2016physio$isPlantation), alpha = 0.4, orientation = "y") +
+  geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$linear), y = tshe2016$TotalHt, color = "linear", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$gam), y = tshe2016$TotalHt, color = "REML GAM", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "b) western hemlock DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
-  scale_color_manual(breaks = c("REML GAM", "parabolic", "REML GAM ABA+T", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
+  scale_color_manual(breaks = c("REML GAM", "linear", "REML GAM ABA+T physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
-  geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = acma2016physio$DBH, y = predict(acmaHeightFromDiameterPreferred$weibullBal), color = "Weibull BA+L", group = acma2016$isPlantation, linetype = acma2016$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$chapmanRichards), color = "Chapman-Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
+  geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$sharmaParton), color = "Sharma-Parton", group = acma2016$isPlantation, linetype = acma2016$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$michaelisMenten), color = "Michaelis-Menten", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$richardsW), color = "unified Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) bigleaf maple height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
-  scale_color_manual(breaks = c("Chapman-Richards", "unified Richards", "Weibull BA+L", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
+  scale_color_manual(breaks = c("Michaelis-Menten", "unified Richards", "Weibull BA+L", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
-  geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(acmaDiameterFromHeightPreferred$gamAbatPhysioRelHt), y = acma2016physio$TotalHt, color = "REML GAM ABA+T RelHt physio", group = acma2016physio$isPlantation, linetype = acma2016physio$isPlantation), alpha = 0.5, orientation = "y") +
   geom_line(aes(x = predict(acmaDiameterFromHeightPreferred$gam), y = acma2016$TotalHt, color = "REML GAM", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = predict(acmaDiameterFromHeightPreferred$ruark), y = acma2016$TotalHt, color = "Ruark", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
@@ -701,19 +700,19 @@ if (exists("umcaHeightFromDiameterPreferred") == FALSE) { load("trees/height-dia
 if (exists("thplHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/THPL preferred models.Rdata") }
 
 ggplot() +
-  geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPreferred$sharmaZhang), color = "Sharma-Zhang", group = umca2016$isPlantation, linetype = umca2016$isPlantation), alpha = 0.4) +
+  geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
+  geom_line(aes(x = umca2016physio$DBH, y = predict(umcaHeightFromDiameterPreferred$sharmaPartonPhysio), color = "Sharma-Parton physio", group = umca2016physio$isPlantation, linetype = umca2016physio$isPlantation), alpha = 0.4) +
   geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPreferred$hossfeld), color = "Hossfeld IV", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
-  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPreferred$michaelisMenten), color = "Michaelis-Menten", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
+  geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPreferred$prodan), color = "Prodan", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "a) Oregon myrtle height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = NULL, y = "height, m", color = NULL) +
-  scale_color_manual(breaks = c("Hossfeld IV", "Michaelis-Menten", "Sharma-Zhang", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
+  scale_color_manual(breaks = c("Hossfeld IV", "Prodan", "Sharma-Parton physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
-  geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = umca2016$DBH, y = umca2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(umcaDiameterFromHeightPreferred$gamRelHtPhysio), y = umca2016physio$TotalHt, color = "REML GAM RelHt physio", group = umca2016physio$isPlantation, linetype = umca2016physio$isPlantation), alpha = 0.5, orientation = "y") +
   geom_line(aes(x = predict(umcaDiameterFromHeightPreferred$gam), y = umca2016$TotalHt, color = "REML GAM", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = predict(umcaDiameterFromHeightPreferred$linear), y = umca2016$TotalHt, color = "linear", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
@@ -725,19 +724,19 @@ ggplot() +
   scale_color_manual(breaks = c("REML GAM", "linear", "REML GAM RelHt physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
-  geom_point(aes(x = thpl2016$DBH, y = thpl2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
-  geom_line(aes(x = thpl2016physio$DBH, y = predict(thplHeightFromDiameterPreferred$gamBalPhysio), color = "REML GAM BA+L physio", group = thpl2016physio$isPlantation, linetype = thpl2016physio$isPlantation), alpha = 0.4) +
-  geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterPreferred$gam), color = "REML GAM", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation), alpha = 0.8) +
-  geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterPreferred$michaelisMenten), color = "Michaelis-Menten", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation), alpha = 0.8) + # Hossfeld and Michaelis-Menten fits are visually indistinguishable
+  geom_point(aes(x = thpl2016$DBH, y = thpl2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
+  geom_line(aes(x = thpl2016physio$DBH, y = predict(thplHeightFromDiameterPreferred$sharmaPartonPhysio), color = "Sharma-Parton physio", group = thpl2016physio$isPlantation, linetype = thpl2016physio$isPlantation), alpha = 0.4) +
+  geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterPreferred$hossfeld), color = "Hossfeld IV", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation), alpha = 0.8) +
+  geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterPreferred$prodan), color = "Prodan", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation), alpha = 0.8) + # Hossfeld and Michaelis-Menten fits are visually indistinguishable
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "c) western redcedar height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
-  scale_color_manual(breaks = c("REML GAM", "Michaelis-Menten", "REML GAM BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
+  scale_color_manual(breaks = c("Hossfeld IV", "Prodan", "Sharma-Parton physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
-  geom_point(aes(x = thpl2016$DBH, y = thpl2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = thpl2016$DBH, y = thpl2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(thplDiameterFromHeightPreferred$gamAbatPhysio), y = thpl2016physio$TotalHt, color = "REML GAM ABA+T physio", group = thpl2016physio$isPlantation, linetype = thpl2016physio$isPlantation), alpha = 0.5, orientation = "y") +
   geom_line(aes(x = predict(thplDiameterFromHeightPreferred$gam), y = thpl2016$TotalHt, color = "REML GAM", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
   geom_line(aes(x = predict(thplDiameterFromHeightPreferred$parabolic), y = thpl2016$TotalHt, color = "parabolic", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
@@ -767,7 +766,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
 if (exists("otherHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/other preferred models.Rdata") }
 
 ggplot() +
-  geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterPreferred$gamBal), color = "REML GAM BA+L", group = other2016$isPlantation, linetype = other2016$isPlantation), alpha = 0.4) +
   geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterPreferred$gam), color = "REML GAM", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterPreferred$parabolic), color = "parabolic", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
@@ -779,7 +778,7 @@ ggplot() +
   scale_color_manual(breaks = c("REML GAM", "parabolic", "REML GAM BA+L", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 1)) +
 ggplot() +
-  geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.15, color = "grey25", na.rm = TRUE, shape = 16) +
+  geom_point(aes(x = other2016$DBH, y = other2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(otherDiameterFromHeightPreferred$gamPhysio), y = other2016physio$TotalHt, color = "REML GAM physio", group = other2016physio$isPlantation, linetype = other2016physio$isPlantation), alpha = 0.5, orientation = "y") +
   geom_line(aes(x = predict(otherDiameterFromHeightPreferred$gam), y = other2016$TotalHt, color = "REML GAM", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = predict(otherDiameterFromHeightPreferred$parabolic), y = other2016$TotalHt, color = "parabolic", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
@@ -904,15 +903,15 @@ ggplot(heightFromDiameterResults) +
   geom_errorbarh(aes(xmin = deltaAicN_q0.025, xmax = deltaAicN_q0.975, y = name, color = species, alpha = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = heightFromDiameterResults$verticalDodge), height = 0.1, linewidth = 0.5) +
   geom_point(aes(x = deltaAicN_q0.5, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = heightFromDiameterResults$verticalDodge)) +
   labs(x = bquote("normalized "*Delta*"AIC"), y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
-  coord_cartesian(xlim = c(0, 1)) + # exclude high AIC of linear, parabolic, and Douglas-fir power+Curtis fits to avoid squashing of nonlinear differences
-  scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
+  coord_cartesian(xlim = c(0, 10)) + # exclude high AIC of linear, parabolic, and Douglas-fir power+Curtis fits to avoid squashing of nonlinear differences
+  scale_x_continuous(breaks = seq(0, 10, by = 2)) +
   scale_y_discrete(labels = NULL) +
 ggplot(heightFromDiameterResults) +
   geom_errorbarh(aes(xmin = nse_q0.025, xmax = nse_q0.975, y = name, color = species, alpha = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = heightFromDiameterResults$verticalDodge), height = 0.1, linewidth = 0.5) +
   geom_point(aes(x = nse_q0.5, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = heightFromDiameterResults$verticalDodge)) +
   coord_cartesian(xlim = c(0, 1)) +
   labs(x = "model efficiency", y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
-  scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
+  scale_x_continuous(breaks = c(0, 0.4, 0.7, 1), minor_breaks = c(0.1, 0.2, 0.3, 0.5, 0.6, 0.8, 0.9)) +
   scale_y_discrete(labels = NULL) +
 plot_annotation(theme = theme(plot.margin = margin(0, 2, 0, 0, "pt"))) +
 plot_layout(nrow = 1, ncol = 5, guides = "collect") &
@@ -978,9 +977,9 @@ ggplot(diameterFromHeightResults) +
   #geom_segment(x = 0.255, xend = 0.275, y = "REML GAM physio", yend = "REML GAM physio", arrow = arrow(length = unit(0.2, "line"), type = "closed"), color = "grey70", linewidth = 0.4) +
   geom_errorbarh(aes(xmin = deltaAicN_q0.025, xmax = deltaAicN_q0.975, y = name, color = species, alpha = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = diameterFromHeightResults$verticalDodge), height = 0.1, linewidth = 0.5) +
   geom_point(aes(x = deltaAicN_q0.5, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = diameterFromHeightResults$verticalDodge)) +
-  coord_cartesian(xlim = c(0, 1)) +
+  coord_cartesian(xlim = c(0, 10)) +
   labs(x = bquote("normalized "*Delta*"AIC"), y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
-  scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
+  scale_x_continuous(breaks = seq(0, 10, by = 2)) +
   #scale_x_continuous(breaks = c(0, 1, 2, 3, 4, 5, 6, 7), trans = scales::pseudo_log_trans()) +
   scale_y_discrete(labels = NULL) +
 ggplot(diameterFromHeightResults) +
@@ -988,7 +987,7 @@ ggplot(diameterFromHeightResults) +
   geom_point(aes(x = nse_q0.5, y = name, color = species, alpha = sizeShapeAlpha, shape = sizeShapeAlpha, size = sizeShapeAlpha), na.rm = TRUE, position = position_nudge(y = diameterFromHeightResults$verticalDodge)) +
   coord_cartesian(xlim = c(0, 1)) +
   labs(x = "model efficiency", y = NULL, color = NULL, alpha = NULL, shape = NULL, size = NULL) +
-  scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
+  scale_x_continuous(breaks = c(0, 0.4, 0.7, 1), minor_breaks = c(0.1, 0.2, 0.3, 0.5, 0.6, 0.8, 0.9)) +
   scale_y_discrete(labels = NULL) +
 plot_annotation(theme = theme(plot.margin = margin(0, 2, 0, 0, "pt"))) +
 plot_layout(nrow = 1, ncol = 5, guides = "collect") &

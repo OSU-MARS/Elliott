@@ -684,7 +684,7 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   {
     # see notes in get_height_stats()
     nlmeValidationData = left_join(bind_cols(validationData, bind_rows(model$coefficients$fixed)),
-                                   bind_cols(StandID = factor(as.numeric(rownames(model$coefficients$random$StandID)), levels = levels(validationData$StandID)), model$coefficients$random$StandID),
+                                   bind_cols(StandID = as.numeric(rownames(model$coefficients$random$StandID), levels = levels(validationData$StandID)), model$coefficients$random$StandID),
                                    by = "StandID")
     randomEffectsColumns = setdiff(names(nlmeValidationData), names(validationData))
     nlmeValidationData %<>% replace_na(setNames(as.list(rep(0, length(randomEffectsColumns))), randomEffectsColumns))
@@ -823,7 +823,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
     # To avoid predicting NAs, this code path bypasses predict.nlme() and replaceds unknown random effects with zeros.
     # It relies on the do.call() workaround to be able to retrieve the model formula to evaluate.
     nlmeValidationData = left_join(bind_cols(validationData, bind_rows(model$coefficients$fixed)),
-                                   bind_cols(StandID = factor(as.numeric(rownames(model$coefficients$random$StandID)), levels = levels(validationData$StandID)), model$coefficients$random$StandID),
+                                   bind_cols(StandID = as.numeric(rownames(model$coefficients$random$StandID), levels = levels(validationData$StandID)), model$coefficients$random$StandID),
                                    by = "StandID")
     randomEffectsColumns = setdiff(names(nlmeValidationData), names(validationData))
     nlmeValidationData %<>% replace_na(setNames(as.list(rep(0, length(randomEffectsColumns))), randomEffectsColumns))
@@ -1414,13 +1414,27 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          tph = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * sum(isLive * measureTreeTphContribution, na.rm = TRUE) / measurePlotsInStand, # stand's total trees per hectare
          qmd = sqrt(standBasalAreaPerHectare / (pi/4 * 0.01^2 * tph)), # quadratic mean diameter, cm
          relativeDiameter = DBH / qmd) %>%
-  arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
-  mutate(topHeightTph = pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), # TPH total towards the H100 definition of top height, trees not measured for TotalHt are skipped
-         topHeightWeight = pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
-         topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), # m, tallest 100 trees per hectare
-         relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees (debatable if imputed heights should be included but, for now, trees not measured for height are left with NA relative height)
+  # top height by tallest trees in stand, regardless of plot
+  #arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
+  #mutate(topHeightTph = pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), # TPH total towards the H100 definition of top height, trees not measured for TotalHt are skipped
+  #       topHeightWeight = pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
+  #       topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), # m, tallest 100 trees per hectare
+  #       relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees (debatable if imputed heights should be included but, for now, trees not measured for height are left with NA relative height)
+  #       tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
+  #       tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>% 
+  # top height by estimating H100 on each plot and then averaging all plots (slower than pooling by stand)
+  group_by(StandID, PlotID, isLiveUnbroken) %>%
+  arrange(desc(TotalHt), .by_group = TRUE) %>% 
+  mutate(topHeightTph = if_else(isLiveUnbroken, pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), NA_real_),
+         topHeightWeight = if_else(isLiveUnbroken, pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), NA_real_),
+         topHeight = if_else(isLiveUnbroken, sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), NA_real_),
+         topHeightMask = if_else(isLiveUnbroken & (is.na(topHeightWeight) == FALSE), row_number() == n(), NA_real_)) %>% # topHeightWeight is NA for count plots
+  group_by(StandID) %>%
+  arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>%
+  mutate(topHeight = sum(topHeightMask * topHeightTph * topHeight, na.rm = TRUE) / sum(topHeightMask * topHeightTph, na.rm = TRUE),
+         relativeHeight = TotalHt / topHeight,
          tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
-         tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>% 
+         tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>%
   ungroup()
 
 heightClassBreaks = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>%

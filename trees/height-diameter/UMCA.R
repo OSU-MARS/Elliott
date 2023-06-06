@@ -11,11 +11,11 @@ umca2016defaultWeight = umca2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*Tr
                                             heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 umca2016defaultWeightPhysio = umca2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-umcaOptions = tibble(fitHeight = FALSE, 
+umcaOptions = tibble(fitHeight = TRUE, 
                      fitHeightNlrob = fitHeight,
                      fitHeightGnls = FALSE,
                      fitHeightMixed = fitHeight,
-                     fitDbh = FALSE,
+                     fitDbh = TRUE,
                      fitDbhNlrob = fitDbh,
                      fitDbhMixed = fitDbh)
 
@@ -54,16 +54,16 @@ if (umcaOptions$fitHeight)
   umcaHeightFromDiameter$sibbesen = fit_gsl_nls("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.3, a1p = 0.1, b1 = 2.0, b2 = -0.16, b2p = -0.03)) # b1p not significant
   umcaHeightFromDiameter$weibull = fit_gsl_nls("Weibull", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^b2)), umca2016, start = list(a1 = 18, b1 = -0.04, b2 = 1.0)) # a1p, b1p, b2p not significant
   umcaHeightFromDiameter$weibullBal = fit_gsl_nls("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH^b2)), umca2016, start = list(a1 = 18, a2 = 0.03, b1 = -0.044, b2 = 1.0), significant = FALSE) # a1p, a2, a2p, a3, a3p, b1p, b2p not significant
-  umcaHeightFromDiameter$weibullBalRelHt = fit_gsl_nls("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a9*pmin(relativeHeight, 1.5)) * (1 - exp((b1 + b1p * isPlantation) * DBH^b2)), umca2016, start = list(a1 = 0, a2 = 0.05, a9 = 55, b1 = -0.5, b1p = 0.3, b2 = 0.4), control = nls.control(maxiter = 500)) # a1, a1p, a2p, a3, a3p, a9p, b2p not significant
+  umcaHeightFromDiameter$weibullBalRelHt = fit_gsl_nls("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a9*pmin(relativeHeight, 1.5)) * (1 - exp((b1 + b1p * isPlantation) * DBH^b2)), umca2016, start = list(a1 = 0, a2 = 0.08, a9 = 33, b1 = -0.5, b1p = 0.3, b2 = 0.4), control = nls.control(maxiter = 500)) # a1, a1p, a2p, a3, a3p, a9p, b2p not significant
   
   if (umcaOptions$fitHeightNlrob)
   {
     umcaHeightFromDiameterNlrob = list(chapmanRichards = fit_nlrob("Chapman-Richards", TotalHt ~ 1.37 + a1 * (1 - exp(b1*DBH))^b2, umca2016, start = list(a1 = 18, b1 = -0.05, b2 = 1.06)))
-    umcaHeightFromDiameterNlrob$chapmanRichardsBal = fit_nlrob("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH))^b2, umca2016, start = list(a1 = 18, a2 = 0.02, b1 = -0.04, b2 = 1.05), control = nls.control(maxiter = 250, tol = 1E-4), significant = FALSE) # job step factor
+    umcaHeightFromDiameterNlrob$chapmanRichardsBal = fit_nlrob("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH))^b2, umca2016, start = list(a1 = 18, a2 = 0.02, b1 = -0.04, b2 = 1.05), control = nls.control(maxiter = 250, tol = 0.001), significant = FALSE) # job step factor
     umcaHeightFromDiameterNlrob$chapmanRichardsBalPhysio = fit_nlrob("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation) * (1 - exp(b1*DBH))^b2, umca2016physio, start = list(a1 = 20, a2 = 0, a4 = -0.014, b1 = -0.05, b2 = 1.1), nls.control(tol = 0.001), significant = FALSE) # job step factor
     #umcaHeightFromDiameterNlrob$chapmanRichardsBalRelHt = fit_nlrob("Chapman-Richards BA+L RelHt", TotalHt ~ 1.37 + (a1 + a3 * standBasalAreaPerHectare + (a9 + a9p * isPlantation) * relativeHeight) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), umca2016, start = list(a1 = -1.9, a3 = 0.03, a9 = 57, a9p = -16, b1 = -0.07, b2 = 0.23, b2p = 0.22), control = nls.control(maxiter = 250)) # NaN-inf
     umcaHeightFromDiameterNlrob$chapmanRichardsBalPhysioRelDbh = fit_nlrob("Chapman-Richards BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a4 * elevation + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, umca2016physio, start = list(a1 = 20, a2 = 0.03, a4 = -0.01, a10 = 0, b1 = -0.05, b2 = 1.06), control = nls.control(tol = 1E-4), significant = FALSE) # job step factor
-    umcaHeightFromDiameterNlrob$chapmanRichardsBalRelDbh = fit_nlrob("Chapman-Richards BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, umca2016, start = list(a1 = 18, a2 = 0.015, a10 = 0, b1 = -0.05, b2 = 1.1), control = nls.control(tol = 0.001), significant = FALSE) # job step factor
+    umcaHeightFromDiameterNlrob$chapmanRichardsBalRelDbh = fit_nlrob("Chapman-Richards BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, umca2016, start = list(a1 = 18, a2 = 0.015, a10 = 0, b1 = -0.05, b2 = 1.1), control = nls.control(tol = 0.01), significant = FALSE) # job step factor
     umcaHeightFromDiameterNlrob$chapmanRichardsPhysio = fit_nlrob("Chapman-Richards physio", TotalHt ~ 1.37 + (a1 + a4 * elevation) * (1 - exp(b1*DBH))^b2, umca2016physio, start = list(a1 = 20, a4 = -0.014, b1 = -0.05, b2 = 1.1), significant = FALSE)
     umcaHeightFromDiameterNlrob$chapmanRichardsRelDbh = fit_nlrob("Chapman-Richards RelDbh", TotalHt ~ 1.37 + (a1 + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, umca2016, start = list(a1 = 18, a10 = 0, b1 = -0.05, b2 = 1.05), control = nls.control(tol = 0.001), significant = FALSE) # job step factor
     #umcaHeightFromDiameterNlrob$chapmanRichardsRelDbhPhysio = fit_nlrob("Chapman-Richards RelDbh physio", TotalHt ~ 1.37 + (a1 + a4 * elevation + a10 * relativeDiameter) * (1 - exp(b1*DBH))^b2, umca2016physio, start = list(a1 = 21, a4 = -0.012, a10 = 0, b1 = -0.05, b2 = 1.1), control = nls.control(maxiter = 100, tol = 1), significant = FALSE) # always job step factor
@@ -84,11 +84,11 @@ if (umcaOptions$fitHeight)
     umcaHeightFromDiameterNlrob$sharmaPartonRelDbh = fit_nlrob("Sharma-Parton RelDbh", TotalHt ~ 1.37 + (a1 + a10 * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^b3*DBH))^b4, umca2016, start = list(a1 = 50, a10 = -4, b1 = -0.2, b2 = -0.04, b3 = 0, b4 = 1.05), control = nls.control(tol = 0.001), significant = FALSE) # b3 not significant, job step factor
     umcaHeightFromDiameterNlrob$sharmaPartonRelDbhPhysio = fit_nlrob("Sharma-Parton RelDbh physio", TotalHt ~ 1.37 + (a1 + a4 * elevation + a10 * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^(b4 + b4p * isPlantation), umca2016physio, start = list(a1 = 13, a4 = -0.008, a10 = 0, b1 = 0.12, b2 = -0.05, b3 = 0.05, b4 = 1.2, b4p = -0.3), control = nls.control(tol = 0.001), significant = FALSE) # job step factor
     umcaHeightFromDiameterNlrob$sharmaZhang = fit_nlrob("Sharma-Zhang", TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1*(1 - exp(b2*tph^b3*DBH))^b4, umca2016, start = list(a1 = 17, b1 = 0, b2 = -0.03, b3 = 0.1, b4 = 1.1), control = nls.control(tol = 1E-4)) # job step factor
-    umcaHeightFromDiameterNlrob$sharmaZhangBal = fit_nlrob("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^b4, umca2016, start = list(a1 = 18, a2 = 0.03, b1 = 0, b2 = -0.03, b3 = 0.10, b4 = 1.08), control = nls.control(tol = 1E-4), significant = FALSE) # job step factor
+    umcaHeightFromDiameterNlrob$sharmaZhangBal = fit_nlrob("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger)*standBasalAreaPerHectare^b1 * (1 - exp(b2*tph^b3*DBH))^b4, umca2016, start = list(a1 = 18, a2 = 0.03, b1 = 0, b2 = -0.03, b3 = 0.10, b4 = 1.08), control = nls.control(tol = 0.001), significant = FALSE) # job step factor
     umcaHeightFromDiameterNlrob$sibbesen = fit_nlrob("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.3, a1p = 0.1, b1 = 2.0, b2 = -0.16, b2p = -0.03))
     umcaHeightFromDiameterNlrob$weibull = fit_nlrob("Weibull", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH^b2)), umca2016, start = list(a1 = 18, b1 = -0.04, b2 = 1.0))
-    umcaHeightFromDiameterNlrob$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH^b2)), umca2016, start = list(a1 = 17.5, a2 = 0.02, b1 = -0.044, b2 = 1.05), significant = FALSE)
-    umcaHeightFromDiameterNlrob$weibullBalRelHt = fit_nlrob("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a9*pmin(relativeHeight, 1.5)) * (1 - exp((b1 + b1p * isPlantation) * DBH^b2)), umca2016, start = list(a1 = -1.2, a2 = 0.03, a9 = 58, b1 = -0.8, b1p = 0.5, b2 = 0.4), control = nls.control(maxiter = 500))
+    umcaHeightFromDiameterNlrob$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + a2 * basalAreaLarger) * (1 - exp(b1*DBH^b2)), umca2016, start = list(a1 = 17.5, a2 = 0.02, b1 = -0.044, b2 = 1.05), control = nls.control(tol = 1E-4), significant = FALSE) # job step halving
+    umcaHeightFromDiameterNlrob$weibullBalRelHt = fit_nlrob("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + a2*basalAreaLarger + a9*pmin(relativeHeight, 1.5)) * (1 - exp((b1 + b1p * isPlantation) * DBH^b2)), umca2016, start = list(a1 = -1.2, a2 = 0.03, a9 = 35, b1 = -0.8, b1p = 0.5, b2 = 0.4), control = nls.control(maxiter = 500))
     #confint_nlrob(umcaHeightFromDiameterNlrob$sharmaZhangBal, level = 0.99, weights = pmin(umca2016$DBH^-0.8, 1))
   } else {
     umcaHeightFromDiameterNlrob = list()
@@ -213,7 +213,6 @@ if (htDiaOptions$includeInvestigatory)
 }
 
 
-## other height-diameter nlme regressions
 if (umcaOptions$fitHeightMixed)
 {
   umcaHeightFromDiameterMixed = list(chapmanRichards = fit_nlme("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1r) * (1 - exp(b1*DBH))^b2, umca2016, 
@@ -390,6 +389,7 @@ if (umcaOptions$fitDbh)
   umcaDiameterFromHeightGslNlsDefault$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016defaultWeightPhysio, start = list(a1 = 4.2, a4 = 0, a9 = -2.8, b1 = 0.53, b2 = 0.18)) # a4 not significant
   umcaDiameterFromHeightGslNlsDefault$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, umca2016defaultWeight, start = list(a1 = -200, b1 = 0.027, b2 = 0.8), control = gsl_nls_control(maxiter = 500))
   
+  # individual term selection: TotalHt by = isPlantation, ABA + cos(aspect) retained by AIC but not significant (p > 0.06)
   umcaDiameterFromHeight$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint)
   umcaDiameterFromHeight$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 14, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint)
   umcaDiameterFromHeight$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, standBasalAreaApprox, tallerApproxBasalArea, slope, bs = "ts", by = as.factor(isPlantation), k = 28, pc = gamConstraint), data = umca2016physio, constraint = umca2016gamConstraint) # >5 minute Zen 3 3.4 GHz fit time with ABA+T, elevation, slope, sin(aspect), and TSI: elevation dropped based on physio AICs, then TSI+aspect
@@ -397,7 +397,7 @@ if (umcaOptions$fitDbh)
   umcaDiameterFromHeight$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 60, pc = gamConstraint), data = umca2016physio, constraint = umca2016gamConstraint) # 72.5% deviance explained (AIC 6089): 75.7% (5995) without elevation, 71.3% (6111) without slope, 72.4% (6043) without aspect, 72.7% (6034) without topographic shelter
   umcaDiameterFromHeight$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 10, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint)
   umcaDiameterFromHeight$gamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, slope, sin(3.14159/180 * aspect), relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 57, pc = gamConstraint), data = umca2016physio, constraint = umca2016gamConstraint) # drop elevation on AIC
-  
+
   save(file = "trees/height-diameter/data/UMCA DBH.Rdata", umcaDiameterFromHeight, umcaDiameterFromHeightNlrob, umcaDiameterFromHeightGslNlsDefault)
 }
 if (htDiaOptions$includeInvestigatory)

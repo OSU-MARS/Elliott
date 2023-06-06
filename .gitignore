@@ -22,6 +22,7 @@ GIS/**/*.cpg
 GIS/**/*.dbf
 GIS/**/*.html
 GIS/**/*.ini
+GIS/**/*.kmz
 GIS/**/*.laz
 GIS/**/*.lyr
 GIS/**/*.mxd

@@ -71,7 +71,7 @@ if (tsheOptions$fitHeight)
   tsheHeightFromDiameterNlrob$power = fit_nlrob("power", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1 + b1p * isPlantation), tshe2016, start = list(a1 = 0.59, a1p = -0.15, b1 = 1.02, b1p = -0.05))
   tsheHeightFromDiameterNlrob$ratkowsky = fit_nlrob("Ratkowsky", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)/(DBH + b2)), tshe2016, start = list(a1 = 64.1, a1p = -6.0, b1 = -42.1, b1p = 3.8, b2 = 8.1))
   tsheHeightFromDiameterNlrob$richardsW = fit_nlrob("unified Richards", TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/(Ha + Hap*isPlantation))^(1 - d) - 1) * exp((-(kU + kUp * isPlantation) * DBH)/d^(d/(1 - d))))^(1/(1 - d)), tshe2016, start = list(Ha = 46.7, Hap = -16.7, d = 1.03, kU = 0.017, kUp = 0.013))
-  tsheHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^(b3 + b3p * isPlantation)*DBH))^b4, tshe2016, start = list(a1 = 11, b1 = 0.36, b2 = -0.032, b3 = -0.13, b3p = 0.13, b4 = 1.30))
+  tsheHeightFromDiameterNlrob$sharmaParton = fit_nlrob("Sharma-Parton", TotalHt ~ 1.37 + a1*topHeight^b1 * (1 - exp(b2*(tph/standBasalAreaPerHectare)^(b3 + b3p * isPlantation)*DBH))^b4, tshe2016, start = list(a1 = 11, b1 = 0.36, b2 = -0.032, b3 = -0.13, b3p = 0.13, b4 = 1.30), control = nls.control(tol = 1E-4)) # job step factor
   tsheHeightFromDiameterNlrob$sharmaPartonBal = fit_nlrob("Sharma-Parton BA+L", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, tshe2016, start = list(a1 = 15, a1p = -2.7, b1 = 0.31, b2 = -0.021, b2p = -0.019, b3 = -0.06, b4 = 1.29), control = nls.control(tol = 1E-4)) # job step factor
   tsheHeightFromDiameterNlrob$sharmaPartonBalPhysio = fit_nlrob("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * slope)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, tshe2016physio, start = list(a1 = 18, a1p = -2.7, b1 = 0.32, a4 = -0.004, a5 = -0.004, b2 = -0.024, b2p = -0.020, b3 = -0.07, b4 = 1.30))
   tsheHeightFromDiameterNlrob$sharmaPartonBalPhysioRelDbh = fit_nlrob("Sharma-Parton BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * slope + a10 * relativeDiameter)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, tshe2016physio, start = list(a1 = 18, a1p = -3, a10 = 0.1, b1 = 0.33, a4 = -0.0038, a5 = -0.039, b2 = -0.024, b2p = -0.023, b3 = -0.09, b4 = 1.29), control = nls.control(tol = 1E-4), significant = FALSE) # job step factor
@@ -83,7 +83,7 @@ if (tsheOptions$fitHeight)
   tsheHeightFromDiameterNlrob$sharmaZhangBal = fit_nlrob("Sharma-Zhang BA+L", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger)*standBasalAreaPerHectare^(b1 + b1p * isPlantation) * (1 - exp(b2*tph^b3*DBH))^b4, tshe2016, start = list(a1 = 33, a2 = -0.05, a2p = 0.65, b1 = 0.13, b1p = -0.04, b2 = -0.020, b3 = -0.02, b4 = 1.27), control = nls.control(maxiter = 100, tol = 1E-4)) # b3 not significant, step factor
   tsheHeightFromDiameterNlrob$sibbesen = fit_nlrob("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), tshe2016, start = list(a1 = 0.271, a1p = 0.071, b1 = 1.68, b2 = -0.085, b2p = -0.014)) # b1p not significant
   tsheHeightFromDiameterNlrob$weibull = fit_nlrob("Weibull", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), tshe2016, start = list(a1 = 60, a1p = -20, b1 = -0.01, b2 = 1.1, b2p = 0.24))
-  tsheHeightFromDiameterNlrob$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH^b2)), tshe2016, start = list(a1 = 41, a2 = -0.13, a2p = 0.90, a3 = -0.13, a3p = -0.14, b1 = -0.008, b2 = 1.20))
+  tsheHeightFromDiameterNlrob$weibullBal = fit_nlrob("Weibull BA+L", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH^b2)), tshe2016, start = list(a1 = 41, a2 = -0.13, a2p = 0.90, a3 = -0.13, a3p = -0.14, b1 = -0.008, b2 = 1.20), control = nls.control(tol = 1E-4)) # job step factor
   tsheHeightFromDiameterNlrob$weibullBalRelHt = fit_nlrob("Weibull BA+L RelHt", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + a3 * standBasalAreaPerHectare + (a9 + a9p * isPlantation) * pmin(relativeHeight, 1.5)) * (1 - exp(b1*DBH^b2)), tshe2016, start = list(a1 = 4, a2 = 0.04, a2p = 0.26, a3 = 0.08, a9 = 50, a9p = -18.5, b1 = -0.042, b2 = 1.0), control = nls.control(maxiter = 200))
   #lapply(tsheHeightFromDiameterNlrob$sharmaPartonBalPhysio$fit, confint_nlrob, level = 0.99)
   
@@ -206,7 +206,6 @@ if (htDiaOptions$includeInvestigatory)
 }
 
 
-## other height-diameter nlme regressions
 if (tsheOptions$fitHeightMixed)
 {
   tsheHeightFromDiameterMixed = list(chapmanRichards = fit_nlme("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a1r) * (1 - exp((b1 + b1p*isPlantation)*DBH))^(b2 + b2p * isPlantation), tshe2016, 
@@ -390,6 +389,7 @@ if (tsheOptions$fitDbh)
   tsheDiameterFromHeightGslNlsDefault$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016defaultWeightPhysio, start = list(a1 = 2.1, a5 = 0.6, a9 = 0.4, b1 = 0.75, b2 = 0.1))
   tsheDiameterFromHeightGslNlsDefault$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, tshe2016defaultWeight, start = list(a1 = -120, b1 = 0.06, b2 = 0.55), control = gsl_nls_control(maxiter = 250))
   
+  # individual term selection: TotalHt + ABA + AAT by = isPlantation + slope, cos(aspect) + TSI retained by AIC but not significant (p > 0.41)
   tsheDiameterFromHeight$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint)
   tsheDiameterFromHeight$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint)
   tsheDiameterFromHeight$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, slope, cos(3.14159/180 * aspect), bs = "ts", by = as.factor(isPlantation), k = 85, pc = gamConstraint), data = tshe2016physio, constraint = tshe2016gamConstraint) # k = 495, ef < 210 with all predictors AIC 13838: 13828 without AAT, 13826 without ABA, 13825 without elevation, 13793 without slope, 13848 without sin(aspect), 13896 without cos(aspect), 13772 without topographic shelter -> eliminate topographic shelter (k = 330, edf < 185) AIC 13772: 13654 without AAT, 13665 without ABA, 13649 without elevation, 13649 without slope, 13635 without sin(aspect), 13656 without cos(aspect) -> eliminate sin(aspect)
@@ -397,7 +397,7 @@ if (tsheOptions$fitDbh)
   tsheDiameterFromHeight$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 85, pc = gamConstraint), constraint = tshe2016gamConstraint, data = tshe2016physio)
   tsheDiameterFromHeight$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint)
   tsheDiameterFromHeight$gamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, elevation, slope, sin(3.14159/180 * aspect), relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 60, pc = gamConstraint), data = tshe2016physio, constraint = tshe2016gamConstraint)
-  
+
   save(file = "trees/height-diameter/data/TSHE DBH.Rdata", tsheDiameterFromHeight, tsheDiameterFromHeightNlrob, tsheDiameterFromHeightGslNlsDefault)
 }
 if (htDiaOptions$includeInvestigatory)
@@ -602,7 +602,8 @@ if (tsheOptions$fitHeight & tsheOptions$fitDbh)
   
   tsheDiameterFromHeightPreferred = list(chapmanRichardsRelHt = fit_gsl_nls("Chapman-Richards inverse RelHt", DBH ~ (a1 + a1p * isPlantation + a9 * relativeHeight)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), tshe2016, start = list(a1 = -322, a1p = 17.7, a9 = -58.4, b1 = 0.0062, b1p = -0.0001, b2 = 0.912), folds = 1, repetitions = 1))
   tsheDiameterFromHeightPreferred$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
-  tsheDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
+  #tsheDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
+  tsheDiameterFromHeightPreferred$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, slope, cos(3.14159/180 * aspect), bs = "ts", by = as.factor(isPlantation), k = 85, pc = gamConstraint), data = tshe2016physio, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
   tsheDiameterFromHeightPreferred$linear = fit_lm("linear", DBH ~ 0 + I(TotalHt - 1.37), tshe2016, folds = 1, repetitions = 1)
   tsheDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2) + I(isPlantation*(TotalHt - 1.37)^2), tshe2016, folds = 1, repetitions = 1)
   tsheDiameterFromHeightPreferred$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016, start = list(a1 = 2.32, b1 = 0.750, b2 = 0.057), folds = 1, repetitions = 1)
