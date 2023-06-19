@@ -1161,37 +1161,51 @@ is_model_converged = function(model)
   return(isConverged)
 }
 
-plot_auc_bank = function(aucs, fillLabel = "median\nAUC")
+plot_auc_bank = function(aucs, fillLabel = "median\nAUC", omitMab = FALSE, xLimits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))
 {
-  ggplot(aucs) +
-    geom_raster(aes(x = species, y = name, fill = aucMab)) +
-    labs(title = "a) MAB", x = NULL, y = NULL, fill = fillLabel) +
-    scale_y_discrete(limits = rev) +
-  ggplot(aucs) +
-    geom_raster(aes(x = species, y = name, fill = aucMae)) +
-    labs(title = "b) MAE", x = NULL, y = NULL, fill = fillLabel) +
-    scale_y_discrete(labels = NULL, limits = rev) +
-  ggplot(aucs) +
-    geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-    labs(title = "c) RMSE", x = NULL, y = NULL, fill = fillLabel) +
-    scale_y_discrete(labels = NULL, limits = rev) +
-  ggplot(aucs) +
-    geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-    labs(title = "d) AIC", x = NULL, y = NULL, fill = fillLabel) +
-    scale_y_discrete(labels = NULL, limits = rev) +
-  ggplot(aucs) +
-    geom_raster(aes(x = species, y = name, fill = aucNse)) +
-    labs(title = "e) model efficiency", x = NULL, y = NULL, fill = fillLabel) +
-    scale_y_discrete(labels = NULL, limits = rev) +
-  plot_annotation(theme = theme(plot.margin =  margin())) +
-  plot_layout(nrow = 1, guides = "collect") &
-    scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
-    scale_x_discrete(limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-    #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-    theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.spacing.y = unit(0.3, "line"), panel.grid = element_blank())
+  if (omitMab)
+  {
+    aucBank = ggplot(aucs) +
+        geom_raster(aes(x = species, y = name, fill = aucMae)) +
+        labs(title = "a) MAE", x = NULL, y = NULL, fill = fillLabel) +
+        scale_y_discrete(limits = rev)
+    titles = c("b) RMSE", "c) AIC", "d) model efficiency")
+  } else {
+    aucBank = ggplot(aucs) +
+        geom_raster(aes(x = species, y = name, fill = aucMab)) +
+        labs(title = "a) MAB", x = NULL, y = NULL, fill = fillLabel) +
+        scale_y_discrete(limits = rev) +
+      ggplot(aucs) +
+        geom_raster(aes(x = species, y = name, fill = aucMae)) +
+        labs(title = "b) MAE", x = NULL, y = NULL, fill = fillLabel) +
+        scale_y_discrete(labels = NULL, limits = rev)
+    titles = c("c) RMSE", "d) AIC", "e) model efficiency")
+  }
+
+  aucBank = aucBank +
+    ggplot(aucs) +
+      geom_raster(aes(x = species, y = name, fill = aucRmse)) +
+      labs(title = titles[1], x = NULL, y = NULL, fill = fillLabel) +
+      scale_y_discrete(labels = NULL, limits = rev) +
+    ggplot(aucs) +
+      geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
+      labs(title = titles[2], x = NULL, y = NULL, fill = fillLabel) +
+      scale_y_discrete(labels = NULL, limits = rev) +
+    ggplot(aucs) +
+      geom_raster(aes(x = species, y = name, fill = aucNse)) +
+      labs(title = titles[3], x = NULL, y = NULL, fill = fillLabel) +
+      scale_y_discrete(labels = NULL, limits = rev) +
+    plot_annotation(theme = theme(plot.margin =  margin())) +
+    plot_layout(nrow = 1, guides = "collect") &
+      scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
+      scale_x_discrete(limits = xLimits) &
+      #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), panel.grid = element_blank())
+  
+  return(aucBank)
 }
 
-plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)"), speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitXlabels = FALSE)
+plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)"), speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE)
 {
   dbhQuantiles = liveUnbrokenTrees %>% mutate(diameterClass = 2.5 * (ceiling(DBH / 2.5) - 0.5)) %>% group_by(diameterClass) %>%
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), height = quantile(TotalHt, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(TotalHt, na.rm = TRUE), .groups = "drop") %>%
@@ -1231,53 +1245,59 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)")
     scale_color_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("green2", "green2", "burlywood2", "burlywood2")) +
     scale_fill_viridis_c(breaks = c(1, 3, 10, 33, 100, 330), limits = c(1, maxTreesMeasured), trans = "log10") +
     scale_linetype_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("solid", "longdash", "solid", "longdash")) +
-    theme(legend.key.height = unit(0.95, "line"), legend.justification = c(1, 0), legend.position = treeLegendPosition, legend.title = element_text(size = 9.5), legend.spacing.y = unit(0.25, "line")) +
-  ggplot(dbhQuantiles) +
-    geom_ribbon(aes(x = diameterClass, ymin = 100 * (q025 - mean) / mean^heightPower, ymax = 100 * (q975 - mean) / mean^heightPower, alpha = "95% probability"), fill = "forestgreen") +
-    geom_ribbon(aes(x = diameterClass, ymin = 100 * (q10 - mean) / mean^heightPower, ymax = 100 * (q90 - mean) / mean^heightPower, alpha = "80% probability"), fill = "forestgreen") +
-    geom_ribbon(aes(x = diameterClass, ymin = 100 * (q25 - mean) / mean^heightPower, ymax = 100 * (q75 - mean) / mean^heightPower, alpha = "50% probability"), fill = "forestgreen") +
-    geom_path(aes(x = diameterClass, y = 100 * (min - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-    #geom_path(aes(x = diameterClass, y = 100 * (q10 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = diameterClass, y = 100 * (q20 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = diameterClass, y = 100 * (q30 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = diameterClass, y = 100 * (q40 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_segment(x = 0, xend = 185, y = 0, yend = 0, color = "forestgreen", linewidth = 0.4) +
-    geom_path(aes(x = diameterClass, y = 100 * (q60 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = diameterClass, y = 100 * (q70 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = diameterClass, y = 100 * (q80 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    #geom_path(aes(x = diameterClass, y = 100 * (q90 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = diameterClass, y = 100 * (max - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-    annotate("text", x = 0, y = 154, label = paste(plotLetters[2], speciesLabel), hjust = 0, size = 3.5) +
-    coord_cartesian(xlim = c(0, 196), ylim = c(-50, 150)) +
-    scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
-    scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
-    scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-    labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL) +
-    theme(legend.position = "none") +
-  ggplot(heightQuantiles) +
-    geom_ribbon(aes(x = heightClass, ymin = 100 * (q025 - mean) / mean^dbhPower, ymax = 100 * (q975 - mean) / mean^dbhPower, alpha = "95% probability"), fill = "burlywood4") +
-    geom_ribbon(aes(x = heightClass, ymin = 100 * (q10 - mean) / mean^dbhPower, ymax = 100 * (q90 - mean) / mean^dbhPower, alpha = "80% probability"), fill = "burlywood4") +
-    geom_ribbon(aes(x = heightClass, ymin = 100 * (q25 - mean) / mean^dbhPower, ymax = 100 * (q75 - mean) / mean^dbhPower, alpha = "50% probability"), fill = "burlywood4") +
-    geom_path(aes(x = heightClass, y = 100 * (min - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-    #geom_path(aes(x = heightClass, y = 100 * (q10 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = heightClass, y = 100 * (q20 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = heightClass, y = 100 * (q30 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = heightClass, y = 100 * (q40 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_segment(x = 0, xend = 77.5, y = 0, yend = 0, color = "burlywood4", linewidth = 0.4) +
-    geom_path(aes(x = heightClass, y = 100 * (q60 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = heightClass, y = 100 * (q70 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-    geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-    annotate("text", x = 0, y = 154, label = paste(plotLetters[3], speciesLabel), hjust = 0, size = 3.5) +
-    coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
-    guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
-    scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
-    scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
-    scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-    labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL) +
-    theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition) +
-  plot_layout(nrow = 1, ncol = 3, widths = c(260, 200, 200))
+    theme(legend.key.height = unit(0.95, "line"), legend.justification = c(1, 0), legend.position = treeLegendPosition, legend.title = element_text(size = 9.5), legend.spacing.y = unit(0.25, "line"))
+  if (omitQuantiles)
+  {
+    return(exploratoryPlots)
+  }
+  
+  exploratoryPlots = exploratoryPlots +
+    ggplot(dbhQuantiles) +
+      geom_ribbon(aes(x = diameterClass, ymin = 100 * (q025 - mean) / mean^heightPower, ymax = 100 * (q975 - mean) / mean^heightPower, alpha = "95% probability"), fill = "forestgreen") +
+      geom_ribbon(aes(x = diameterClass, ymin = 100 * (q10 - mean) / mean^heightPower, ymax = 100 * (q90 - mean) / mean^heightPower, alpha = "80% probability"), fill = "forestgreen") +
+      geom_ribbon(aes(x = diameterClass, ymin = 100 * (q25 - mean) / mean^heightPower, ymax = 100 * (q75 - mean) / mean^heightPower, alpha = "50% probability"), fill = "forestgreen") +
+      geom_path(aes(x = diameterClass, y = 100 * (min - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+      #geom_path(aes(x = diameterClass, y = 100 * (q10 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = diameterClass, y = 100 * (q20 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = diameterClass, y = 100 * (q30 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = diameterClass, y = 100 * (q40 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_segment(x = 0, xend = 185, y = 0, yend = 0, color = "forestgreen", linewidth = 0.4) +
+      geom_path(aes(x = diameterClass, y = 100 * (q60 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = diameterClass, y = 100 * (q70 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = diameterClass, y = 100 * (q80 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      #geom_path(aes(x = diameterClass, y = 100 * (q90 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = diameterClass, y = 100 * (max - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+      annotate("text", x = 0, y = 154, label = paste(plotLetters[2], speciesLabel), hjust = 0, size = 3.5) +
+      coord_cartesian(xlim = c(0, 196), ylim = c(-50, 150)) +
+      scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
+      scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
+      scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
+      labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL) +
+      theme(legend.position = "none") +
+    ggplot(heightQuantiles) +
+      geom_ribbon(aes(x = heightClass, ymin = 100 * (q025 - mean) / mean^dbhPower, ymax = 100 * (q975 - mean) / mean^dbhPower, alpha = "95% probability"), fill = "burlywood4") +
+      geom_ribbon(aes(x = heightClass, ymin = 100 * (q10 - mean) / mean^dbhPower, ymax = 100 * (q90 - mean) / mean^dbhPower, alpha = "80% probability"), fill = "burlywood4") +
+      geom_ribbon(aes(x = heightClass, ymin = 100 * (q25 - mean) / mean^dbhPower, ymax = 100 * (q75 - mean) / mean^dbhPower, alpha = "50% probability"), fill = "burlywood4") +
+      geom_path(aes(x = heightClass, y = 100 * (min - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+      #geom_path(aes(x = heightClass, y = 100 * (q10 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = heightClass, y = 100 * (q20 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = heightClass, y = 100 * (q30 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = heightClass, y = 100 * (q40 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_segment(x = 0, xend = 77.5, y = 0, yend = 0, color = "burlywood4", linewidth = 0.4) +
+      geom_path(aes(x = heightClass, y = 100 * (q60 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = heightClass, y = 100 * (q70 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+      geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+      annotate("text", x = 0, y = 154, label = paste(plotLetters[3], speciesLabel), hjust = 0, size = 3.5) +
+      coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
+      guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
+      scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
+      scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
+      scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
+      labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL) +
+      theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition) +
+    plot_layout(nrow = 1, ncol = 3, widths = c(260, 200, 200))
   return(exploratoryPlots)
 }
 
@@ -1725,7 +1745,7 @@ if (htDiaOptions$includeInvestigatory)
   plot_layout() &
     coord_cartesian(ylim = c(0, 10))
   
-  # sizes of trees
+  # sizes of trees and taper limits
   treeStemLimits = get_species_limits(trees2016)
   ggplot(trees2016) +
     geom_histogram(aes(x = TotalHt, y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), fill = speciesGroup), binwidth = 2, na.rm = TRUE) +
@@ -1830,7 +1850,7 @@ if (htDiaOptions$includeInvestigatory)
                                                                          if_else(secondaryPct == thplPct, "THPL", "other")))))),
               isPlantation = isPlantation[1],
               standArea = standArea[1],
-              standAge2020 = standAge2020[1],
+              standAge2016 = standAge2016[1],
               topHeight = topHeight[1],
               qmd = sqrt(totalBA / (pi / (4 * 100^2) * totalTph)))
   #speciesCountByStand2016 %>% group_by(primarySpecies, secondarySpecies) %>% summarize(n = n())
@@ -1900,16 +1920,16 @@ if (htDiaOptions$includeInvestigatory)
 
   speciesBasalAreaByCluster = speciesCountByStand2016 %>% mutate(clusterID = cutree(standHierarchyBA, k = 20)) %>%
     group_by(clusterID) %>%
-    summarize(PSME = sum(psmeBA) / n(), # could also join clustersBA$centers
-              ALRU = sum(alruBA) / n(),
-              TSHE = sum(tsheBA) / n(),
-              ACMA = sum(acmaBA) / n(),
-              UMCA = sum(umcaBA) / n(),
-              THPL = sum(thplBA) / n(),
-              other = sum(otherBA) / n(),
-              meanAge2016 = sum(standAge2020) / n() - 4,
-              meanTopHeight = mean(topHeight),
-              meanTotalBasalArea = sum(totalBA) / n(),
+    summarize(PSME = sum(standArea * psmeBA) / sum(standArea), # could also join clustersBA$centers
+              ALRU = sum(standArea * alruBA) / sum(standArea),
+              TSHE = sum(standArea * tsheBA) / sum(standArea),
+              ACMA = sum(standArea * acmaBA) / sum(standArea),
+              UMCA = sum(standArea * umcaBA) / sum(standArea),
+              THPL = sum(standArea * thplBA) / sum(standArea),
+              other = sum(standArea * otherBA) / sum(standArea),
+              meanAge2016 = sum(standArea * standAge2016) / sum(standArea),
+              meanTopHeight = sum(standArea * topHeight) / sum(standArea),
+              meanTotalBasalArea = sum(standArea * totalBA) / sum(standArea),
               plantationArea = sum(isPlantation * standArea),
               totalArea = sum(standArea)) %>%
     arrange(totalArea) %>%
@@ -1917,7 +1937,7 @@ if (htDiaOptions$includeInvestigatory)
            ageLabel = if_else(totalArea == max(totalArea), sprintf('bar(age) == %.0f~"years"', meanAge2016), sprintf("%.0f", meanAge2016)),
            ageLabelX = if_else(totalArea > 270, 30, totalArea + 30),
            ageLabelColor = if_else(totalArea > 270, "white", "black"),
-           topHeightLabel = if_else(totalArea == max(totalArea), sprintf('bar(H[100]) == "%.1f"~"m"', meanTopHeight), sprintf('"%.1f"', meanTopHeight)),
+           topHeightLabel = if_else(totalArea == max(totalArea), sprintf('bar(H)[100] == "%.1f"~"m"', meanTopHeight), sprintf('"%.1f"', meanTopHeight)),
            topHeightLabelColor = if_else(meanTotalBasalArea > 10, "white", "black"),
            topHeightLabelX = if_else(meanTotalBasalArea > 10, 1, meanTotalBasalArea + 1))
   
@@ -1948,7 +1968,7 @@ if (htDiaOptions$includeInvestigatory)
     theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
-  # ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10, width = 22, units = "cm", dpi = 200)
+  #ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10, width = 22, units = "cm", dpi = 200)
   
   # tree counts
   trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%
@@ -2069,4 +2089,21 @@ if (htDiaOptions$includeInvestigatory)
   ggplot(stands2022 %>% filter(siteSpecies == "Douglas-fir")) +
     geom_histogram(aes(x = Age_2020, y = ..density..), binwidth = 5, fill = "green4") +
     labs(x = "stand age in 2020, years", y = "probability", color = NULL)
+}
+
+
+## stand tree pooling
+if (htDiaOptions$includeInvestigatory)
+{
+  # stand merge by plantation age
+  # for now, proxy HX as Pacific dogwood (Cornus nuttalli)
+  treesOfAge = trees2016 %>% filter(standAge2016 == 30, isLive, is.na(DBH) == FALSE) %>% 
+    mutate(year = 2016L, 
+           expansionFactor = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, 
+           species = case_match(Species, "DF" ~ "PSME", "RA" ~ "ALRU", "WH" ~ "TSHE", "BM" ~ "ACMA", "OM" ~ "UMCA", "RC" ~ "THPL", "CH" ~ "CHCH", "HX" ~ "CONU", "TO" ~ "LIDE"),
+           condition = as.integer(isLiveUnbroken == FALSE)) %>%
+    rename(stand = StandID, plot = PlotID, tree = TreeID, age = standAge2016, dbh = DBH, height = imputedHeight) %>%
+    select(stand, plot, tree, species, year, age, dbh, height, expansionFactor, condition)
+  #treesOfAge %>% group_by(species) %>% summarize(n = n())
+  #treesOfAge %>% group_by(stand) %>% summarize(uniqueTrees = n(), tph = sum(expansionFactor))
 }

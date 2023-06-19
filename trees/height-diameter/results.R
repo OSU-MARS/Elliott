@@ -331,8 +331,8 @@ heightDiameterModelAucs %>% filter(name != "REML GAM", otherModelName == "REML G
   arrange(desc(responseVariable))
 
 primaryResults %>% group_by(responseVariable, species) %>% 
-  reframe(quantiles = c(0.05, 0.50, 0.95), pFx = quantile(meanAbsolutePlantationEffect, probs = quantiles, na.rm = TRUE), pFxPct = quantile(meanAbsolutePercentPlantationEffect, probs = quantiles, na.rm = TRUE)) %>%
-  pivot_wider(id_cols = c("responseVariable", "species"), names_from = "quantiles", values_from = c("pFx", "pFxPct")) %>%
+  reframe(quantiles = c(0.05, 0.50, 0.95), plantFx = quantile(meanAbsolutePlantationEffect, probs = quantiles, na.rm = TRUE), plantFxPct = quantile(meanAbsolutePercentPlantationEffect, probs = quantiles, na.rm = TRUE)) %>%
+  pivot_wider(id_cols = c("responseVariable", "species"), names_from = "quantiles", values_from = c("plantFx", "plantFxPct")) %>%
   arrange(desc(responseVariable))
 
 # AIC selection of generalizing predictors based on ΔAICn AUC
@@ -366,7 +366,7 @@ predictorVariableStats %>%
 # model efficiency of generalized predictors
 generalizedPredictors = primaryResults %>%
   mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name))) %>%
-  filter(baseName %in% c("Chapman-Richards", "Ruark", "Sharma-Parton", "Sibbesen"), (responseVariable != "height")  | (baseName != "Sibbesen")) # remove base forms which weren't generalized
+  filter(baseName %in% c("Chapman-Richards", "Ruark", "Sharma-Parton", "Sibbesen"), (responseVariable != "height")  | (baseName != "Sibbesen"), significant) # remove base forms which weren't generalized and non-significant forms
 generalizedPredictorMapbModel = lm(mapb ~ responseVariable + species + baseName + hasPhysio + responseVariable:hasRelative + hasStand, generalizedPredictors)
 summary(generalizedPredictorMapbModel)
 generalizedPredictorMapeModel = lm(mape ~ responseVariable + species + baseName + hasPhysio + responseVariable:hasRelative + hasStand, generalizedPredictors)
@@ -417,6 +417,8 @@ heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>%
 # fittings which failed
 heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable, species, name) %>% arrange(desc(fitSet))
 
+# Figure 1 in GIS
+# Figute 2 in 
 
 ## Figure 3: overall dataset summary
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel = "conifer", maxTreesMeasured = 170, omitLegends = TRUE, omitXlabels = TRUE) /
@@ -616,8 +618,8 @@ ggplot() +
 ggplot() +
   geom_point(aes(x = alru2016$DBH, y = alru2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
   geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gamAbatPhysioRelHt), y = alru2016physio$TotalHt, color = "REML GAM ABA+T RelHt physio", group = alru2016physio$isPlantation, linetype = alru2016physio$isPlantation), alpha = 0.4, orientation = "y") +
-  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$ruark), y = alru2016$TotalHt, color = "Ruark", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
-  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gam), y = alru2016$TotalHt, color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
+  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$ruark), y = alru2016$TotalHt, color = "Ruark", group = alru2016$isPlantation, linetype = alru2016$isPlantation), orientation = "y") +
+  geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gam), y = alru2016$TotalHt, color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation), orientation = "y") +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
   annotate("text", x = 0, y = 85, label = "d) red alder DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
@@ -672,7 +674,7 @@ ggplot() +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
   labs(x = "DBH, cm", y = "height, m", color = NULL) +
-  scale_color_manual(breaks = c("Michaelis-Menten", "unified Richards", "Weibull BA+L", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
+  scale_color_manual(breaks = c("Michaelis-Menten", "unified Richards", "Sharma-Parton", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
   geom_point(aes(x = acma2016$DBH, y = acma2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
@@ -818,9 +820,7 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
 #ggsave("trees/height-diameter/figures/Figure S04 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 150)
 
 
-# Figure S5 in residuals.R
-
-## Figure S6: comparison of accuracy metrics
+## Figure S5: comparison of accuracy metrics
 accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(responseVariable == "height") %>% 
                                                     select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
                                   rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
@@ -846,10 +846,10 @@ ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) +
   plot_layout(nrow = 1, ncol = 2, guides = "collect") &
   scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
   theme(legend.spacing.y = unit(0.5, "line"))
-#ggsave("trees/height-diameter/figures/Figure S06 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure S05 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
 
 
-# Figure S7: height prediction accuracy
+# Figure S6: height prediction accuracy
 # If axis limits, vertical dodges, or aesthetics are changed Figure S6 should be updated.
 heightFromDiameterAccuracyLevels = primaryResults %>% 
   filter(responseVariable == "height") %>%
@@ -921,10 +921,10 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
-#ggsave("trees/height-diameter/figures/Figure S07 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S06 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
 
 
-# Figure S8: DBH prediction accuracy
+# Figure S7: DBH prediction accuracy
 # If axis limits, vertical dodges, or aesthetics are changed Figure S4 should be updated.
 diameterFromHeightAccuracyLevels = primaryResults %>% 
   filter(responseVariable == "DBH") %>%
@@ -997,9 +997,10 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
-#ggsave("trees/height-diameter/figures/Figure S08 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S07 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
 
 
+# Figure S8 in residuals.R
 # Table S1 in setup.R
 
 
