@@ -34,12 +34,13 @@ Sys.time() - startTime
 
 stands2022 = read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx") # from height-diameter/setup.R plus manual revisions to stand 1672, 1807, and 2463 area for boundary shifts and slivers (2016 IDs)
 
+
 # 26 s dplyr + prediction time (~25 seconds for three nonlinear iterations), Zen 3 4.7 GHz
 if (recalcDbh)
 {
   startTime = Sys.time()
   elliottTreesMod = left_join(elliottTrees %>% select(-StandID, -STD_ID), # drop other stand IDs to avoid errors
-                              stands2022, 
+                              stands2022,
                               by = "standID2016") %>% # ~1 s for join
     rename(treeID = TreeID, TotalHt = Ht) %>% # change Ht to TotalHt to integrate with DBH model fits
     filter(treeID != "NA", TotalHt >= 1.5 * 3.2808) %>%  # remove total of 1271 rows missing TreeIDs, remove 273805 rows below iLand's definition of tree height as 4.0 m (TODO: translate these rows to iLand saplings?)
@@ -130,18 +131,67 @@ if (recalcDbh)
 }
 
 elliottStandsMod = left_join(elliottTreesMod %>% group_by(standID2016) %>% 
-                              summarize(segmentedTrees = n(),
-                                        segmentedTph = n() / standArea[1],
-                                        segmentedTopHeight = topHeight[1],
-                                        segmentedQmd = sqrt(standArea[1] * standBasalAreaApprox[1] / (pi/4 * 0.01^2 * n())), # basal area is in m²/ha so need to multiply by stand area since n() counts all trees in the stand
-                                        standBasalAreaBootstrap = standBasalAreaBootstrap[1], 
-                                        #standBasalAreaInitial = standBasalAreaInitial[1],
-                                        standBasalAreaApprox = standBasalAreaApprox[1],
-                                        topHeightTrees = sum(topHeightWeight > 0)),
-                            stands2022,
-                            by = "standID2016") %>%
+                               summarize(segmentedTrees = n(),
+                                         segmentedTph = n() / standArea[1],
+                                         segmentedTopHeight = topHeight[1],
+                                         segmentedQmd = sqrt(standArea[1] * standBasalAreaApprox[1] / (pi/4 * 0.01^2 * n())), # basal area is in m²/ha so need to multiply by stand area since n() counts all trees in the stand
+                                         standBasalAreaBootstrap = standBasalAreaBootstrap[1], 
+                                         #standBasalAreaInitial = standBasalAreaInitial[1],
+                                         standBasalAreaApprox = standBasalAreaApprox[1],
+                                         topHeightTrees = sum(topHeightWeight > 0)),
+                             stands2022,
+                             by = "standID2016") %>%
   mutate(topHeightRatio = segmentedTopHeight / topHeight,
          standClass = factor(isPlantation + (standAge2016 <= 15), labels = c("natural regen", "pre-2001 plantation", "2001+ plantation"), levels = c(0, 1, 2)))
+
+segmentationByHeight = left_join(elliottTreesMod %>% mutate(relativeHeightClass = 0.05 * floor(relativeHeight / 0.05) + 0.5 * 0.05) %>%
+                                   group_by(standID2016, relativeHeightClass) %>% 
+                                   reframe(standAge2016 = standAge2016[1],
+                                           topHeight = topHeight[1],
+                                           standArea = standArea[1],
+                                           isPlantation = isPlantation[1],
+                                           segmentedTph = n() / standArea[1]),
+                                 trees2016 %>% rename(standID2016 = StandID) %>%
+                                   filter(is.na(measureTreeTphContribution) == FALSE) %>%
+                                   mutate(relativeHeight = imputedHeight / topHeight, # no effect for height measure trees, creates relative height for DBH only measure trees to impute TPH by relative height class
+                                          relativeHeightClass = 0.05 * floor(relativeHeight / 0.05) + 0.5 * 0.05) %>%
+                                   group_by(standID2016, relativeHeightClass) %>% 
+                                   reframe(groundTph = sum(meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution) / measurePlotsInStand),
+                                 by = c("standID2016", "relativeHeightClass")) %>%
+  mutate(groundTph = replace_na(groundTph, 0),
+         segmentationPct = 100 * segmentedTph / groundTph)
+
+ggplot(segmentationByHeight %>% group_by(standID2016) %>%
+         summarize(standArea = standArea[1], isPlantation = isPlantation[1], topHeight = topHeight[1], segmentedTph = sum(segmentedTph), groundTph = sum(groundTph)) %>%
+         filter(groundTph != 0)) +
+  geom_point(aes(x = topHeight, y = 100 * segmentedTph / groundTph, color = isPlantation, size = standArea), alpha = 0.3, shape = 16) +
+  coord_cartesian(ylim = c(0, 150)) + # excludes ~6 outlying stands of 200-3000%
+  labs(x = "top height, m", y = "trees segmented, %", color = "plantation", size = "stand area, ha") +
+  theme(legend.spacing.y = unit(0.3, "line"))
+
+ggplot(segmentationByHeight %>% group_by(isPlantation, relativeHeightClass) %>%
+         summarize(segmentedTph = sum(standArea * segmentedTph) / sum(standArea),
+                   groundTph = sum(standArea * groundTph) / sum(standArea),
+                   .groups = "drop") %>%
+         group_by(relativeHeightClass) %>%
+         mutate(estimatedTphFraction = segmentedTph / sum(segmentedTph)) %>%
+         ungroup() %>%
+         filter(groundTph != 0)) +
+  geom_bar(aes(x = 100 * estimatedTphFraction * segmentedTph / groundTph, y = relativeHeightClass, fill = isPlantation), orientation = "y", stat = "identity") +
+  coord_cartesian(xlim = c(0, 150), ylim = c(0, 2.5)) + # substantial quantization due to limited ground trees by relative height = 2
+  labs(x = "segmented trees, % of ground estimate", y = "relative height", fill = "plantation")
+
+print(segmentationByHeight %>% group_by(isPlantation, relativeHeightClass) %>%
+  summarize(segmentedTph = sum(standArea * segmentedTph) / sum(standArea),
+            groundTph = sum(standArea * groundTph) / sum(standArea),
+            .groups = "drop") %>%
+  group_by(relativeHeightClass) %>%
+  mutate(estimatedTphFraction = segmentedTph / sum(segmentedTph)), n = 300)
+
+ggplot(elliottStandsMod) + 
+  geom_histogram(aes(x = standArea, fill = isPlantation), binwidth = 5) +
+  labs(x = "stand area, h", y = "stands", fill = "plantation") +
+  theme(legend.spacing.y = unit(0.3, "line"))
 
 # check summaries and check plots for dataset alignment and DBH prediction
 #elliottTrees %>% filter(is.na(standID2016)) %>% group_by(STD_ID) %>% summarize(n = n())
@@ -165,7 +215,7 @@ ggplot() +
   geom_bin2d(aes(x = dbhBootstrap, y = height), binwidth = c(2.5, 1), elliottTreesMod) +
   annotate("text", x = 60, y = 76, label = "H:D = 100", color = "grey70", hjust = 0.5, size = 3, vjust = 0) +
   annotate("text", x = 190, y = 96, label = "H:D = 50", color = "grey70", hjust = 0.5, size = 3, vjust = 0) +
-  coord_cartesian(xlim = c(0, 700), ylim = c(0, 96)) +
+  coord_cartesian(xlim = c(0, 300), ylim = c(0, 96)) +
   labs(x = "bootstrap DBH, cm", y = "segmented height, m", fill = "trees") +
   scale_fill_viridis_c(breaks = c(1, 100, 10000, 500000), labels = scales::label_comma(), limits = c(1, 500E3), trans = "log10") +
 #ggplot() +
@@ -187,7 +237,7 @@ ggplot() +
   labs(x = "predicted DBH, cm", y = NULL, fill = "trees") +
   scale_fill_viridis_c(breaks = c(1, 100, 10000, 500000), labels = scales::label_comma(), limits = c(1, 500E3), trans = "log10") +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(nrow = 1, widths = c(7, 3), guides = "collect") &
+plot_layout(nrow = 1, guides = "collect") &
   theme(legend.spacing.y = unit(0.3, "line"))
 
 # comparison of stand-level properties
@@ -219,34 +269,42 @@ plot_layout(widths = c(1, 1), heights = c(1, 1), guides = "collect") &
   scale_shape_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(16, 17, 18)) &
   scale_size_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(1.5, 1.5, 1.85))
 
+
 # distribution of fraction of trees segmented  
 ggplot() +
-  geom_histogram(aes(x = 100 * segmentedTph / tph, y = after_stat(100 * count / sum(count)), fill = isPlantation), elliottStandsMod, binwidth = 5, na.rm = TRUE) +
+  geom_histogram(aes(x = 100 * segmentedTph / tph, y = after_stat(100 * count / sum(count)), fill = isPlantation, weight = standArea), elliottStandsMod, binwidth = 5, na.rm = TRUE) +
   geom_line(aes(x = seq(0, 300), y = 5 * dgamma(0.01 * seq(0, 300), shape = 3.2, rate = 5)), color = "grey30") +
   coord_cartesian(xlim = c(0, 200)) +
   labs(x = "fraction of trees segmented, %", y = "fraction of stands, %", fill = "plantation") +
   theme(legend.spacing.y = unit(0.3, "line"))
 # relative height distribution of 2016 measure trees and 2021 segmented trees
+# total number of measure plots: stands2022 %>% group_by(isPlantation) %>% summarize(measurePlots = sum(measurePlotsInStand, na.rm = TRUE)) = 10,076 plots, 4192 natural regen, 5844 plantation
+#                                trees2016 %>% filter(is.na(DBH) == FALSE) %>% group_by(isPlantation) %>% summarize(measurePlots = n_distinct(PlotID))
+# total cruised area: sum((stands2022 %>% filter(is.na(standBasalAreaPerHectare) == FALSE))$standArea) = 15,981 ha, 7172 ha natural regen + 8809 ha plantation = 45% + 55%
+# total forest area: 33,403 ha, 16468 natural regen + 16935 ha plantation = 49% + 51%
 ggplot(elliottTreesMod %>% filter(isPlantation == FALSE)) +
-  geom_histogram(aes(x = relativeHeight, y = after_stat(100 * count/sum(count)), fill = species), binwidth = 0.05) +
-  coord_cartesian(xlim = c(0, 2), ylim = c(0, 11)) +
-  labs(x = NULL, y = "fraction of trees, %", title = "a) 2021 natural regen", fill = NULL) +
-ggplot(trees2016 %>% filter(isPlantation == FALSE)) +
-  geom_histogram(aes(x = relativeHeight, y = after_stat(100 * count/sum(count)), fill = speciesGroup, weight = TreeCount), binwidth = 0.05, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 2), ylim = c(0, 11)) +
-  labs(x = NULL, y = NULL, title = "b) 2015–16 natural regen", fill = NULL) +
+  geom_histogram(aes(x = relativeHeight, fill = species, weight = 1 / sum((stands2022 %>% filter(isPlantation == FALSE))$standArea)), binwidth = 0.05) + # average across total segmented area: 33,403 ha
+  coord_cartesian(xlim = c(0, 2), ylim = c(0, 60)) +
+  labs(x = NULL, y = "trees per hectare", title = "a) 2021 natural regen segmentation", fill = "LiDAR\nsegmentation") +
+ggplot(trees2016 %>% filter(isPlantation == FALSE, is.na(DBH) == FALSE) %>% mutate(relativeHeight = imputedHeight / topHeight)) +
+  geom_histogram(aes(x = relativeHeight, fill = speciesGroup, weight = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / n_distinct(PlotID)), binwidth = 0.05) + 
+  coord_cartesian(xlim = c(0, 2), ylim = c(0, 60)) +
+  labs(x = NULL, y = NULL, title = "b) 2015–16 natural regen ground", fill = "ground") +
 ggplot(elliottTreesMod %>% filter(isPlantation)) +
-  geom_histogram(aes(x = relativeHeight, y = after_stat(100 * count/sum(count)), fill = species), binwidth = 0.05) +
-  coord_cartesian(xlim = c(0, 2), ylim = c(0, 11)) +
-  labs(x = "relative height", y = "fraction of trees, %", title = "c) 2021 plantation", fill = NULL) +
-ggplot(trees2016 %>% filter(isPlantation)) +
-  geom_histogram(aes(x = relativeHeight, y = after_stat(100 * count/sum(count)), fill = speciesGroup, weight = TreeCount), binwidth = 0.05, na.rm = TRUE) +
-  coord_cartesian(xlim = c(0, 2), ylim = c(0, 11)) +
-  labs(x = "relative height", y = NULL, title = "d) 2015–16 plantation", fill = NULL) +
+  geom_histogram(aes(x = relativeHeight, fill = species, weight = 1 / sum((stands2022 %>% filter(isPlantation))$standArea)), binwidth = 0.05) +
+  coord_cartesian(xlim = c(0, 2), ylim = c(0, 60)) +
+  labs(x = "relative height", y = "trees per hectare", title = "c) 2021 plantation segmentation", fill = "LiDAR\nsegmentation") +
+ggplot(trees2016 %>% filter(isPlantation, is.na(DBH) == FALSE) %>% mutate(relativeHeight = imputedHeight / topHeight)) +
+  geom_histogram(aes(x = relativeHeight, fill = speciesGroup, weight = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / n_distinct(PlotID)), binwidth = 0.05) +
+  coord_cartesian(xlim = c(0, 2), ylim = c(0, 60)) +
+  labs(x = "relative height", y = NULL, title = "d) 2015–16 plantation ground", fill = "ground") +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(guides = "collect")
-
-# breakout of segmented trees by slope, 
+plot_layout(guides = "collect") &
+  scale_fill_manual(breaks = c("DF", "HW", "RA", "WH", "BM", "OM", "RC", "other"), values = c("forestgreen", "red2", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65"))&
+  theme(legend.spacing.y = unit(0.3, "line"))
+#ggsave("presentation/LiDAR-ground TPH distribution.png", height = 12, width = 16, units = "cm", dpi = 150)
+  
+# breakout of segmented trees by elevation, slope, and topographic shelter
 ggplot(elliottTreesMod) +
   geom_histogram(aes(x = elevation, fill = isPlantation, group = isPlantation), binwidth = 20) +
   labs(x = "elevation, m", y = "trees") +
@@ -264,12 +322,6 @@ ggplot(elliottTreesMod) +
   scale_y_continuous(labels = scales::label_comma()) +
 plot_layout(guides = "collect") &
   theme(legend.spacing.y = unit(0.3, "line"))
-
-ggplot(elliottTreesMod) +
-  geom_histogram(aes(y = height, fill = species), binwidth = 0.5) +
-  labs(x = "trees segemented", y = "tree height, m", fill = NULL) +
-  scale_fill_manual(breaks = c("DF", "WH", "HW"), values = c("forestgreen", "blue2", "red2")) +
-  scale_x_continuous(labels = scales::label_comma())
 
 
 ## write trees for iLand
