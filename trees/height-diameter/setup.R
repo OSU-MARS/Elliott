@@ -1411,6 +1411,7 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          isConifer = Species %in% c("DF", "WH", "RC", "SS", "CX", "PC", "PY", "GF", "LP"),
          isLive = (CompCode %in% c("D.", "SN")) == FALSE,
          isLiveUnbroken = isLive & (CompCode != "BT"),
+         plotRadius = if_else(SamplingMethod == "BAF", 100 / 2.54 * 0.3048 / (12 * sqrt(SampleFactor / 10890)), 0.3048 * sqrt(43560 / (pi * SampleFactor))), # m
          SampleFactor = 2.47105 * if_else(SamplingMethod == "BAF", 0.092903, 1) * SampleFactor, # convert BAF from ft²/ac to m²/ha and TPA to TPH, BAF conversion is BAF ft²/ac * 2.47105 ac/ha * 0.092903 m²/ft² = 0.229568 m²/ha / ft²/ac
          TotalHt = na_if(0.3048 * TotalHt, 0),
          TreeCount = if_else((PlotType == "IP") & (SamplingMethod == "BAF") & (TreeCount > 1), 1, TreeCount), # fix tree duplication per notes above

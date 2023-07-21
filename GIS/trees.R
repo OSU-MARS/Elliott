@@ -9,8 +9,6 @@ library(tidyr)
 
 theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.border = element_blank()))
 
-load("trees/height-diameter/data/segmentationDbhModels.Rdata")
-
 
 ## read trees from .gpkg and predict their DBH
 # QGIS preparation
@@ -38,6 +36,8 @@ stands2022 = read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx") # fr
 # 26 s dplyr + prediction time (~25 seconds for three nonlinear iterations), Zen 3 4.7 GHz
 if (recalcDbh)
 {
+  load("trees/height-diameter/data/segmentationDbhModels.Rdata")
+  
   startTime = Sys.time()
   elliottTreesMod = left_join(elliottTrees %>% select(-StandID, -STD_ID), # drop other stand IDs to avoid errors
                               stands2022,
@@ -370,3 +370,71 @@ tsheGamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, elevation
 tsheRuarkAbatPhysio = fit_gsl_nls("Ruark ABA+T physio", DBH ~ (a1 + a3 * standBasalAreaApprox + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2*(TotalHt - 1.37)), tshe2016physio, start = list(a1 = 2.5, a3 = -0.0034, a5 = 0.5, b1 = 0.74, b2 = 0.014), folds = 1, repetitions = 1)
 tsheRuarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), tshe2016, start = list(a1 = 2.7, a9 = 1.0, b1 = 0.74, b1p = -0.033, b2 = 0.01), folds = 1, repetitions = 1)
 save(file = "trees/height-diameter/data/segmentationDbhModels.Rdata", psmeGamRelHtPhysio, psmeRuarkAbatPhysio, psmeRuarkRelHtPhysio, alruChapmanRichardsPhysio, alruGamRelHtPhysio, alruRuarkAbatPhysioRelHt, tsheGamRelHt, tsheGamRelHtPhysio, tsheRuarkAbatPhysio, tsheRuarkRelHt)
+
+
+## nominal crown radius
+library(gslnls)
+library(mgcv)
+library(quantreg)
+
+crownRadii = elliottTreesMod %>%
+  select(standID2016, species, height, CanopyArea, isPlantation, elevation, slope, sinAspect, cosAspect, topographicShelterIndex) %>% 
+  rename(projectedCrownArea = CanopyArea) %>%
+  mutate(isPlantation = as.factor(isPlantation), # for bam()
+         projectedCrownArea = 0.3048^2 * projectedCrownArea, # ft² to m²
+         nominalCrownRadius = sqrt(projectedCrownArea / pi)) %>%
+  filter(nominalCrownRadius <= height) # exclude physiologically implausible crowns, exclude NA crown areas
+# tibble(height = range(crownRadii$height), crownArea = range(crownRadii$projectedCrownArea))
+
+#crownRadiiLinear = lm(nominalCrownRadius ~ height, crownRadii) # adj R² = 0.651
+crownRadiiLinear = lm(nominalCrownRadius ~ height + I(height^2), crownRadii) # adj R² = 0.688
+#crownRadiiLinear = lm(nominalCrownRadius ~ height + I(height^2) + I(height^3), crownRadii) # adj R² = 0.690, asymmetric residuals as crown radius can't be negative but not clearly heterokedastic, inadequately asymptotic for small and large trees
+#crownRadiiLinear = lm(nominalCrownRadius ~ height + log(height), crownRadii) # adj R² = 0.682 but poorly behaved for height < 8 m
+#crownRadiiLinear = lm(nominalCrownRadius ~ height + I(height^2) + elevation + slope + sinAspect + cosAspect + topographicShelterIndex, crownRadii) # adj R² = 0.682, all predictors significant
+summary(crownRadiiLinear)
+crownRadiiLogistic = gsl_nls(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii)
+summary(crownRadiiLogistic)
+crownRadiiBam = bam(nominalCrownRadius ~ s(height, by = isPlantation, k = 6), data = crownRadii) # ~8 minutes 5950X, default k = 10 likely overfits
+summary(crownRadiiBam)
+k.check(crownRadiiBam)
+crownRadiiLogisticQ05 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.5) # ~2.5 minutes, internal error on tau = c(0.5, 0.2)
+crownRadiiLogisticQ02 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.2) # ~2.5 minutes
+crownRadiiLogisticQ01 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.1) # ~2.5 minutes
+crownRadiiLogisticQ0025 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.025) # ~2.5 minutes
+#summary(crownRadiiLogisticQ05) # spins CPU for unclear duration, not interruptible (requires R session restart to abort)
+
+bind_cols(AIC(crownRadiiLinear, crownRadiiLogistic, crownRadiiBam) %>% mutate(AICn = AIC / nrow(crownRadii)),
+          tibble(rmse = c(sqrt(mean(residuals(crownRadiiLinear)^2)), 
+                          sqrt(mean(residuals(crownRadiiLogistic)^2)),
+                          sqrt(mean(residuals(crownRadiiBam)^2))),
+                 nse = 1 - c(sum(residuals(crownRadiiLinear)^2) / sum((crownRadii$height - mean(crownRadii$height))^2),
+                             sum(residuals(crownRadiiLogistic)^2) / sum((crownRadii$height - mean(crownRadii$height))^2),
+                             sum(residuals(crownRadiiBam)^2) / sum((crownRadii$height - mean(crownRadii$height))^2))))
+
+ggplot() +
+  geom_bin2d(aes(x = height, y = nominalCrownRadius), crownRadii, binwidth = c(1, 0.2)) +
+  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLinear, tibble(height = seq(1.5, 85))), color = "H + H²")) +
+  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogistic, tibble(height = seq(1.5, 85))), color = "logistic(H)")) +
+  geom_line(aes(x = height, y = predictedCrownRadius, color = "bam(H)", group = isPlantation, linetype = isPlantation), crossing(height = seq(1.5, 85), isPlantation = factor(c(FALSE, TRUE))) %>% mutate(predictedCrownRadius = predict(crownRadiiBam, .))) +
+  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ05, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.5)")) +
+  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ02, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.2)")) +
+  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ01, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.1)")) +
+  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ0025, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.025)")) +
+  labs(x = "height, m", y = "nominal crown radius, m", color = "model", fill = "trees\nsegmented", linetype = "plantation") +
+  scale_color_manual(breaks = c("H + H²", "logistic(H)", "logistic(H, q = 0.5)", "logistic(H, q = 0.2)", "logistic(H, q = 0.1)", "logistic(H, q = 0.025)", "bam(H)"), values = c("cyan", "green1", "green2", "green3", "green4", "darkgreen", "red")) +
+  scale_fill_viridis_c(trans = "log10") +
+  scale_linetype_manual(breaks = c(FALSE, TRUE), values = c("solid", "longdash"))
+#ggsave("trees/segmentation/figures/implied crown radius.png", height = 12, width = 16, units = "cm", dpi = 150)
+
+ggplot() +
+  geom_hline(yintercept = 1, color = "grey70", linetype = "longdash") +
+  geom_line(aes(x = height, y = 12.59/(1+exp((56.56-height)/22.34)) / 0.457, color = "q = 0.5"), tibble(height = seq(0, 100))) +
+  geom_line(aes(x = height, y = 9.76/(1+exp((52.60-height)/19.37)) / 0.457, color = "q = 0.2"), tibble(height = seq(0, 100))) +
+  geom_line(aes(x = height, y = 8.99/(1+exp((53.17-height)/18.79)) / 0.457, color = "q = 0.1"), tibble(height = seq(0, 100))) +
+  geom_line(aes(x = height, y = 8.59/(1+exp((58.72-height)/19.42)) / 0.457, color = "q = 0.025"), tibble(height = seq(0, 100))) +
+  guides(color = guide_legend(reverse = TRUE)) +
+  labs(x = "height, m", y = "local maxima search radius, 45.7 cm raster cells", color = NULL)
+
+ggplot() +
+  geom_bin2d(aes(x = height, y = residuals(crownRadiiBam)), crownRadii, binwidth = c(1, 0.25)) +
+  scale_fill_viridis_c(trans = "log10")

@@ -5,6 +5,7 @@ library(lidR)
 library(magrittr)
 library(patchwork)
 library(sf)
+library(stringr)
 library(terra)
 library(tibble)
 library(tidyterra)
@@ -75,7 +76,7 @@ process_stand = function(standID, plotSegmentation = FALSE)
       standAndBufferPoints@data$Classification[which((standAndBufferPoints@data$Z >= zThreshold) & (standAndBufferPoints@data$treeID == treeID))] = 18L # point class: high
     }
     
-    standAndBufferPoints = standAndBufferPoints[standAndBufferPoints@data$Classification != 18L,] # remove outlier points
+    standAndBufferPoints = standAndBufferPoints[(standAndBufferPoints@data$Classification != 7L) & (standAndBufferPoints@data$Classification != 18L),] # remove outlier points
     standAndBufferPoints = las_update(standAndBufferPoints)
   }
   cat(sprintf("%d upper quantile checking: found %d trees with large upper quantile differences in %.1f s.", standID, nrow(outlierAboveTrees), difftime(Sys.time(), highPointStartTime, units = "secs")), fill = TRUE)
@@ -265,6 +266,7 @@ segment_cloud = function(pointCloud, isNormalized = FALSE)
 }
 
 # setup
+# 2021 tile naming convention: s<easting>w<northing> where easting ≥ 03450 and northing ≥ 06360 increment in steps of 30 (units are 100 ft)
 #dataPath = "E:/Elliott/GIS/DOGAMI/2009 OLC South Coast"
 dataPath = "E:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 
@@ -301,8 +303,9 @@ if (nrow(elliottStands) != length(unique(elliottStands$OSU_SID)))
 # 443        s03960w07050, s03990w07050   7.5 ha, 150 y natural regen, N central
 # 605        s03990w06930, s04020w06930   40 ha, young plantation, steep, S central
 # 1874       s03510w06480, s03540w06480   1.1 ha, natural regen, flat, SW corner
-tileName = "s03960w07050"
-tile = readLAS(file.path(dataPath, "points", paste0(tileName, "_las.las")))
+tileBaseName = "s03960w07050"
+tile = readLAS(file.path(dataPath, "Points", paste0(tileBaseName, "_las.las")))
+#table(tile$Classification)
 #nonNormalizedSegmentation = segment_cloud(tile)
 #nonNormalizedTrees = get_trees(nonNormalizedSegmentation)
 #st_write(tileTrees, file.path(dataPath, "segmentation", paste0(tileName, " trees non-normalized.gpkg")), append = FALSE) # only 17 with default Dalponte
