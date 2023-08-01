@@ -17,11 +17,11 @@ if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other re
 heightDiameterCoefficients = bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients,
                                        umcaCoefficients, thplCoefficients, otherCoefficients) %>% 
   relocate(responseVariable, species, fitSet, fixedWeight, name, fitting, repetition, fold, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
-write_xlsx(heightDiameterCoefficients %>% 
-             filter(fitSet == "primary", is.na(fixedWeight), fitting != "gam") %>%
-             select(-fitSet, -fixedWeight, -a0, -starts_with("a1r"), -starts_with("a3r"), -starts_with("Har"), -X, -starts_with("Xr"), -starts_with("s(")) %>%
-             relocate(responseVariable, species, name, fitting, significant),
-           "trees/height-diameter/data/height-diameter model coefficients.xlsx") # slow on full results (74+ MB .xlsx), suppress GAM coefficients since 1) they're not meaningful outside of mgcv and 2) doing so reduces the primary fit set's .xlsx from 20+ MB to 4.6 MB, trim empty GAM and nlme() columns
+#write_xlsx(heightDiameterCoefficients %>% 
+#             filter(fitSet == "primary", is.na(fixedWeight), fitting != "gam") %>%
+#             select(-fitSet, -fixedWeight, -a0, -starts_with("a1r"), -starts_with("a3r"), -starts_with("Har"), -X, -starts_with("Xr"), -starts_with("s(")) %>%
+#             relocate(responseVariable, species, name, fitting, significant),
+#           "trees/height-diameter/data/height-diameter model coefficients.xlsx") # slow on full results (74+ MB .xlsx), suppress GAM coefficients since 1) they're not meaningful outside of mgcv and 2) doing so reduces the primary fit set's .xlsx from 20+ MB to 4.6 MB, trim empty GAM and nlme() columns
 
 heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
                                   umcaResults, thplResults, otherResults) %>%
@@ -1014,6 +1014,14 @@ preferredModelForms = heightDiameterModelRanking %>% filter(significant) %>%
   arrange(desc(responseVariable), species, isBaseForm, rank) %>%
   select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
   relocate(responseVariable, species, rank, name, aucMab, aucMae, aucRmse, aucDeltaAicN, aucNse)
+preferredModelFormsHeightNonPhysio = heightDiameterModelRanking %>% filter(significant, hasPhysio == FALSE) %>% 
+  mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
+  group_by(responseVariable, species) %>% 
+  slice_max(aucBlended, n = 10, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
+  mutate(rank = row_number()) %>% 
+  arrange(desc(responseVariable), species, isBaseForm, rank) %>%
+  select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
+  relocate(responseVariable, species, rank, name, aucMab, aucMae, aucRmse, aucDeltaAicN, aucNse)
 preferredModelFormsInitialDbh = heightDiameterModelRanking %>% filter(significant, hasStand == FALSE) %>% 
   mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
   group_by(responseVariable, species) %>% 
@@ -1022,4 +1030,4 @@ preferredModelFormsInitialDbh = heightDiameterModelRanking %>% filter(significan
   arrange(desc(responseVariable), species, isBaseForm, rank) %>%
   select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
   relocate(responseVariable, species, rank, name, aucMab, aucMae, aucRmse, aucDeltaAicN, aucNse)
-write_xlsx(list(preferred = preferredModelForms, initialDbh = preferredModelFormsInitialDbh), "trees/height-diameter/figures/Tables S02-15 model AUCs.xlsx")
+write_xlsx(list(preferred = preferredModelForms, heightNonPhysio = preferredModelFormsHeightNonPhysio, initialDbh = preferredModelFormsInitialDbh), "trees/height-diameter/figures/Tables S02-15 model AUCs.xlsx")

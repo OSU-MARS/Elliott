@@ -268,7 +268,7 @@ plot_layout(widths = c(1, 1), heights = c(1, 1), guides = "collect") &
   scale_color_viridis_c(end = 0.96) &
   scale_shape_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(16, 17, 18)) &
   scale_size_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(1.5, 1.5, 1.85))
-
+#ggsave("Presentation/2015-16 ground to 2021 LiDAR stand comparison.png", units = "cm", width = 20, height = 14, dpi = 150)
 
 # distribution of fraction of trees segmented  
 ggplot() +
@@ -304,6 +304,56 @@ plot_layout(guides = "collect") &
   theme(legend.spacing.y = unit(0.3, "line"))
 #ggsave("presentation/LiDAR-ground TPH distribution.png", height = 12, width = 16, units = "cm", dpi = 150)
   
+# comparison of top height by age
+library(gslnls)
+yearsToBreastHeight = 5
+kingSiteIndexModelGround = gsl_nls(topHeight ~ (standAge2016 - yearsToBreastHeight)^2 / (a + b * (standAge2016 - yearsToBreastHeight) + c * (standAge2016 - yearsToBreastHeight)^2), elliottStandsMod %>% filter(standAge2016 > 5, topHeight < 1.5 * standAge2016), start = list(a = 1, b = 1, c = 1))
+kingSiteIndexModelLidar = gsl_nls(segmentedTopHeight ~ (standAge2016 - yearsToBreastHeight)^2 / (a + b * (standAge2016 - yearsToBreastHeight) + c * (standAge2016 - yearsToBreastHeight)^2), elliottStandsMod %>% filter(standAge2016 > 5, topHeight < (10 + 1.1 * standAge2016)), start = list(a = 1, b = 1, c = 1))
+
+elliottStandsGisSiteIndex = left_join(elliottStandsMod,
+                                      read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% rename(standID2016 = StandID),
+                                      by = "standID2016")
+
+ggplot() +
+  geom_line(aes(x = seq(yearsToBreastHeight, 250), y = predict(kingSiteIndexModelGround, tibble(standAge2016 = seq(yearsToBreastHeight, 250))), linetype = "King's"), color = "grey30", linewidth = 0.5) +
+  geom_point(aes(x = standAge2016,  y = topHeight, color = isPlantation, shape = standClass, size = standClass), elliottStandsMod, alpha = 0.3, na.rm = TRUE) +
+  labs(x = NULL, y = bquote("ground measured H"[100]*" in 2016, m"), color = NULL, fill = NULL, linetype = NULL, shape = NULL, size = NULL) +
+ggplot() +
+  geom_line(aes(x = seq(yearsToBreastHeight, 250), y = predict(kingSiteIndexModelLidar, tibble(standAge2016 = seq(yearsToBreastHeight, 250))), linetype = "King's"), color = "grey30", linewidth = 0.5) +
+  geom_point(aes(x = standAge2016 + 5,  y = segmentedTopHeight, color = isPlantation, shape = standClass, size = standClass), elliottStandsMod, alpha = 0.3, na.rm = TRUE) +
+  labs(x = NULL, y = bquote("LiDAR measured H"[100]*" in 2021, m"), color = NULL, fill = NULL, linetype = NULL, shape = NULL, size = NULL) +
+ggplot() +
+  geom_smooth(aes(x = standAge2016, y = 0.3048 * Cruised_Si, linetype = "GAM"), elliottStandsGisSiteIndex %>% filter(Cruised_Si != 0), formula = y ~ s(x), method = "gam", alpha = 0.1, color = "grey30", linewidth = 0.5) +
+  geom_point(aes(x = standAge2016, y = 0.3048 * Cruised_Si, color = isPlantation, shape = standClass, size = standClass), elliottStandsGisSiteIndex %>% filter(Cruised_Si != 0), alpha = 0.3) +
+  labs(x = "stand age, years", y = "ground measured site index in 2016, m", color = NULL, fill = NULL, linetype = NULL, shape = NULL, size = NULL) +
+ggplot() +
+  geom_smooth(aes(x = standAge2016, y = 0.3048 * if_else(ODSL_Site_ == 0, ODSL_Physi, pmin(ODSL_Physi, ODSL_Site_)), linetype = "GAM"), elliottStandsGisSiteIndex %>% filter(Cruised_Si == 0), formula = y ~ s(x), method = "gam", alpha = 0.1, color = "grey30", linewidth = 0.5) +
+  geom_point(aes(x = standAge2016, y = 0.3048 * if_else(ODSL_Site_ == 0, ODSL_Physi, pmin(ODSL_Physi, ODSL_Site_)), color = isPlantation, shape = standClass, size = standClass), elliottStandsGisSiteIndex %>% filter(Cruised_Si == 0), alpha = 0.3) +
+  labs(x = "stand age, years", y = "lower of ODSL site indices, m", color = NULL, fill = NULL, linetype = NULL, shape = NULL, size = NULL) +
+plot_annotation(theme = theme(plot.margin = margin())) +
+plot_layout(guides = "collect") &
+  coord_cartesian(ylim = c(0, 75)) &
+  guides(color = guide_legend(order = 1), fill = guide_legend(order = 3), linetype = guide_legend(order = 3), shape = guide_legend(order = 2), size = guide_legend(order = 2)) &
+  scale_color_manual(breaks = c(FALSE, TRUE), labels = c("natural regen", "plantation"), values = c("forestgreen", "green2")) &
+  scale_linetype_manual(breaks = c("King's", "GAM"), labels = c("King's curve", "GAM smooth"), values = c("solid", "longdash")) &
+  scale_shape_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(16, 17, 18)) &
+  scale_size_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(1.5, 1.5, 1.85)) &
+  theme(legend.spacing.y = unit(0.4, "line"))
+
+# cruised site index versus modeled
+ggplot() +
+  geom_segment(aes(x = 0, y = 0, xend = 50, yend = 50), color = "grey70", linetype = "longdash") +
+  geom_point(aes(x = 0.3048 * Cruised_Si, y = 0.3048 * if_else(ODSL_Site_ == 0, ODSL_Physi, pmin(ODSL_Physi, ODSL_Site_)), color = isPlantation, shape = standClass, size = standClass), elliottStandsGisSiteIndex %>% filter(Cruised_Si > 0), alpha = 0.3) +
+  coord_equal(ylim = c(0, 50)) +
+  labs(x = "ground measured site index in 2016, m", y = "lower of ODSL site indices, m", color = NULL, shape = NULL, size = NULL) +
+  guides(color = guide_legend(order = 1), fill = guide_legend(order = 3), linetype = guide_legend(order = 3), shape = guide_legend(order = 2), size = guide_legend(order = 2)) +
+  scale_color_manual(breaks = c(FALSE, TRUE), labels = c("natural regen", "plantation"), values = c("forestgreen", "green2")) +
+  scale_linetype_manual(breaks = c("King's", "GAM"), labels = c("King's curve", "GAM smooth"), values = c("solid", "longdash")) +
+  scale_shape_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(16, 17, 18)) +
+  scale_size_manual(breaks = c("natural regen", "pre-2001 plantation", "2001+ plantation"), values = c(1.5, 1.5, 1.85)) +
+  theme(legend.spacing.y = unit(0.4, "line"))
+
+
 # breakout of segmented trees by elevation, slope, and topographic shelter
 ggplot(elliottTreesMod) +
   geom_histogram(aes(x = elevation, fill = isPlantation, group = isPlantation), binwidth = 20) +
@@ -327,11 +377,12 @@ plot_layout(guides = "collect") &
 ## write trees for iLand
 elliottTreesArrow = arrow_table(elliottTreesMod %>%
                                   mutate(fiaCode = recode(species, "DF" = 202, "WH" = 263, "HW" = 351)) %>% # for now, approximate all hardwoods as red alder
-                                  select(standID, treeID, fiaCode, dbh, height, x, y) %>%
-                                  arrange(resourceUnitY, resourceUnitX, species, y, x),
+                                  arrange(resourceUnitY, resourceUnitX, species, y, x) %>%
+                                  rename(standID = standID2016) %>%
+                                  select(standID, treeID, fiaCode, dbh, height, x, y),
                                 schema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
                                                 dbh = float32(), height = float32(), x = float32(), y = float32()))
-write_feather(elliottTreesArrow, "iLand/init/ESRF_Trees2021.feather", compression = "uncompressed")
+write_feather(elliottTreesArrow, "iLand/init/ESRF trees 2023-05.feather")
 
 
 ## transcode .csv files exported from QGIS to .feather
@@ -352,7 +403,7 @@ write_feather(elliottTreesArrow, "iLand/init/ESRF_Trees2021.feather", compressio
 #    tileArrow = arrow_table(tile %>% mutate(fiaCode = recode(species, "psme" = 202)) %>% select(-species) %>% relocate(standID, treeID, fiaCode, dbh, height, x, y),
 #                            schema = schema(standID = int32(), treeID = int32(), fiaCode = uint16(), 
 #                                            dbh = float32(), height = float32(), x = float32(), y = float32()))
-#    write_feather(tileArrow, featherFilePath, compression = "uncompressed")
+#    write_feather(tileArrow, featherFilePath)
 #  }
 #}
 

@@ -12,7 +12,7 @@ library(terra)
 library(tibble)
 library(tidyr)
 
-theme_set(theme_bw() + theme(axis.line = element_line(size = 0.5),
+theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.5),
                              legend.background = element_rect(fill = alpha("white", 0.5)),
                              legend.margin = margin(),
                              panel.border = element_blank()))
@@ -112,7 +112,7 @@ for (weatherCellSize in c("100 m", "200 m", "400 m", "800 m", "4 km"))
                                                              PAS01 = float32(), PAS02 = float32(), PAS03 = float32(), PAS04 = float32(), PAS05 = float32(), PAS06 = float32(), PAS07 = float32(), PAS08 = float32(), PAS09 = float32(), PAS10 = float32(), PAS11 = float32(), PAS12 = float32(),
                                                              RH01 = float32(), RH02 = float32(), RH03 = float32(), RH04 = float32(), RH05 = float32(), RH06 = float32(), RH07 = float32(), RH08 = float32(), RH09 = float32(), RH10 = float32(), RH11 = float32(), RH12 = float32(),
                                                              Rad01 = float32(), Rad02 = float32(), Rad03 = float32(), Rad04 = float32(), Rad05 = float32(), Rad06 = float32(), Rad07 = float32(), Rad08 = float32(), Rad09 = float32(), Rad10 = float32(), Rad11 = float32(), Rad12 = float32()))
-  write_feather(monthlyArrow, paste0("iLand/database/weather ", weatherCellSize, " 2011-2100 13GCMssp370.feather"), compression = "uncompressed") # work around lack of compression support in Arrow 8.0.0 C#
+  write_feather(monthlyArrow, paste0("iLand/database/weather ", weatherCellSize, " 2011-2100 13GCMssp370.feather"))
 }
 
 #library(fst)
@@ -120,8 +120,8 @@ for (weatherCellSize in c("100 m", "200 m", "400 m", "800 m", "4 km"))
 
 ## translate resource unit .csv exported from QGIS to iLand resource unit .csv and .feather as a function of weather
 # cell size
-maxBufferDistance = 1000
-maxBufferDistanceName = paste(0.001 * maxBufferDistance, "km")
+maxBufferDistance = 400
+maxBufferDistanceName = if_else(maxBufferDistance < 1000, paste(maxBufferDistance, "m"), paste(0.001 * maxBufferDistance, "km"))
 resourceUnitColumnTypes = cols(name = "c", name4km = "c", name800m = "c", name400m = "c", name200m = "c", .default = "d")
 for (weatherCellSize in c("4 km", "800 m", "400 m", "200 m", "100 m"))
 {
@@ -216,11 +216,11 @@ for (weatherCellSize in c("4 km", "800 m", "400 m", "200 m", "100 m"))
   {
     write_csv(resourceUnits, paste0("iLand/gis/resource units ", maxBufferDistanceName, " buffer ", weatherCellSize, " weather.csv"))
   }
-  resourceUnitsArrow = arrow_table(resourceUnits, schema = schema(id = int32(), 
+  resourceUnitsArrow = arrow_table(resourceUnits, schema = schema(id = uint32(), 
                                                                   centerX = float32(), centerY = float32(), 
                                                                   weatherID = string(),
                                                                   soilPlantAccessibleDepth = float32(), soilThetaS = float32(), soilThetaR = float32(), soilVanGenuchtenAlpha = float32(), soilVanGenuchtenN = float32()))
-  write_feather(resourceUnitsArrow, paste0("iLand/gis/resource units ", maxBufferDistanceName, " buffer ", weatherCellSize, " weather.feather"), compression = "uncompressed")
+  write_feather(resourceUnitsArrow, paste0("iLand/gis/resource units ", maxBufferDistanceName, " buffer ", weatherCellSize, " weather.feather"))
 }
 
 resourceUnitsWithPawc = resourceUnits %>% 
@@ -243,7 +243,7 @@ ggplot() +
 # Set resourceUnits and resourceUnitsArrow with loop body above after uncommenting the filter() statement for weather 
 # windowing. The should find 190 resource units.
 weatherCellSize = "200 m"
-write_feather(resourceUnitsArrow, paste0("iLand/gis/unit test resource units ", weatherCellSize, " weather.feather"), compression = "uncompressed")
+write_feather(resourceUnitsArrow, paste0("iLand/gis/unit test resource units ", weatherCellSize, " weather.feather"))
 monthlyWeather = read_feather(paste0("iLand/database/weather ", weatherCellSize, " 2011-2100 13GCMssp370.feather")) %>%
   filter(ID2 %in% resourceUnits$weatherID)
 monthlyArrow = arrow_table(monthlyWeather, schema = schema(Year = int16(), ID2 = string(), 
@@ -254,7 +254,7 @@ monthlyArrow = arrow_table(monthlyWeather, schema = schema(Year = int16(), ID2 =
                                                            PAS01 = float32(), PAS02 = float32(), PAS03 = float32(), PAS04 = float32(), PAS05 = float32(), PAS06 = float32(), PAS07 = float32(), PAS08 = float32(), PAS09 = float32(), PAS10 = float32(), PAS11 = float32(), PAS12 = float32(),
                                                            RH01 = float32(), RH02 = float32(), RH03 = float32(), RH04 = float32(), RH05 = float32(), RH06 = float32(), RH07 = float32(), RH08 = float32(), RH09 = float32(), RH10 = float32(), RH11 = float32(), RH12 = float32(),
                                                            Rad01 = float32(), Rad02 = float32(), Rad03 = float32(), Rad04 = float32(), Rad05 = float32(), Rad06 = float32(), Rad07 = float32(), Rad08 = float32(), Rad09 = float32(), Rad10 = float32(), Rad11 = float32(), Rad12 = float32()))
-write_feather(monthlyArrow, paste0("iLand/database/unit test weather ", weatherCellSize, " 2011-2100 13GCMssp370.feather"), compression = "uncompressed") # work around lack of compression support in Arrow 8.0.0 C#
+write_feather(monthlyArrow, paste0("iLand/database/unit test weather ", weatherCellSize, " 2011-2100 13GCMssp370.feather"))
 
 
 resourceUnits %>% summarize(thetaRmin = min(soilThetaR), thetaRmax = max(soilThetaR),
@@ -284,7 +284,7 @@ ssp370timeSeries = ssp370 %>% filter(year >= 2011, year <= 2100) %>% select(-co2
 write_csv(ssp370timeSeries, "iLand/database/co2 ssp370.csv")
 
 ssp370arrow = arrow_table(ssp370timeSeries, schema = schema(year = int16(), month = uint8(), co2 = float32()))
-write_feather(ssp370arrow, "iLand/database/co2 ssp370.feather", compression = "uncompressed")
+write_feather(ssp370arrow, "iLand/database/co2 ssp370.feather")
 
 ggplot(marineBoundaryLayerReference) +
   # geom_ribbon(aes(x = decimal_date, ymin = value - 1.96 * uncertainty, ymax = value + 1.96 * uncertainty), alpha = 0.1, fill = "grey50") + # treated as normally distributed, see docs, but negligible for forest modeling since range is <±1 ppm
