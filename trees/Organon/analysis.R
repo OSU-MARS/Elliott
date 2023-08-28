@@ -1,3 +1,4 @@
+library(arrow)
 library(dplyr)
 library(ggplot2)
 library(patchwork)
@@ -14,14 +15,11 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
                              panel.border = element_blank(),
                              plot.title = element_text(size = 10)))
 
-standTrajectoriesFile ="trees/Organon/Elliott stand trajectories 2016-2116.csv"
-#standTrajectoriesFile ="trees/Organon/Elliott stand trajectories 80 percent site index.csv"
-standTrajectories = left_join(read_csv(standTrajectoriesFile, col_types = cols(.default = "d", financialScenario = "c", regenMinCostSystem = "c", thinChainsawCrewWithWheeledHarvester = "c", thinForwardingMethod = "c", regenChainsawCrewWithFellerBuncherAndGrappleSwingYarder = "c", regenChainsawCrewWithFellerBuncherAndGrappleYoader = "c", regenChainsawCrewWithTrackedHarvester = "c", regenChainsawCrewWithWheeledHarvester = "c")) %>%
+standTrajectoriesFile ="trees/Organon/Elliott stand trajectories 2016-2116.feather"
+standTrajectories = left_join(read_feather(standTrajectoriesFile, mmap = FALSE) %>%
                                 mutate(mai = standingMbfh / standAge), # MBF/ha
-                              read_xlsx("trees/Organon/Elliott Organon cruise records 2015-16.xlsx", sheet = "stands") %>% rename(stand = id) %>% select(-age),
+                              read_xlsx("trees/Organon/Elliott Organon cruise records 2015-16.xlsx", sheet = "stands") %>% rename(stand = id, cruiseAge2016 = age),
                               by = c("stand"))
-
-stands2022 %>% group_by(is.na(plotsInStand)) %>% summarize(area = sum(standArea))
 
 # MAI
 ggplot() +
@@ -41,6 +39,25 @@ plot_layout(widths = c(200, 300), guides = "collect") &
 #ggsave("trees/Organon/MAI measured+Organon SWO predicted - preliminary.png", height = 13, width = 20, units = "cm", dpi = 150)
 
 
+# net annualized revenue and components, undiscounted
+ggplot() +
+  geom_bin_2d(aes(x = standAge, y = (regenPond2S + regenPond3S + regenPond4S - regenFallerGrappleSwingYarderCost) / standAge, weight = area), standTrajectories %>% filter(cruiseAge2016 < (2016 - 1950)), binwidth = c(2, 20)) +
+  coord_cartesian(xlim = c(0, 175), ylim = c(0, 2000)) +
+  labs(x = "stand age, years", y = bquote("net annualized revenue, US$ ha"^-1~"year"^-1), fill = "area, ha") +
+ggplot() +
+  geom_bin_2d(aes(x = standAge, y = regenPond2S + regenPond3S + regenPond4S, weight = area), standTrajectories %>% filter(cruiseAge2016 < (2016 - 1950)), binwidth = c(2, 1000)) +
+  coord_cartesian(xlim = c(0, 175), ylim = c(0, 325000)) +
+  labs(x = "stand age, years", y = bquote("pond value, US$ ha"^-1), fill = "area, ha") +
+ggplot() +
+  geom_bin_2d(aes(x = standAge, y = regenFallerGrappleSwingYarderCost, weight = area), standTrajectories %>% filter(cruiseAge2016 < (2016 - 1950)), binwidth = c(2, 1000)) +
+  coord_cartesian(xlim = c(0, 175), ylim = c(0, 325000)) +
+  labs(x = "stand age, years", y = bquote("harvest cost, US$ ha"^-1), fill = "area, ha") +
+plot_annotation(theme = theme(plot.margin = margin())) +
+plot_layout(guides = "collect") &
+  scale_fill_viridis_c(breaks = c(1, 10, 100, 500), limits = c(1, 500), trans = "log10") &
+  scale_y_continuous(labels = scales::label_comma()) &
+  theme(legend.spacing.y = unit(0.4, "line"))
+              
 # stand trajectories
 logBreaks = c(1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000, 4000)
 logMinorBreaks = c(4, 6, 7, 8, 9, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 2000, 3000)

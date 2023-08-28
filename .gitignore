@@ -5,6 +5,7 @@
 **/*.csv
 **/*.mdb
 **/*.xlsx
+**/*.zip
 GIS/**/*.adf
 GIS/**/*.asc
 GIS/**/*.atx
@@ -45,6 +46,7 @@ GIS/**/*.txt
 GIS/**/*.vrt
 GIS/**/*.xml
 GIS/GRASS
+trees/Organon/*.feather
 
 # offline directories
 doc/

@@ -21,7 +21,7 @@ organonStands = stands2022 %>%
          plantingDensityPerHa = 2.47 * 360, # 
          yardingFactor = if_else(RoadDistMedian > 0, 0.5 * RoadDistMean / RoadDistMedian, 0.5),
          slopeAbove100PercentFraction = SlopeAbove100PercentFraction) %>%
-  rename(id = StandID, area = standArea, age = standAge2016) %>%
+  rename(id = StandID, area = standArea, age = standAge2016, allocation = April2021_Allocation) %>%
   select(id, area, siteIndex, age, slopeInPercent, forwardingRoad, forwardingUntethered, forwardingTethered, yardingFactor, plantingDensityPerHa, slopeAbove100PercentFraction)
 
 
@@ -69,9 +69,18 @@ organonStands %>% reframe(quantiles = c(0, 1), age = quantile(age, probs = quant
 organonTrees %>% group_by(speciesGroup) %>% 
   reframe(quantiles = c(0, 0.025, 0.5, 0.975, 1), dbh = quantile(dbh, probs = quantiles), height = quantile(height, probs = quantiles), EF = quantile(expansionFactor, probs = quantiles)) %>%
   pivot_wider(names_from = quantiles, values_from = c(dbh, height, EF))
-organonTrees %>% mutate(ageClass = 10 * floor(age / 10) + 0.5 * 10) %>% group_by(ageClass) %>% summarize(totalTph = sum(expansionFactor))
 
-#write_xlsx(list(stands = organonStands, trees = organonTrees %>% select(-speciesGroup)), "trees/Organon/Elliott Organon cruise records 2015-16.xlsx")
+
+intensiveStands = left_join(stands2022 %>% filter(April2021_Allocation == "Intensive"),
+                            trees2016 %>% group_by(StandID) %>% summarize(measurePlots = measurePlotsInStand[1], uniqueMeasureTrees = sum(is.na(DBH) == FALSE)),
+                            by = "StandID") %>%
+  filter(is.na(measurePlots) == FALSE, uniqueMeasureTrees >= 20) # exclude uncruised stands and stands with too few measure trees to form meaningful prescription guidance
+
+intensiveStands$uniqueMeasureTrees[which(intensiveStands$StandID == 2445)]
+
+intensiveStandIDs = unique(intensiveStands$StandID)
+intensiveTrees = organonTrees %>% filter(stand %in% intensiveStandIDs) %>% select(-speciesGroup)
+#write_xlsx(list(stands = organonStands, trees = organonTrees %>% select(-speciesGroup), intensiveTrees = intensiveTrees), "trees/Organon/Elliott Organon cruise records 2015-16.xlsx")
 
 
 ## exploratory plots
@@ -114,5 +123,19 @@ plot_layout(guides = "collect")
 cruisedSImodel = lm(Cruised_Si ~ ODSL_Site_, stands2022 %>% mutate(Cruised_Si = 0.3048 * Cruised_Si, ODSL_Site_ = 0.3048 * ODSL_Site_))
 summary(cruisedSImodel)
 
+# measure trees per stand
+ggplot() +
+  geom_histogram(aes(x = uniqueMeasureTrees), intensiveStands, binwidth = 2) +
+  labs(x = "measure trees", y = "intensive stands")
+
+
+## management allocations
+stands2022 %>% filter(StandID %in% unique(trees2016$StandID)) %>% group_by(April2021_Allocation) %>% summarize(n = n(), area = sum(area_ha), age2016min = min(standAge2016), age2016max = max(standAge2016))
+stands2022 %>% filter(StandID %in% unique(trees2016$StandID), April2021_Allocation == "Intensive")
 #stands2022 %>% filter(is.na(Cruised_Si) == FALSE) %>% summarise(ODSL_Physi = cor(Cruised_Si, ODSL_Physi))
 #stands2022 %>% filter(is.na(Cruised_Si) == FALSE, is.na(ODSL_Site_) == FALSE) %>% summarise(ODSL_Site = cor(Cruised_Si, ODSL_Site_))
+
+esrfAllocations = read_xlsx("GIS/Planning/ESRF_Allocations.xlsx")
+esrfAllocations %>% group_by(April2021_Allocation) %>% summarize(n = n(), areaHa = sum(Acres) / 2.47105)
+# approximate management costs (https://www.oregon.gov/dsl/Land/Elliott%20Forest%20Library/ElliottExpensesOverview.pdf)
+tibble(managementPerIntensiveHa = 1.7E6 / 5829) # US$/ha-year

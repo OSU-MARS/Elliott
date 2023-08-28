@@ -543,26 +543,27 @@ ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm)) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
   labs(x = NULL, y = NULL, fill = NULL, title = "b) base DBH prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
-ggplot(smallTreeEfficiency) + 
-  #geom_violin(aes(x = pctSmall, y = nse, color = species, group = species), draw_quantiles = c(0.25, 0.50, 0.75), fill = alpha("white", 0.5), position = position_identity(), width = 2) + # too stretched to be useful due to tail of negative model efficiencies
-  geom_boxplot(aes(x = pctSmall, y = nse, color = species, group = species), fill = alpha("white", 0.5), position = position_identity(), na.rm = TRUE, outlier.alpha = 0.1, outlier.size = 0.1, width = 4) +
-  coord_equal(ratio = 60, xlim = c(0, 100), ylim = c(0, 21.5/20)) +
-  labs(x = "stems less than 20 cm DBH, %", y = "model efficiency", color = NULL, title = "c) lack of small stem effect") +
-  scale_x_continuous(breaks = seq(0, 100, by = 20)) +
-  scale_y_continuous(breaks = seq(0, 1, by = 0.2)) +
-  theme(plot.title = element_text(vjust = -27)) +
+#ggplot(smallTreeEfficiency) + 
+#  #geom_violin(aes(x = pctSmall, y = nse, color = species, group = species), draw_quantiles = c(0.25, 0.50, 0.75), fill = alpha("white", 0.5), position = position_identity(), width = 2) + # too stretched to be useful due to tail of negative model efficiencies
+#  geom_boxplot(aes(x = pctSmall, y = nse, color = species, group = species), fill = alpha("white", 0.5), position = position_identity(), na.rm = TRUE, outlier.alpha = 0.1, outlier.size = 0.1, width = 4) +
+#  coord_equal(ratio = 60, xlim = c(0, 100), ylim = c(0, 21.5/20)) +
+#  labs(x = "stems less than 20 cm DBH, %", y = "model efficiency", color = NULL, title = "c) lack of small stem effect") +
+#  scale_x_continuous(breaks = seq(0, 100, by = 20)) +
+#  scale_y_continuous(breaks = seq(0, 1, by = 0.2)) +
+#  theme(plot.title = element_text(vjust = -27)) +
 ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm == FALSE)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
-  labs(x = "model efficiency", y = "fraction of fits, %", fill = NULL, title = "d) generalized height prediction") +
+  labs(x = "model efficiency", y = "fraction of fits, %", fill = NULL, title = "c) generalized height prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm == FALSE)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
-  labs(x = "model efficiency", y = NULL, fill = NULL, title = "e) generalized DBH prediction") +
+  labs(x = "model efficiency", y = NULL, fill = NULL, title = "d) generalized DBH prediction") +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
-plot_layout(nrow = 3, ncol = 3, design = "123\n453", guides = "collect") &
+#plot_layout(nrow = 3, ncol = 3, design = "123\n453", guides = "collect") &
+plot_layout(nrow = 2, ncol = 2, guides = "collect") &
   guides(color = "none", fill = guide_legend(ncol = 7)) &
   scale_color_manual(breaks = levels(primaryResults$species), limits = levels(primaryResults$species), values = speciesGroupColors) &
   scale_fill_manual(breaks = levels(primaryResults$species), limits = levels(primaryResults$species), values = speciesGroupColors) &
@@ -570,7 +571,7 @@ plot_layout(nrow = 3, ncol = 3, design = "123\n453", guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.6, "line"), legend.position = "bottom", legend.text = element_text(margin = margin(l = -2.5, r = 6.5)))
-#ggsave("trees/height-diameter/figures/Figure 07 model efficiency.png", height = 10, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 07 model efficiency - no small stems.png", height = 10, width = 20, units = "cm")
 
 
 ## Figure 8: Douglas-fir and red alder preferred models
