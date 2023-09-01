@@ -70,12 +70,12 @@ organonTrees %>% group_by(speciesGroup) %>%
   reframe(quantiles = c(0, 0.025, 0.5, 0.975, 1), dbh = quantile(dbh, probs = quantiles), height = quantile(height, probs = quantiles), EF = quantile(expansionFactor, probs = quantiles)) %>%
   pivot_wider(names_from = quantiles, values_from = c(dbh, height, EF))
 
-
 intensiveStands = left_join(stands2022 %>% filter(April2021_Allocation == "Intensive"),
-                            trees2016 %>% group_by(StandID) %>% summarize(measurePlots = measurePlotsInStand[1], uniqueMeasureTrees = sum(is.na(DBH) == FALSE)),
+                            trees2016 %>% filter(isLive) %>% group_by(StandID) %>% summarize(measurePlots = measurePlotsInStand[1], uniqueNonReserveMeasureTrees = sum((is.na(DBH) == FALSE) & (CompCode != "RT"))),
                             by = "StandID") %>%
-  filter(is.na(measurePlots) == FALSE, uniqueMeasureTrees >= 20) # exclude uncruised stands and stands with too few measure trees to form meaningful prescription guidance
+  filter(is.na(measurePlots) == FALSE, uniqueNonReserveMeasureTrees >= 20) # exclude uncruised stands and stands with too few measure trees to form meaningful prescription guidance
 
+intensiveStands %>% filter(uniqueNonReserveMeasureTrees < 20)
 intensiveStands$uniqueMeasureTrees[which(intensiveStands$StandID == 2445)]
 
 intensiveStandIDs = unique(intensiveStands$StandID)
@@ -130,7 +130,10 @@ ggplot() +
 
 
 ## management allocations
-stands2022 %>% filter(StandID %in% unique(trees2016$StandID)) %>% group_by(April2021_Allocation) %>% summarize(n = n(), area = sum(area_ha), age2016min = min(standAge2016), age2016max = max(standAge2016))
+stands2022 %>% filter(StandID %in% unique(trees2016$StandID)) %>% group_by(April2021_Allocation) %>% 
+  summarize(n = n(), area = sum(area_ha), age2016min = min(standAge2016), age2016max = max(standAge2016), 
+            n20 = sum(standAge2016 <= 20), area20 = sum((standAge2016 <= 20) * area_ha),
+            n40 = sum(standAge2016 <= 40), area40 = sum((standAge2016 <= 40) * area_ha))
 stands2022 %>% filter(StandID %in% unique(trees2016$StandID), April2021_Allocation == "Intensive")
 #stands2022 %>% filter(is.na(Cruised_Si) == FALSE) %>% summarise(ODSL_Physi = cor(Cruised_Si, ODSL_Physi))
 #stands2022 %>% filter(is.na(Cruised_Si) == FALSE, is.na(ODSL_Site_) == FALSE) %>% summarise(ODSL_Site = cor(Cruised_Si, ODSL_Site_))
