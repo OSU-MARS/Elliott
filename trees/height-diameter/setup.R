@@ -1630,12 +1630,11 @@ if (htDiaOptions$includeInvestigatory)
 if (htDiaOptions$includeInvestigatory)
 {
   # Table S1
-  trees2016summary = trees2016 %>% filter(is.na(DBH) == FALSE) %>% # exclude trees on count plots
-    #mutate(speciesClassification = if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other")) %>%
-    #group_by(speciesClassification) %>%
+  trees2016summary = trees2016 %>%
+    #group_by(Species) %>%
     group_by(speciesGroup) %>% 
     summarize(stands = n_distinct(StandID),
-              trees = sum(TreeCount),
+              stems = sum(TreeCount),
               live = sum(TreeCount * isLive),
               plantation = sum(TreeCount * isLive * isPlantation), 
               retention = sum(TreeCount * isLive * (CompCode == "RT")), 
@@ -1649,12 +1648,14 @@ if (htDiaOptions$includeInvestigatory)
               taperDia = sum(TreeCount * (is.na(Dia1) == FALSE), na.rm = TRUE), 
               taperHt = sum(TreeCount * (is.na(Ht1) == FALSE), na.rm = TRUE), 
               .groups = "drop") %>%
-    mutate(pctStems = 100 * trees / sum(trees), 
+    mutate(pctStems = 100 * stems / sum(stems), 
            pctStands = 100 * stands / n_distinct(trees2016$StandID)) %>%
     relocate(speciesGroup, stands, pctStems) %>%
-    arrange(desc(trees)) %>%
+    #relocate(Species, stands, pctStems) %>%
+    arrange(desc(stems)) %>%
     bind_rows(summarize(., across(where(is.numeric), ~if_else(is.integer(.x), max(.x), sum(.x))))) %>%
     mutate(speciesGroup = replace_na(as.character(speciesGroup), "total"))
+    #mutate(Species = replace_na(as.character(Species), "total"))
   print(trees2016summary, n = 25)
   trees2016 %>% group_by(isConifer) %>% summarize(heightMeasureTrees = sum(TreeCount * isLive * (is.na(TotalHt) == FALSE)))
 

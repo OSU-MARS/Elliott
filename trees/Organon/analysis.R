@@ -20,6 +20,46 @@ as_harvest_system = function(harvestSystem)
   return(factor(harvestSystem, levels = seq(0, 10), labels = c("None", "FallersGrappleSwingYarderProcessorLoader", "FallersGrappleYoaderProcessorLoader", "FellerBuncherGrappleSwingYarderProcessorLoader", "FellerBuncherGrappleYoaderProcessorLoader", "TrackedHarvesterForwarder", "TrackedHarvesterGrappleSwingYarderLoader", "TrackedHarvesterGrappleYoaderLoader", "WheeledHarvesterForwarder", "WheeledHarvesterGrappleSwingYarderLoader", "WheeledHarvesterGrappleYoaderLoader")))
 }
 
+read_stand_trajectories = function(trajectoryFilePath)
+{
+  return(read_feather(trajectoryFilePath, mmap = FALSE) %>%
+    mutate(thinMinCostSystem = as_harvest_system(thinMinCostSystem),
+           regenMinCostSystem = as_harvest_system(regenMinCostSystem),
+           thinCost = case_match(thinMinCostSystem, "None" ~ 0,
+                                 "FallersGrappleSwingYarderProcessorLoader" ~ thinFallerGrappleSwingYarderCost,
+                                 "FallersGrappleYoaderProcessorLoader" ~ thinFallerGrappleYoaderCost,
+                                 "FellerBuncherGrappleSwingYarderProcessorLoader" ~ thinFellerBuncherGrappleSwingYarderCost,
+                                 "FellerBuncherGrappleYoaderProcessorLoader" ~ thinChainsawCmhWithFellerBuncherAndGrappleYoader,
+                                 "TrackedHarvesterForwarder" ~ thinTrackedHarvesterForwarderCost,
+                                 "TrackedHarvesterGrappleSwingYarderLoader" ~ thinTrackedHarvesterGrappleSwingYarderCost,
+                                 "TrackedHarvesterGrappleYoaderLoader" ~ thinTrackedHarvesterGrappleYoaderCost,
+                                 "WheeledHarvesterForwarder" ~ thinWheeledHarvesterForwarderCost, 
+                                 "WheeledHarvesterGrappleSwingYarderLoader" ~ thinWheeledHarvesterGrappleSwingYarderCost,
+                                 "WheeledHarvesterGrappleYoaderLoader" ~ thinWheeledHarvesterGrappleYoaderCost),
+           regenHarvestCost = case_match(regenMinCostSystem, "None" ~ 0,
+                                         "FallersGrappleSwingYarderProcessorLoader" ~ regenFallerGrappleSwingYarderCost,
+                                         "FallersGrappleYoaderProcessorLoader" ~ regenFallerGrappleYoaderCost,
+                                         "FellerBuncherGrappleSwingYarderProcessorLoader" ~ regenFellerBuncherGrappleSwingYarderCost,
+                                         "FellerBuncherGrappleYoaderProcessorLoader" ~ regenChainsawCmhWithFellerBuncherAndGrappleYoader,
+                                         "TrackedHarvesterForwarder" ~ NA,
+                                         "TrackedHarvesterGrappleSwingYarderLoader" ~ regenTrackedHarvesterGrappleSwingYarderCost,
+                                         "TrackedHarvesterGrappleYoaderLoader" ~ regenTrackedHarvesterGrappleYoaderCost,
+                                         "WheeledHarvesterForwarder" ~ NA, 
+                                         "WheeledHarvesterGrappleSwingYarderLoader" ~ regenWheeledHarvesterGrappleSwingYarderCost,
+                                         "WheeledHarvesterGrappleYoaderLoader" ~ regenWheeledHarvesterGrappleYoaderCost),
+           thinNetRevenue = if_else(standAge == thin1, replace_na(thinPond2S, 0) + replace_na(thinPond3S, 0) + replace_na(thinPond4S, 0) - thinCost, 0),
+           regenHarvestNetRevenue = if_else(standAge == rotation, replace_na(regenPond2S, 0) + replace_na(regenPond3S, 0) + replace_na(regenPond4S, 0) - regenHarvestCost, 0)) %>%
+    group_by(stand, thin1, thin2, thin3, rotation) %>%
+    mutate(netRevenue = sum(thinNetRevenue + regenHarvestNetRevenue),
+           npvRotation = sum(if_else(standAge == rotation, NPV, 0)),
+           levRotation = sum(if_else(standAge == rotation, LEV, 0))) %>%
+    group_by(stand) %>%
+    mutate(maxNetRevenue = max(netRevenue),
+           maxNpv = max(npvRotation),
+           maxLev = max(levRotation)) %>%
+    ungroup())
+}
+
 
 ## no management option
 standTrajectoriesFile ="trees/Organon/Elliott stand trajectories 2016-2116.feather"
@@ -90,46 +130,10 @@ ggplot() +
 ## intensive stands
 standTrajectoriesFile ="trees/Organon/Elliott intensive prescriptions max LEV.feather"
 #standTrajectoriesFile ="trees/Organon/Elliott intensive prescriptions max NPV.feather"
-intensiveTrajectories = left_join(read_feather(standTrajectoriesFile, mmap = FALSE) %>%
+intensiveTrajectories = left_join(read_stand_trajectories(standTrajectoriesFile) %>%
                                     mutate(mai = standingMbfh / standAge), # MBF/ha
                                   read_xlsx("trees/Organon/Elliott Organon cruise records 2015-16.xlsx", sheet = "stands") %>% rename(stand = id, cruiseAge2016 = age),
-                                  by = c("stand")) %>%
-  mutate(thinMinCostSystem = as_harvest_system(thinMinCostSystem),
-         regenMinCostSystem = as_harvest_system(regenMinCostSystem),
-         thinCost = case_match(thinMinCostSystem, "None" ~ 0,
-                                                  "FallersGrappleSwingYarderProcessorLoader" ~ thinFallerGrappleSwingYarderCost,
-                                                  "FallersGrappleYoaderProcessorLoader" ~ thinFallerGrappleYoaderCost,
-                                                  "FellerBuncherGrappleSwingYarderProcessorLoader" ~ thinFellerBuncherGrappleSwingYarderCost,
-                                                  "FellerBuncherGrappleYoaderProcessorLoader" ~ thinChainsawCmhWithFellerBuncherAndGrappleYoader,
-                                                  "TrackedHarvesterForwarder" ~ thinTrackedHarvesterForwarderCost,
-                                                  "TrackedHarvesterGrappleSwingYarderLoader" ~ thinTrackedHarvesterGrappleSwingYarderCost,
-                                                  "TrackedHarvesterGrappleYoaderLoader" ~ thinTrackedHarvesterGrappleYoaderCost,
-                                                  "WheeledHarvesterForwarder" ~ thinWheeledHarvesterForwarderCost, 
-                                                  "WheeledHarvesterGrappleSwingYarderLoader" ~ thinWheeledHarvesterGrappleSwingYarderCost,
-                                                  "WheeledHarvesterGrappleYoaderLoader" ~ thinWheeledHarvesterGrappleYoaderCost),
-         regenHarvestCost = case_match(regenMinCostSystem, "None" ~ 0,
-                                       "FallersGrappleSwingYarderProcessorLoader" ~ regenFallerGrappleSwingYarderCost,
-                                       "FallersGrappleYoaderProcessorLoader" ~ regenFallerGrappleYoaderCost,
-                                       "FellerBuncherGrappleSwingYarderProcessorLoader" ~ regenFellerBuncherGrappleSwingYarderCost,
-                                       "FellerBuncherGrappleYoaderProcessorLoader" ~ regenChainsawCmhWithFellerBuncherAndGrappleYoader,
-                                       "TrackedHarvesterForwarder" ~ NA,
-                                       "TrackedHarvesterGrappleSwingYarderLoader" ~ regenTrackedHarvesterGrappleSwingYarderCost,
-                                       "TrackedHarvesterGrappleYoaderLoader" ~ regenTrackedHarvesterGrappleYoaderCost,
-                                       "WheeledHarvesterForwarder" ~ NA, 
-                                       "WheeledHarvesterGrappleSwingYarderLoader" ~ regenWheeledHarvesterGrappleSwingYarderCost,
-                                       "WheeledHarvesterGrappleYoaderLoader" ~ regenWheeledHarvesterGrappleYoaderCost),
-         thinNetRevenue = if_else(standAge == thin1, replace_na(thinPond2S, 0) + replace_na(thinPond3S, 0) + replace_na(thinPond4S, 0) - thinCost, 0),
-         regenHarvestNetRevenue = if_else(standAge == rotation, replace_na(regenPond2S, 0) + replace_na(regenPond3S, 0) + replace_na(regenPond4S, 0) - regenHarvestCost, 0)) %>%
-  group_by(stand, thin1, thin2, thin3, rotation) %>%
-  mutate(netRevenue = sum(thinNetRevenue + regenHarvestNetRevenue),
-         npvRotation = sum(if_else(standAge == rotation, NPV, 0)),
-         levRotation = sum(if_else(standAge == rotation, LEV, 0))) %>%
-  group_by(stand) %>%
-  mutate(maxNetRevenue = max(netRevenue),
-         maxNpv = max(npvRotation),
-         maxLev = max(levRotation)) %>%
-  ungroup()
-
+                                  by = c("stand"))
 
 # net harvest revenues by stand age
 # TODO: filter out pre-2021 harvest
