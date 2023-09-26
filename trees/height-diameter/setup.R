@@ -1953,7 +1953,7 @@ if (htDiaOptions$includeInvestigatory)
                mutate(isPlantation = factor(isPlantation, labels = c("natural regeneration", "plantation"), levels = c("naturalRegenArea", "plantationArea")))) +
     geom_text(aes(x = ageLabelX, y = clusterID, label = ageLabel), speciesBasalAreaByCluster, color = speciesBasalAreaByCluster$ageLabelColor, hjust = 0, parse = TRUE, size = 3) +
     coord_cartesian(xlim = c(0, 2550)) +
-    labs(x = "area inventoried, ha", y = "stand type classification (hierarchical cluster ID)", fill = NULL) +
+    labs(x = "area inventoried, ha", y = "stand type classification (hierarchical cluster ID)", fill = NULL, title = "a) age and area") +
     scale_fill_manual(breaks = c("natural regeneration", "plantation"), values = c("grey10", "grey35")) +
     scale_x_continuous(expand = c(0.012, 0)) +
     theme(legend.justification = c(1, 0), legend.position = c(1, 0.02)) +
@@ -1963,14 +1963,14 @@ if (htDiaOptions$includeInvestigatory)
                mutate(speciesGroup = factor(speciesGroup, levels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other")))) +
     geom_text(aes(x = topHeightLabelX, y = clusterID, label = topHeightLabel), speciesBasalAreaOneRowPerClusterSlice, color = speciesBasalAreaOneRowPerClusterSlice$topHeightLabelColor, hjust = 0, parse = TRUE, size = 3) +
     coord_cartesian(xlim = c(0, 83)) +
-    labs(x = bquote("mean basal area, m"^2*" ha"^-1), y = NULL, fill = NULL) +
+    labs(x = bquote("mean basal area, m"^2*" ha"^-1), y = NULL, fill = NULL, title = "b) top height and density") +
     scale_fill_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
     scale_x_continuous(expand = c(0.008, 0)) +
     scale_y_discrete(labels = NULL) +
     theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
-  #ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10, width = 22, units = "cm", dpi = 200)
+  #ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 200)
   
   # tree counts
   trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%

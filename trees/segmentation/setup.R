@@ -1,15 +1,41 @@
+library(data.table)
 library(dplyr)
 library(FNN) # fast nearest neighbor::get.knn() for cleaning segmentation
+library(future)
 library(ggplot2)
 library(lidR)
 library(magrittr)
 library(patchwork)
+library(readxl)
 library(sf)
 library(stringr)
 library(terra)
 library(tibble)
 library(tidyterra)
 library(tidyr)
+
+metrics_rgbn = function(returnNumber, r, g, b, nir)
+{
+  firstReturns = which(returnNumber == 1)
+  return(data.table(r = sqrt(mean(r[firstReturns]^2)), g = sqrt(mean(g[firstReturns]^2)), b = sqrt(mean(b[firstReturns]^2)), nir = sqrt(mean(nir[firstReturns]^2))))
+}
+
+metrics_rgbnc = function(classification, returnNumber, r, g, b, nir)
+{
+  firstReturns = which((classification == 1) & (returnNumber == 1))
+  return(data.table(r = sqrt(mean(r[firstReturns]^2)), g = sqrt(mean(g[firstReturns]^2)), b = sqrt(mean(b[firstReturns]^2)), nir = sqrt(mean(nir[firstReturns]^2))))
+}
+
+#metrics_zero = function(returnNumber, z) # lidR testing function
+#{
+#  return(tibble(n1 = 0, n2 = 0))
+#}
+
+metrics_zn = function(returnNumber, z)
+{
+  return(data.table(n1 = sum(returnNumber == 1), n2 = sum(returnNumber == 2), n3 = sum(returnNumber == 3), n4 = sum(returnNumber == 4), n5 = sum(returnNumber == 5),
+                    z1 = max((returnNumber == 1) * z), z2 = max((returnNumber == 2) * z), z3 = max((returnNumber == 3) * z), z4 = max((returnNumber == 4) * z), z5 = max((returnNumber == 5) * z)))
+}
 
 normalize_stand = function(standID)
 {
@@ -230,6 +256,20 @@ process_stand = function(standID, plotSegmentation = FALSE)
   #plot(st_geometry(standTrees), pch=20, add=TRUE)
 }
 
+remove_redundant_tiles = function(directoryToRetain, directoryToPrune)
+{
+  tileNamesEligibleToObsolete = list.files(directoryToPrune, pattern = "\\.laz$")
+  tileNamesToRetain = list.files(directoryToRetain, pattern = "\\.laz$")
+  
+  tileNamesToObsolete = intersect(tileNamesToRetain, tileNamesEligibleToObsolete)
+  cat(paste0("Removing ", length(tileNamesToObsolete), " tiles from ", directoryToPrune, "...\n"))
+  for (tileName in tileNamesToObsolete)
+  {
+    #cat(paste0("Remove", file.path(directoryToPrune, tileName)))
+    file.remove(file.path(directoryToPrune, tileName))
+  }
+}
+
 segment_cloud = function(pointCloud, isNormalized = FALSE)
 {
   chm = rasterize_canopy(pointCloud, res = 1, algorithm = p2r(subcircle = 0)) # compute the canopy height model using a pixel of 0.5 units, in this case feet
@@ -265,12 +305,23 @@ segment_cloud = function(pointCloud, isNormalized = FALSE)
   return(list(standPoints = pointCloud, chm = chm, minimumTreeHeight = minimumTreeHeight))
 }
 
+stdmetrics_z_simple = function(z) # reduced from https://github.com/r-lidar/lidR/blob/master/R/metrics_stdmetrics.R
+{
+  n = length(z)
+
+  probs = seq(0, 1.0, by = 0.1)
+  zq = as.list(stats::quantile(z, probs))
+  names(zq) = paste0("zq", 100 * probs)
+
+  return(c(n = length(z), zq, zmean = mean(z), zsd = sd(z)))
+}
+
 # setup
 # 2021 tile naming convention: s<easting>w<northing> where easting ≥ 03450 and northing ≥ 06360 increment in steps of 30 (units are 100 ft)
 #dataPath = "E:/Elliott/GIS/DOGAMI/2009 OLC South Coast"
 dataPath = "E:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 
-dtm2021nv5 = rast("GIS/NV5/DTM_NV5_2021.tif")
+dtm2021nv5 = rast("GIS/DOGAMI/2021 OLC Coos County/DTM_NV5_2021.tif")
 elliottStands = st_read("GIS/Planning/ESRF_Stands062022Fixed.shp") # June 2022 stand boundaries
 elliottStands = st_transform(elliottStands, 6557) # override EPSG:2992 to 6557 - same projection and units, just different EPSG
 elliottLidarTiles = readLAScatalog(file.path(dataPath, "Points"), progress = FALSE) # progress = FALSE turns off plotting of tiles during clip_roi() calls, many warnings: only 2 bytes until point block
@@ -296,6 +347,42 @@ if (nrow(elliottStands) != length(unique(elliottStands$OSU_SID)))
 #elliottStands.id = elliottStands.id[,-(1)]
 #head(elliottStands.id)
 #st_crs(elliottStands.id)
+
+
+## tile level pixel metrics, 5950X: get_lidr_threads() = 16
+dataPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
+tileName = "s04020w06690.laz" # 40-45 year old plantations + 130+ reserve stands
+tileName = "s04260w06720.laz" # 4, 5, 13, 46, 52 year plantations + 95 & 120 year reserves
+tile = readLAS(file.path(dataPath, "pointz", tileName))
+tile = filter_poi(tile, (Classification != 7L & (Classification != 18L)))
+
+#metricsZero = pixel_metrics(tile, ~metrics_zero(ReturnNumber, Z), res = 3.28084 * 1) # 1.4 min with data.table(), 5.3 min with tibble() -> 3.8x penalty
+#metrics = pixel_metrics(tile, ~stdmetrics(X, Y, Z, Intensity, ReturnNumber, Classification), dz = 3.28084 * 1, res = 3.28084 * 1) # 11.6 min / tile @ 1 m resolution with dz = 1 foot -> 126 MB GeoTIFF
+#metricsCtrl = pixel_metrics(tile, .stdmetrics_ctrl, res = 3.28084 * 1) # only n and area but just a few seconds, error with ~stdmetrics_ctrl(X, Y, Z)
+#metricsReturns = pixel_metrics(tile, .stdmetrics_rn, res = 3.28084 * 1) # 1.0 min -> 15 MB GeoTIFF
+#metricsRgbn = pixel_metrics(tile, ~metrics_rgbn(ReturnNumber, R, G, B, NIR), res = 1) # 20.3 min -> 64 MB GeoTIFF
+#metricsZ = pixel_metrics(tile, .stdmetrics_z, dz = 3.28084 * 1, res = 3.28084 * 1) # 5.53 min -> 71 MB GeoTIFF, z mean, σ, quantiles, skew, kurtosis, entropy, probabilities, error with ~stdmetrics_z(X, Y, Z)
+#metricsZ = pixel_metrics(tile, ~stdmetrics_z_simple(Z), res = 3.28084 * 1) # 2.5 min -> 34 MB GeoTIFF
+#metricsZn = pixel_metrics(tile, ~metrics_zn(ReturnNumber, Z), res = 3.28084 * 1) # 2.4 min -> 16.9 MB GeoTIFF
+
+metricsStartTime = Sys.time()
+#metricsRgbn = pixel_metrics(tile, ~metrics_rgbn(ReturnNumber, R, G, B, NIR), res = 1) # 20.3 min -> 64 MB GeoTIFF
+metricsRgbnc = pixel_metrics(tile, ~metrics_rgbnc(Classification, ReturnNumber, R, G, B, NIR), res = 1) # ~21 min -> 64 MB GeoTIFF
+format(Sys.time() - metricsStartTime)
+
+
+tileBaseName = str_remove(tileName, "\\.laz$")
+writeRaster(metrics, file.path(dataPath, "metrics 1m", paste0(tileBaseName, ".tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+writeRaster(metricsCtrl, file.path(dataPath, "metrics 1m", paste0(tileBaseName, " ctrl.tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+writeRaster(metricsReturns, file.path(dataPath, "metrics 1m", paste0(tileBaseName, " rn.tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+writeRaster(metricsRgbn, file.path(dataPath, "metrics 1m", paste0(tileBaseName, " rgbn.tif")), datatype = "INT2U", gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+writeRaster(metricsRgbnc, file.path(dataPath, "metrics 1m", paste0(tileBaseName, " rgbnc.tif")), datatype = "INT2U", gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+writeRaster(metricsZ, file.path(dataPath, "metrics 1m", paste0(tileBaseName, " Z.tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+writeRaster(metricsZn, file.path(dataPath, "metrics 1m", paste0(tileBaseName, " Zn.tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+
+
+## remove old versions of .laz files which have been updated
+remove_redundant_tiles("E:/Elliott/GIS/DOGAMI/2021 OLC Coos County/pointz RGBIR", "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/pointz")
 
 
 ## testing
@@ -370,7 +457,7 @@ get_trees = function(segmentation)
 }
 
 
-##
+## problems with lack of parallel support in terra
 library(furrr)
 #options(future.debug = TRUE)
 plan(multisession, workers = 8)
@@ -383,10 +470,9 @@ boundingBoxes = future_map(elliottLidarTiles$filename, function(tilePath)
 
 st_write(st_sf(bind_rows(boundingBoxes)), file.path(dataPath, "Points", "tile index.gpkg"), append = TRUE)
 
-#
 #standIDs = c(1874, 1875)
 #future_map(standIDs, function(standID)
 #{
 #  process_stand(standID)
 #})
-ggsave(file.path(dataPath, "segmentation", "604 trees.tif"), device = tiff(compression = "lzw"), width = 30, height = 30, units = "cm", dpi = 600)
+#ggsave(file.path(dataPath, "segmentation", "604 trees.tif"), device = tiff(compression = "lzw"), width = 30, height = 30, units = "cm", dpi = 600)

@@ -6,6 +6,7 @@ library(readxl)
 library(stringr)
 library(terra)
 library(tidyr)
+library(writexl)
 
 theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.border = element_blank()))
 
@@ -452,6 +453,7 @@ crownRadiiLogisticQ05 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, sc
 crownRadiiLogisticQ02 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.2) # ~2.5 minutes
 crownRadiiLogisticQ01 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.1) # ~2.5 minutes
 crownRadiiLogisticQ0025 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.025) # ~2.5 minutes
+crownRadiiLogisticQ0010 = nlrq(nominalCrownRadius ~ SSlogis(height, asym, xmid, scale), crownRadii, tau = 0.01) # ~2.5 minutes
 #summary(crownRadiiLogisticQ05) # spins CPU for unclear duration, not interruptible (requires R session restart to abort)
 
 bind_cols(AIC(crownRadiiLinear, crownRadiiLogistic, crownRadiiBam) %>% mutate(AICn = AIC / nrow(crownRadii)),
@@ -464,18 +466,35 @@ bind_cols(AIC(crownRadiiLinear, crownRadiiLogistic, crownRadiiBam) %>% mutate(AI
 
 ggplot() +
   geom_bin2d(aes(x = height, y = nominalCrownRadius), crownRadii, binwidth = c(1, 0.2)) +
-  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLinear, tibble(height = seq(1.5, 85))), color = "H + H²")) +
-  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogistic, tibble(height = seq(1.5, 85))), color = "logistic(H)")) +
-  geom_line(aes(x = height, y = predictedCrownRadius, color = "bam(H)", group = isPlantation, linetype = isPlantation), crossing(height = seq(1.5, 85), isPlantation = factor(c(FALSE, TRUE))) %>% mutate(predictedCrownRadius = predict(crownRadiiBam, .))) +
-  geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ05, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.5)")) +
+  #geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLinear, tibble(height = seq(1.5, 85))), color = "H + H²")) +
+  #geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogistic, tibble(height = seq(1.5, 85))), color = "logistic(H)")) +
+  #geom_line(aes(x = height, y = predictedCrownRadius, color = "bam(H)", group = isPlantation, linetype = isPlantation), crossing(height = seq(1.5, 85), isPlantation = factor(c(FALSE, TRUE))) %>% mutate(predictedCrownRadius = predict(crownRadiiBam, .))) +
+  #geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ05, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.5)")) +
   geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ02, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.2)")) +
   geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ01, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.1)")) +
   geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ0025, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.025)")) +
+  #geom_line(aes(x = seq(1.5, 85), y = predict(crownRadiiLogisticQ0010, tibble(height = seq(1.5, 85))), color = "logistic(H, q = 0.010)")) +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(5.7/(1 + exp((58 - seq(1.5, 85))/20)) / 0.4572, 0), 1), color = "manual 1")) +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(5.9/(1 + exp((56 - seq(1.5, 85))/17)) / 0.4572, 0), 1), color = "manual 2")) +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(5.9/(1 + exp((56 - seq(1.5, 85))/16)) / 0.4572, 0), 1), color = "manual 3")) +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(5.9/(1 + exp((56 - seq(1.5, 85))/15)) / 0.4572, 0), 1), color = "manual 4")) +
+  coord_cartesian(ylim = c(0, NA)) +
   labs(x = "height, m", y = "nominal crown radius, m", color = "model", fill = "trees\nsegmented", linetype = "plantation") +
-  scale_color_manual(breaks = c("H + H²", "logistic(H)", "logistic(H, q = 0.5)", "logistic(H, q = 0.2)", "logistic(H, q = 0.1)", "logistic(H, q = 0.025)", "bam(H)"), values = c("cyan", "green1", "green2", "green3", "green4", "darkgreen", "red")) +
-  scale_fill_viridis_c(trans = "log10") +
-  scale_linetype_manual(breaks = c(FALSE, TRUE), values = c("solid", "longdash"))
+  scale_color_manual(breaks = c("H + H²", "logistic(H)", "logistic(H, q = 0.5)", "logistic(H, q = 0.2)", "logistic(H, q = 0.1)", "logistic(H, q = 0.025)", "logistic(H, q = 0.010)", "manual 1", "manual 2", "manual 3", "manual 4", "bam(H)"), values = c("cyan", "lawngreen", "green1", "green2", "green3", "green4", "darkgreen", "blue", "blue2", "blue3", "blue4","red")) +  scale_fill_viridis_c(trans = "log10") +
+  scale_linetype_manual(breaks = c(FALSE, TRUE), values = c("solid", "longdash")) +
+  scale_y_continuous(breaks = c(1, 5, 10, 15))
 #ggsave("trees/segmentation/figures/implied crown radius.png", height = 12, width = 16, units = "cm", dpi = 150)
+
+ggplot() +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(8.59/(1 + exp((58 - seq(1.5, 85))/19.42)) / 0.4572, 0), 1), color = "logistic radius")) +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(pmin(0.055*seq(1.5, 85) + 0.4, 5) / 0.4572, 0), 1), color = "linear radius")) +
+  geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round((0.045*seq(1.5, 85) + 0.5) / 0.4572, 0), 1), color = "ring radius")) +
+  #geom_line(aes(x = seq(1.5, 85), y = 0.4572 * pmax(round(6.0/(1 + exp((48 - seq(1.5, 85))/18)) / 0.4572, 0), 1), color = "alternate 3")) +
+  labs(x = "height, m", y = "nominal crown radius, m", color = "model", fill = "trees\nsegmented", linetype = "plantation") +
+  scale_color_discrete() +
+  scale_linetype_manual(breaks = c(FALSE, TRUE), values = c("solid", "longdash")) +
+  scale_y_continuous(breaks = c(1, 5, 10, 15))
+
 
 ggplot() +
   geom_hline(yintercept = 1, color = "grey70", linetype = "longdash") +
@@ -489,3 +508,18 @@ ggplot() +
 ggplot() +
   geom_bin2d(aes(x = height, y = residuals(crownRadiiBam)), crownRadii, binwidth = c(1, 0.25)) +
   scale_fill_viridis_c(trans = "log10")
+
+
+## ring prominence
+distance = crossing(x = seq(-10, 10), y = seq(-10, 10)) %>% 
+  mutate(distance = sqrt(x^2 + y^2),
+         ring = round(distance, 0)) %>%
+  filter(distance < 10.5)
+ggplot(distance) +
+  geom_raster(aes(x = x, y = y, fill = as.factor(ring))) +
+  geom_text(aes(x = x, y = y, label = ring), size = 3) +
+  coord_equal() +
+  labs(x = "x", y = "y", fill = "ring") +
+  scale_fill_viridis_d()
+
+write_xlsx(distance %>% arrange(ring), "trees/segmentation/rings.xlsx")

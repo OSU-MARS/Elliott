@@ -1,151 +1,211 @@
-# Code for Species identification from Planet imagery
-# authors: Liviu and subsemantu'
-# May 5, 2022
-rm(list=ls())
-
-library(sp)
-library(sf)
+library(dplyr)
 library(terra)
-library(raster)
-library(glcm)
-library(ranger) # used for random forest
-library(stars) #compatibility between sf and raster
-library(caret)
 
+# reference data frame
+#library(readr)
+#xycrw.df.rf = tibble(read_rds(file.path(getwd(), "GIS/Trees/segmentation/SpeciesTrainingData.rds")))
 
-#---FUNCTIONS---------------------------------------------------------------------#
+trainingPolygons = vect(file.path(getwd(), "GIS/Trees/segmentation/SpeciesITC.shp"))
 
-multiFocal <- function(x, w=matrix(1, nr=3, nc=3), ...) {
-  if(is.character(x)) {
-    x <- brick(x)
-  }
-  # The function to be applied to each individual layer
-  fun <- function(ind, x, w, ...){
-    focal(x[[ind]], w=w, na.rm=TRUE,...)
-  }
-  n    <- seq(nlayers(x))
-  list <- lapply(X=n, FUN=fun, x=x, w=w, ...)
-  out  <- stack(list)
-  names(out) <- names(x)
-  return(out)
+dataSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
+chm = rast(file.path(dataSourcePath, "CHM", "CHM.vrt"))
+orthoimagery = rast(file.path(dataSourcePath, "orthoimage", "orthoimage.vrt"))
+orthoimageCellSize = max(res(orthoimagery))
+
+for (trainingPolygonIndex in 1:nrow(trainingPolygons))
+{
+  # extract training data for this polygon
+  # For now, assume orthoimagery and CHM are in the same CRS and that orthoimagery is higher resolution.
+  trainingPolygon = trainingPolygons[trainingPolygonIndex]
+  polygonOrthoimage = crop(orthoimagery, trainingPolygon, touches = FALSE) # take only cells with centroids within the training polygon
+  polygonChm = resample(crop(chm, buffer(trainingPolygon, orthoimageCellSize)), polygonOrthoimage)
+  
+  c(polygonChm, polygonOrthoimage) # stack CHM Z and RGB+NIR raster bands
 }
 
-setwd("k:\\People\\MARS\\Strimbu\\TreeSeg2\\")
-getwd()
-
-#### ------ INPUT DATA ----#
-
-#chm=rast("ULC_CHM_2fts.tif") #import CHM to be classified
-#chm=as(chm, "Raster")
-#chm=chm[[1]]
-#crs(chm)=crs(rast("ULC_CHM_2fts.tif"))
-
-loff =rast("k:\\RawData\\Imagery\\Planet\\composite_2022_02_09_rect.tif")
-lon =rast("k:\\RawData\\Imagery\\Planet\\composite_2022_08_16_rect.tif")
-names(loff)[1:4]=paste0("loff", substr(names(loff)[1:4], nchar(names(loff)[1:4])-1, nchar(names(loff)[1:4])))
-names(lon)[1:4]=paste0("lon", substr(names(lon)[1:4], nchar(names(lon)[1:4])-1, nchar(names(lon)[1:4])))
-chm=rast("k:\\People\\MARS\\Strimbu\\TreeSeg2\\ESSRF_CHM_60cm.tif")
-
-planet=c(loff,lon)
-
-#names(planet)[1:4]=paste0(names(planet)[1:4],"_","lon")
-#names(planet)[-c(1:4)]=paste0(names(planet)[-c(1:4)],"_","loff")
-planet$loff_5=(planet$loff_4-planet$loff_3) / (planet$loff_4 + planet$loff_3)
-planet$lon_5=(planet$lon_4-planet$lon_3) / (planet$lon_4 + planet$lon_3)
-planet = planet[[c(1:4,9,5:8,10)]] # order the layers
-planet
-planet=project(planet,"epsg:32610") # re-project the image coordinate system using terra package
-
-planet1=resample(planet, rast(ext=ext(planet), resolution=1, crs=crs(planet)), method="near")
-
-#train.shp=read_sf("d:\\Work\\ULC\\GIS\\ULC_GroundTreesTrain_DBHCrown.shp")
-train.shp=st_read("./GIS/Species_aoi.shp")
-plot(st_geometry(train.shp), col="red")
-aggregate(train.shp$Area_m2 ~ train.shp$Species, FUN = sum)
-
-#### - RANDOM FOREST TRAINING ---- #
-
-#-----Create Training data-------------------------------------------------------------------#
-
-xycrw.df = vector('list',dim(train.shp)[1])
-
-for(i in 1:dim(train.shp)[1]) {
-  #i=11
-  print(dim(train.shp)[1]-i)
-  polyg.tmp = train.shp[i,]
-  #st_crs(polyg.tmp)
-  #plot(st_geometry(polyg.tmp))
- 
-  rsp.tmp = extract(planet1, polyg.tmp, fun=NULL, method="simple",  exact=TRUE) #select only pixels that have the centroid intersected by the polygon
+for (i in 1:length(orthoimageFileNamesbypol)) {
+  polygonChm = disagg(polygonChm, fact=2)
+  bands.cz = c(ortho, polygonChm)
+  #plot(ortho$NIR)
+  #plot(z.var, add=TRUE)
+  #rgb2g = (0.3 * ortho$R  + 0.59 *ortho$G + 0.11 * ortho$B)/ 65535 #RGB to gray
+  #plot(rgb2g)
   
-  #create a new dataset with two predictors mean and Std.dev.
+  x.var = terra::extract(bands.cz, trainingPolygons[i,], fun = NULL, method="simple",  exact=TRUE) #select only pixels that have the centroid intersected by the polygon
   
-  rsc.tmp.mu=as.data.frame(t(apply(rsp.tmp[,1:10],2,mean, na.rm=TRUE)))
-  rsc.tmp.mad=as.data.frame(t(apply(rsp.tmp[,1:10],2,mad, na.rm=TRUE)))
-  names(rsc.tmp.mu)=paste0(names(rsc.tmp.mu),"_mu")
-  names(rsc.tmp.mad)=paste0(names(rsc.tmp.mad),"_mad")
-  rsc.tmp=cbind(rsc.tmp.mu,rsc.tmp.mad)
+  #plot(z.var)
   
-  rsc.tmp$ID = polyg.tmp$Id
-  rsp.tmp$ID = polyg.tmp$Id
-  rsc.tmp$Species = polyg.tmp$Species
-  rsp.tmp$Species = polyg.tmp$Species
-  xycrw.df[[i]] = rsc.tmp 
- 
+  idx.z = which(!is.na(x.var$Z))
+  if (length(idx.z) > 0) {
+    z.tr = myOtsu(x.var$Z[idx.z]) 
+  } else {
+    z.tr = myOtsu(x.var$Z) 
+  }
   
-}
+  x.var.tr = x.var[x.var$Z>z.tr,]
+  #class(x.var)
+  #rgb2g = (0.3 * x.var$R  + 0.59 *x.var$G + 0.11 * x.var$B)/ 65535 #RGB to gray
+  #intens.tr = myOtsu(rgb2g)
+  #x.var.tr = x.var[rgb2g>intens.tr,]
+  #sum(rgb2g>intens.tr)/length(rgb2g)
+  #hist(rgb2g,30)
+  
+  
+  
+  tmp = matrix(apply(x.var.tr,2,function(x) quantile(x, seq(0,1,by = 0.10)))[,c("R","G","B","NIR","Z")], nrow=1)
+  colnames(tmp) = c(paste0("R",seq(0,100, by = 10)), 
+                    paste0("G",seq(0,100, by = 10)),
+                    paste0("B",seq(0,100, by = 10)), 
+                    paste0("NIR",seq(0,100, by = 10)),
+                    paste0("Z",seq(0,100, by = 10)))
+  tmp = as.data.frame(tmp)
+  tmp[,c("Rm","Gm","Bm","NIRm","Zm")] = as.numeric(apply(x.var.tr[,c("R","G","B","NIR","Z")], 2, mean))
+  tmp[,c("Rsd","Gsd","Bsd","NIRsd", "Zsd")] = as.numeric(apply(x.var.tr[,c("R","G","B","NIR","Z")], 2, sd))
+  #indices computed using the formulas from "A visible band index for remote sensing leaf chlorophyll content at the canopy scale" by Hunt et al 2013
+  tmp$NDVIm = (tmp$NIRm-tmp$Rm) / (tmp$NIRm+tmp$Rm) #NDVI
+  tmp$NGRDIm = (tmp$Gm-tmp$Rm) / (tmp$Gm+tmp$Rm) #Normalized Green-Red Difference Index: Tucker 1979
+  tmp$CIGm = tmp$NIRm/tmp$Gm - 1 #Gitelson et al 2003
+  tmp$CVIm = tmp$NIRm * tmp$Rm / tmp$Gm^2 #Vinciniet al 2008
+  tmp2 = matrix(apply(tmp, 2, function(x) quantile(x, seq(0,1,by = 0.10)))[,c("NDVIm","NGRDIm","CIGm","CVIm")], nrow=1)
+  colnames(tmp2) = c(paste0("NDVI",seq(0,100, by = 10)), 
+                     paste0("NGRDI",seq(0,100, by = 10)),
+                     paste0("CIG",seq(0,100, by = 10)), 
+                     paste0("CVI",seq(0,100, by = 10)))
+  tmp2 = as.data.frame(tmp2)
+  tmp=cbind(tmp,tmp2)
+  tmp$Species = trainingPolygons[i,]$Species
+  
+  xycrw.df[[i]] = tmp
+  
+}  
+
+print(paste0("Time to create Input data: ", difftime(Sys.time(), datain.t, units = "mins"), " min"))
+
 xycrw.df.rf = do.call('rbind',xycrw.df) #creates the training data set to be used in RF for crown
 xycrw.df.rf$Species = as.factor(xycrw.df.rf$Species)
-xycrw.df.rf2= xycrw.df.rf
-xycrw.df.rf2$Species=as.character(xycrw.df.rf2$Species)
-#xycrw.df.rf2$Species[xycrw.df.rf2$Species=="WC"] = "DF" 
-xycrw.df.rf2$Species = as.factor(xycrw.df.rf2$Species)
-#head(xycrw.df.rf2)
-#xycrw.df.rf2 = xycrw.df.rf2[,-which(names(xycrw.df.rf2)=="ID")]
-#summary(xycrw.df.rf)
+saveRDS(xycrw.df.rf, "k:/People/MARS/Strimbu/TreeSeg2/TrainingData.RDS")
 
-fit.crw.rf = ranger(Species~.,data=xycrw.df.rf2)
+names(xycrw.df.rf)
+xycrw.df.rf2= xycrw.df.rf #[,-c(45:55,60,65)] # no heights
+#xycrw.df.rf2= xycrw.df.rf[,-c(1:44, 56:64)] #eliminate the absolute values for the reflectance
 
-xycrw.df.rf.bin = xycrw.df.rf2
-xycrw.df.rf.bin$Species=ifelse(xycrw.df.rf.bin$Species=="DF",1,0)
 
-planet.dif=xycrw.df.rf.bin[,c(1:5)]-xycrw.df.rf.bin[,c(6:10)]
-planet.dif[,c("Species")]=xycrw.df.rf.bin[,c("Species")]
+#xycrw.df.rf2$Species=as.factor(xycrw.df.rf2$Species)
 
-#Logistic regression on the difference between seasons-alternative to Random Forest
-fit.glm.crw = glm(Species~.,data=planet.dif, family = binomial)
-summary(fit.glm.crw)
-yhat = predict(fit.glm.crw, type="response", newdata=planet.dif)
-summary(yhat)
-hist(yhat)
-
-yhat=ifelse(yhat>0.5,1,0)
-table(yhat,planet.dif$Species)
+#Random Forest using ranger
+# set.seed(1969)
+# fit.crw.rf = ranger(Species~., data=xycrw.df.rf2, importance="permutation")
+# fit.crw.rf$confusion.matrix
+# barplot(importance(fit.crw.rf))
+# 
+# ctrl <- trainControl(method = 'cv', 
+#                     number = 10,
+#                     classProbs = TRUE,
+#                     savePredictions = TRUE,
+#                     verboseIter = TRUE)
+# 
+# rfFit <- train(Species ~ ., 
+#                data = xycrw.df.rf2, 
+#                method = "ranger",
+#                importance = "permutation", #***
+#                trControl = ctrl,
+#                verbose = T)
+# 
+# x.importance = varImp(rfFit)$importance
+# x.importance$Var.names = row.names(x.importance)
+# 
+# x.importance = x.importance[order(x.importance$Overall, decreasing = TRUE),]
+# barplot(x.importance$Overall[1:12], names=x.importance$Var.names[1:12])
+# 
+# saveRDS(fit.crw.rf,"k:/People/MARS/Strimbu/TreeSeg2/TrainingFIT.RDS")
 
 ## -- Cross validation
-yhat=rep(0,dim(xycrw.df.rf2)[1])
+yhat.rf=rep(0,dim(xycrw.df.rf2)[1])
+yhat.svm.r=rep(0,dim(xycrw.df.rf2)[1])
+yhat.svm.l=rep(0,dim(xycrw.df.rf2)[1])
+yhat.nn=rep(0,dim(xycrw.df.rf2)[1])
 
 for (i in 1:dim(xycrw.df.rf2)[1]) {
   #i=1
   test.data = xycrw.df.rf2[i,]
-  fit.crw.rf.cv = ranger(Species~.,data=xycrw.df.rf2[-i,])
-  yhat[i]=as.character(predict(fit.crw.rf.cv, data=test.data)$predictions)
+  train_control <- trainControl(method="repeatedcv", number=10, repeats=3)
+  ### Random Forest
+  #fit.rf = train(Species ~., data = xycrw.df.rf2[-i,], method = "ranger", 
+  #               trControl = train_control, tuneGrid = expand.grid(mtry=floor(sqrt(dim(xycrw.df.rf)[2]-1)),
+  #                                                                 splitrule = 'gini',
+  #                                                                 min.node.size = c(1:7)))
+  #yhat.rf[i]=as.character(predict(fit.rf, newdata=test.data))
   
+  ###### Neural Networks
+  
+  #fit.nnet <- train(Species ~., data = xycrw.df.rf2[-i,], method = "nnet", 
+  #                  trControl = train_control, preProcess = c("center","scale"), verbose = FALSE,
+  #                  tuneGrid = expand.grid(size=c(2, 3), decay = seq(0.05, 1, length.out=10)))
+  #yhat.nn[i]=as.character(predict(fit.s, newdata = test.data))
+  
+  ##### Support Vector Machine
+  
+  fit.svm.r <- train(Species ~., data = xycrw.df.rf2[-i,], method = "svmRadial", #radial Basis Function Kernel
+                     trControl = train_control, preProcess = c("center","scale"), tuneLength = 10)
+  
+  fit.svm.l <- train(Species ~., data = xycrw.df.rf2[-i,], method = "svmLinear", #linear kernel
+                     trControl = train_control, preProcess = c("center","scale"), 
+                     tuneGrid =expand.grid(C = c(0.01, 0.05,0.1, 1)))
+  
+  yhat.svm.r[i]=as.character(predict(fit.svm.r, newdata = test.data))
+  yhat.svm.l[i]=as.character(predict(fit.svm.l, newdata = test.data))
 }
 
-cf.mat=confusionMatrix(as.factor(yhat),as.factor(xycrw.df.rf2$Species))
-cf.mat$byClass
+cf.mat.nn=confusionMatrix(as.factor(yhat.nn),as.factor(xycrw.df.rf2$Species))
+cf.mat.nn$byClass
 
+cf.mat.rf=confusionMatrix(as.factor(yhat.rf),as.factor(xycrw.df.rf2$Species))
+cf.mat.rf$byClass
 
-fit.crw.rf = ranger(Species~.,data=xycrw.df.rf2)
-saveRDS(fit.crw.rf,"./Results/RandForest.RDS")
+cf.mat.svm.r=confusionMatrix(as.factor(yhat.svm.r),as.factor(xycrw.df.rf2$Species))
+cf.mat.svm.r$byClass
 
+cf.mat.svm.l=confusionMatrix(as.factor(yhat.svm.l),as.factor(xycrw.df.rf2$Species))
+cf.mat.svm.l$byClass
 
-RF.model = readRDS("./Results/RandForest.RDS")
-rm()
 
 #--CLASSIFY Species Crown Level----------------------------------------------------------------------#
+RF.model = readRDS("k:/People/MARS/Strimbu/TreeSeg2/TrainingFIT.RDS")
+rm()
 
+#RF
+#fit.rf <- train(Species ~., data = xycrw.df.rf2, method = "ranger", 
+#                trControl = train_control)
+#saveRDS(fit.rf,"k:/People/MARS/Strimbu/TreeSeg2/TrainingRF.RDS")
+
+#+++++++++SVM
+# --- Radial Kernell
+# fit.svm.r <- train(Species ~., data = xycrw.df.rf2, method = "svmRadial", 
+#                  trControl = train_control, preProcess = c("center","scale"), tuneLength = 10)
+# whichTwoPct <- tolerance(fit.svm.r$results, metric = "Kappa", 
+#                          tol = 1, maximize = TRUE) 
+# 
+# fit.svm.rf = fit.svm.r$results[whichTwoPct,] #identify best SVM parametrization
+# 
+# fit.svm.r <- train(Species ~., data = xycrw.df.rf2, method = "svmRadial", 
+#                  trControl = train_control, preProcess = c("center","scale"), 
+#                  tuneGrid = expand.grid(C = fit.svm.rf$C, sigma=fit.svm.rf$sigma) )
+#saveRDS(fit.svm.r,"k:/People/MARS/Strimbu/TreeSeg2/TrainingSVMradial.RDS")
+
+# ---- Linear kernel
+fit.svm.l <- train(Species ~., data = xycrw.df.rf2, method = "svmLinear", 
+                   trControl = train_control, preProcess = c("center","scale"), 
+                   tuneGrid =expand.grid(C = c(0.01, 0.05,0.1, 1)))
+whichTwoPct <- tolerance(fit.svm.l$results, metric = "Kappa", 
+                         tol = 1, maximize = TRUE) 
+
+fit.svm.lf = fit.svm.l$results[whichTwoPct,] #identify best SVM parametrization
+
+fit.svm.l <- train(Species ~., data = xycrw.df.rf2, method = "svmLinear", 
+                   trControl = train_control, preProcess = c("center","scale"), 
+                   tuneGrid = expand.grid(C = fit.svm.lf$C) )
+
+saveRDS(fit.svm.l,"k:/People/MARS/Strimbu/TreeSeg2/TrainingSVMlinear.RDS")
 
 #shp.list =list.files("k:\\People\\MARS\\Strimbu\\TreeSeg2\\Results",pattern=".shp") #read the stands: trees and crowns
 
@@ -160,100 +220,187 @@ rm()
 #crown.shp = st_read("d:\\Work\\ULC\\Results\\CrownsInvent.shp")
 #cat(crs(crown.shp))
 
-trees1 = st_read("./Results/Compiled/TreesInventCompl500lt290.shp")
-trees2 = st_read("./Results/Compiled/TreesInventCompl1000lt290.shp")
-trees3 = st_read("./Results/Compiled/TreesInventCompl1500lt290.shp")
-trees4 = st_read("./Results/Compiled/TreesInventCompl1970lt290.shp")
-trees.nn =rbind(trees1, trees2, trees3, trees4)
-trees.nn=st_transform(trees.nn,32610)
-cat(crs(trees.nn))
-stand.list=vector("list", length(unique(trees.nn$OSU_SID)))
+#===============================================================================
+#Connect stands with orthophotos
+stand.list = as.data.frame(list.files("k:\\People\\MARS\\Strimbu\\TreeSeg2\\Results\\", pattern = "ITCDalp_OSU_SID"))
+names(stand.list)=c("stand")
+stand.list$rec.id = seq.int(nrow(stand.list))
+stand.list = stand.list[which(substr(stand.list$stand, nchar(stand.list$stand)-2,nchar(stand.list$stand))=="shp"),]
 
-osu_sid = unique(trees.nn$OSU_SID)
+#trees = vect("k:\\ProcessedData\\ForestInvent\\Invent062023\\TreesFinal_062023.shp")
 
- for (sid in 1:100){ #length(shp.crown)) {
-   #sid=2
-  #c=1
-  #crown.shp = st_read(paste0("k:/People/MARS/Strimbu/TreeSeg2/Results/",shp.crown[sid]))
-  #crown.shp=st_transform(crown.shp,32610)
-  #crs(crown.shp)
-  #crown.shp$OSU_SID = as.integer(substr(shp.crown[sid],17,nchar(shp.crown[sid])-4))
-  crown.shp =  st_buffer(trees.nn[which(trees.nn$OSU_SID == osu_sid[sid]),],3) #buffer of 3 m
+stand.list$osu_sid = substr(stand.list$stand, 17, nchar(stand.list$stand)-4)
+
+ij.stand = matrix(0, ncol=length(orthoimageFileNames), nrow = dim(stand.list)[1])
+
+time2ortho=Sys.time()
+for (t in  1:nrow(stand.list)) {
+  #t=2
+  stand.tmp = stand.b[stand.b$OSU_SID == stand.list$osu_sid[t],]
+  #plot(stand.tmp)
+  for (tt in 1:length(orthoimageFileNames)) {
+    ortho =rast(paste0("k:\\RawData\\Imagery\\NV5_4bands_2021_RayTrace\\MaxZSmooth\\",orthoimageFileNames[[tt]])) 
+    ext.ortho = ext(ortho)
+    tmp=try(terra::intersect(ext.ortho, stand.tmp), silent=TRUE)
+    #tmp=try(crop(ortho,stand.tmp),silent=TRUE)
+    if(class(tmp)=="try-error") {
+      next
+    } else {
+      print(c(t,tt))
+      ij.stand[t,tt]=1
+    }  
+    
+  }
+}
+print(paste0("Time to id the orthophotos needed for each polygon: ", 
+             difftime(Sys.time(),time2ortho, units = "mins"), " min"))
+saveRDS(ij.stand, "k:\\People\\MARS\\Strimbu\\TreeSeg2\\Results\\ij_stand.RDS")
+
+#feature extraction and species prediction 
+#================================================
+#FOREST LEVEL CLASSIFICATION
+#run thru stands
+#ij.stand =readRDS("k:\\People\\MARS\\Strimbu\\TreeSeg2\\Results\\ij_stand.RDS")
+
+for (sid in 97:200) {#nrow(stand.list)) {
+  #sid=2
+  print(paste0("Execute stand #", sid, " ->OSU_SID = ", stand.list$stand[sid]))
+  trainingPolygons = vect(paste0("k:\\People\\MARS\\Strimbu\\TreeSeg2\\Results\\", stand.list$stand[sid])) #select all crowns from stand osu_SID
+  trainingPolygons = project(trainingPolygons, "epsg:6557")
+  #cat(crs(trainingPolygons))
+  #plot(trainingPolygons, add=TRUE)
   
-  #xycrw.df = vector('list',dim(crown.shp)[1])
-  xycrw.df = vector('list', length(osu_sid))
-   
-#create the data to be classified with Random Forests
-#for(i in 1:dim(crown.shp)[1]) {
-for(i in 1:dim(crown.shp)[1]) {
-  #i=2
-  #print(paste0("Crowns left to be executed for OSU_SID ",substr(shp.crown[sid],17,nchar(shp.crown[sid])-4) ," (stand#",sid,") : ",dim(crown.shp)[1]-i))
-  print(paste0("Trees left from stand ", osu_sid[sid], " (#", sid ,")"," for which species is computed # ", dim(crown.shp)[1]-i))
-  #polyg.tmp = crown.shp[i,] #for using crown
-  polyg.tmp = crown.shp[i,]
-  #plot(st_geometry(polyg.tmp))
-  rsp.tmp = extract(planet1, polyg.tmp, fun=NULL, method="simple",  exact=TRUE) #select only pixels that have the centroid intersected by the polygon
+  #================================================================================================
+  id.ortho = which(ij.stand[sid,]==1)  
+  rlist = list()
+  for (ii in 1:length(id.ortho)) {
+    rlist[[ii]] = rast(paste0("k:\\RawData\\Imagery\\NV5_4bands_2021_RayTrace\\MaxZSmooth\\",
+                              orthoimageFileNames[id.ortho[ii]]))
+  }
+  rsrc <- sprc(rlist)
+  ortho <- mosaic(rsrc)
+  #plot(ortho$NIR)
   
-  #create a new dataset with two predictors mean and mad
+  #================================================================================================
+  #Execute classification INSIDE the stands
+  xycrw.df = vector('list',dim(trainingPolygons)[1])
+  #print(paste0("Number of crowns in the stand: ", dim(trainingPolygons)[1]))
+  for (i in 1:nrow(trainingPolygons)) {
+    #i=50
+    z.var = terra::crop(chm,ext(trainingPolygons[i,]))
+    z.var = disagg(z.var, fact=2)
+    if (ext(ortho) != ext(z.var)) {
+      ortho.c=terra::crop(ortho, ext(z.var))
+    } 
+    #plot(ortho.c$NIR)
+    #plot(z.var, add=TRUE)
+    
+    bands.cz = c(ortho.c, z.var)
+    
+    x.var = terra::extract(bands.cz, trainingPolygons[i,], fun = NULL, method="simple",  exact=TRUE) #select only pixels that have the centroid intersected by the polygon
+    
+    if(sum(is.na(x.var))>0) {
+      tmp=matrix(0,1,55)
+      colnames(tmp) = c(paste0("R",seq(0,100, by = 10)), 
+                        paste0("G",seq(0,100, by = 10)),
+                        paste0("B",seq(0,100, by = 10)), 
+                        paste0("NIR",seq(0,100, by = 10)),
+                        paste0("Z",seq(0,100, by = 10)))
+      tmp = as.data.frame(tmp)
+      tmp[,c("Rm","Gm","Bm","NIRm","Zm")] = 0
+      tmp[,c("Rsd","Gsd","Bsd","NIRsd", "Zsd")] = 0
+      tmp$NDVIm = 0
+      tmp$NGRDIm = 0
+      tmp$CIGm = 0
+      tmp$CVIm = 0
+      tmp2 = matrix(apply(tmp, 2, function(x) quantile(x, seq(0,1,by = 0.10), na.rm=TRUE))[,c("NDVIm","NGRDIm","CIGm","CVIm")], nrow=1)
+      colnames(tmp2) = c(paste0("NDVI",seq(0,100, by = 10)), 
+                         paste0("NGRDI",seq(0,100, by = 10)),
+                         paste0("CIG",seq(0,100, by = 10)), 
+                         paste0("CVI",seq(0,100, by = 10)))
+      tmp2 = as.data.frame(tmp2)
+      tmp=cbind(tmp,tmp2)
+      
+      tmp$ID = trainingPolygons[i,]$treeID
+      
+      tmp$SpeciesHat.svm = "UN"
+      xycrw.df[[i]] = tmp
+      next
+    } 
+    
+    idx.z = which(!is.na(x.var$Z))
+    if (length(idx.z) > 0) {
+      z.tr = myOtsu(x.var$Z[idx.z]) 
+    } else {
+      z.tr = myOtsu(x.var$Z)
+    }
+    
+    x.var.tr = x.var[x.var$Z>z.tr & x.var$fraction>0.4,]
+    
+    tmp = matrix(apply(x.var.tr,2,function(x) quantile(x, seq(0,1,by = 0.10),na.rm=TRUE))[,c("R","G","B","NIR","Z")], nrow=1)
+    colnames(tmp) = c(paste0("R",seq(0,100, by = 10)), 
+                      paste0("G",seq(0,100, by = 10)),
+                      paste0("B",seq(0,100, by = 10)), 
+                      paste0("NIR",seq(0,100, by = 10)),
+                      paste0("Z",seq(0,100, by = 10)))
+    tmp = as.data.frame(tmp)
+    tmp[,c("Rm","Gm","Bm","NIRm","Zm")] = as.numeric(apply(x.var.tr[,c("R","G","B","NIR","Z")], 2, mean))
+    tmp[,c("Rsd","Gsd","Bsd","NIRsd", "Zsd")] = as.numeric(apply(x.var.tr[,c("R","G","B","NIR","Z")], 2, sd))
+    #indices computed using the formulas from "A visible band index for remote sensing leaf chlorophyll content at the canopy scale" by Hunt et al 2013
+    tmp$NDVIm = (tmp$NIRm-tmp$Rm) / (tmp$NIRm+tmp$Rm) #NDVI
+    tmp$NGRDIm = (tmp$Gm-tmp$Rm) / (tmp$Gm+tmp$Rm) #Normalized Green-Red Difference Index: Tucker 1979
+    tmp$CIGm = tmp$NIRm/tmp$Gm - 1 #Gitelson et al 2003
+    tmp$CVIm = tmp$NIRm * tmp$Rm / tmp$Gm^2 #Vinciniet al 2008
+    tmp2 = matrix(apply(tmp, 2, function(x) quantile(x, seq(0,1,by = 0.10), na.rm=TRUE))[,c("NDVIm","NGRDIm","CIGm","CVIm")], nrow=1)
+    colnames(tmp2) = c(paste0("NDVI",seq(0,100, by = 10)), 
+                       paste0("NGRDI",seq(0,100, by = 10)),
+                       paste0("CIG",seq(0,100, by = 10)), 
+                       paste0("CVI",seq(0,100, by = 10)))
+    tmp2 = as.data.frame(tmp2)
+    tmp=cbind(tmp,tmp2)
+    
+    tmp$ID = trainingPolygons[i,]$treeID
+    #Random Forest
+    #yhat.svm=as.character(predict(fit.rf, newdata = tmp))
+    #tmp$SpeciesHat.rf = yhat.rf
+    
+    #Support Vector Machine
+    if(sum(is.na(tmp))>0) {
+      tmp$SpeciesHat.svm = "UN"
+      xycrw.df[[i]] = tmp
+      next
+    } else {
+      yhat.svm=predict(fit.svm.l, newdata = tmp)
+      tmp$SpeciesHat.svm = yhat.svm
+      xycrw.df[[i]] = tmp
+    }
+    
+  }  
+  xycrw.df.all =  do.call('rbind',xycrw.df) #creates the training data set to be used in SVM for crown
+  xycrw.df.all$OSU_SID = stand.list$osu_sid[sid]
+  #=====================================================================================
   
-  rsc.tmp.mu=as.data.frame(t(apply(rsp.tmp[,1:10],2,mean, na.rm=TRUE)))
-  rsc.tmp.mad=as.data.frame(t(apply(rsp.tmp[,1:10],2,mad, na.rm=TRUE)))
-  names(rsc.tmp.mu)=paste0(names(rsc.tmp.mu),"_mu")
-  names(rsc.tmp.mad)=paste0(names(rsc.tmp.mad),"_mad")
-  rsc.tmp=cbind(rsc.tmp.mu,rsc.tmp.mad)
+  trainingPolygons$SpeciesHat.svm = xycrw.df.all$SpeciesHat.svm
+  writeVector(trainingPolygons, paste0("k:/People/MARS/Strimbu/TreeSeg2/Species/PredSVM/",
+                                str_remove(stand.list$stand[sid],".shp"),"SVM.shp"), overwrite = TRUE)
+  rm(ortho, rlist, tmp, tmp2);gc()
   
-  rsc.tmp$ID = polyg.tmp$treeID
-  
-  xycrw.df[[i]] = rsc.tmp 
- }
-xycrw.df.rf = do.call('rbind',xycrw.df) #creates the  data set to be classified with RF for crown
-#names(xycrw.df.rf)
-
-#table(is.na(xycrw.df.rf[1]))
-
-yhat=as.character(predict(RF.model, data=xycrw.df.rf[,1:20])$predictions)
-#yhat = ifelse(yhat == 0,"HW","DF")
-
-crown.shp$Species = 0
-crown.shp$Species=yhat
-table(crown.shp$Species)
-
-
-#trees.tmp = intersect(vect(trees.nn), vect(crown.shp[,c("treeID","Species")])) #use terra package for intersection
-
-trees.tmp = merge(st_drop_geometry(crown.shp[,c("OSU_SID","treeID","Species")]),st_drop_geometry(trees.nn), by=c("OSU_SID", "treeID"))
-length(trees.tmp$OSU_SID) # check validity of the intersection
-trees.tmp$Ht_ft = trees.tmp$zmax
-trees.tmp$Area_ft2 = trees.tmp$area
-trees.tmp=trees.tmp[,-c(4,25)]
-trees.tmp = trees.tmp[,c(1:3,27, 4:26)]
-
-#trees.tmp$Ht2BC_ft = trees.tmp$zq65
-#trees.tmp$Species = "DF"
-
-
-trees.tmp$DBH_in=0
-trees.tmp$DBH_in[which(trees.tmp$Species=="DF")] = -47.2424 + 46.2518 * exp(0.00336 * trees.tmp$Ht_ft[which(trees.tmp$Species=="DF" )])
-trees.tmp$DBH_in[which(trees.tmp$Species=="DF" & trees.tmp$Ht_ft >= 280)] = 90
-#trees.tmp$DBH_in[which(trees.tmp$Species=="WH")] = -105.1 +104.3*exp(0.00186* trees.tmp$Ht_ft[which(trees.tmp$Species=="WH" )])
-#trees.tmp$DBH_in[which(trees.tmp$Species=="WH" & trees.tmp$Ht_ft >= 260)] = 70
-trees.tmp$DBH_in[which(trees.tmp$Species=="HW")] = -24.2932+ 28.4565*exp(0.00457* trees.tmp$Ht_ft[which(trees.tmp$Species=="HW" )])
-trees.tmp$DBH_in[which(trees.tmp$Species=="HW" & trees.tmp$Ht_ft >= 230)] = 60
-
-#summary(trees.tmp$Ht_ft)
-#summary(trees.tmp$DBH_in)
-#table(trees.tmp$Species)
-
-stand.list[[sid]]<-trees.tmp
+  saveRDS(xycrw.df.all,paste0("k:/People/MARS/Strimbu/TreeSeg2/Species/RDS_SVM/",
+                              str_remove(stand.list$stand[sid],".shp"),".RDS"))
 }
 
 
-tree.final=do.call("rbind", stand.list)
-table(tree.final$Species)
-tree.final=st_as_sf(tree.final, coords = c("X","Y"),crs=6557) #the coordinates of of the original trees were in 6557
+## one time setup
+# Since gdalbuildvrt doesn't flow metadata (https://github.com/OSGeo/gdal/issues/3627) VRTs need manual editing
+# after creation to add <VRTRasterBand/Description> elements naming raster bands. This most likely isn't important 
+# to the CHM (or DSM or DTM) as terra defaults the band name to the file name but is needed for orthoimagery
+# to set the band names to R, G, B, and NIR.
+# create .vrt for CHM after chmJob.R has processed all tiles
+chmSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/CHM"
+chmFilePaths = file.path(chmSourcePath, list.files(orthoimageSourcePath, "\\.tif"))
+vrt(chmFilePaths, file.path(chmSourcePath, "CHM.vrt"), overwrite = TRUE)
 
-st_write(tree.final,"./Results/Compiled/TreesFinal100.shp", append=TRUE)
-
-
-
-
+# create .vrt for orthoimages after orthoImageJob.R has processed all tiles
+orthoimageSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/orthoimage"
+orthoimageFilePaths = file.path(orthoimageSourcePath, list.files(orthoimageSourcePath, "\\.tif"))
+vrt(orthoimageFilePaths, file.path(orthoimageSourcePath, "orthoimage.vrt"), overwrite = TRUE)
