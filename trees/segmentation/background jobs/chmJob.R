@@ -19,7 +19,7 @@ for (tileName in dsmTileNames)
   dsmTile = rast(file.path(dsmTilePath, tileName))
   dtmTile = rast(file.path(dtmTilePath, tileName))
   chmTile = dsmTile - dtmTile
-  writeRaster(chmTile, file.path(chmTilePath, tileName), overwrite = TRUE)
+  writeRaster(chmTile, file.path(chmTilePath, tileName), datatype = "FLT4S", gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
 }
 
 cat(paste0("Canopy height models for ", length(dsmTileNames), " tiles in ", format(Sys.time() - chmStartTime), ".\n"))

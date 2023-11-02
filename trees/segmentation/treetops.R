@@ -92,3 +92,13 @@ diff %>% filter((treeID == TRUE) | (x == TRUE) | (y == TRUE) | (z == TRUE) | (he
 referenceTreetops %>% arrange(desc(y), x, z)
 newTreetops %>% arrange(desc(y), x, z)
 
+# merge treetops into single GeoPackage after Get-Treetops has processed all tiles
+#treetopSourcePath = file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County/treetops DSM ring")
+#treetopFilePaths = file.path(treetopSourcePath, list.files(treetopSourcePath, "\\.gpkg$"))
+#treetopLayers = list()
+#for (treetopFileIndex in 1:length(treetopFilePaths)) # 2 min, 47 s with terra but terra drops Z coordinates
+#{
+#  treetopLayers[[treetopFileIndex]] = read_sf(treetopFilePaths[treetopFileIndex])
+#}
+#
+#treetops = data.table::rbindlist(treetopLayers) # https://github.com/r-spatial/sf/issues/2254

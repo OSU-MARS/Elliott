@@ -1,8 +1,9 @@
 library(readxl)
 
 sourcePath = "T:/Groups/ElliottStateResearchForest"
-destinationPath = file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County")
+#destinationPath = file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County")
 #destinationPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
+destinationPath = "E:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 tileIndex = read_xlsx("GIS/DOGAMI/2021 OLC Coos County/Elliott tile index.xlsx")
 
 # copy .las tiles from network share to local drive with support for semi-manual concurrent compression
@@ -19,13 +20,13 @@ tileIndex = read_xlsx("GIS/DOGAMI/2021 OLC Coos County/Elliott tile index.xlsx")
 # .las to .laz compression ratios are about 4.9x.
 for (tileName in tileIndex$Tile_ID)
 {
-  existingLazPath = file.path(destinationPath, "Pointz", paste0(tileName, ".laz"))
-  if (file.exists(existingLazPath))
-  {
-    cat(paste0(tileName, " already copied.\n"))
-    next
-  }
-  existingLasPath = file.path(destinationPath, "Points", paste0(tileName, ".las"))
+  #existingLazPath = file.path(destinationPath, "pointz", paste0(tileName, ".laz"))
+  #if (file.exists(existingLazPath))
+  #{
+  #  cat(paste0(tileName, " already copied.\n"))
+  #  next
+  #}
+  existingLasPath = file.path(destinationPath, "points", paste0(tileName, ".las"))
   if (file.exists(existingLasPath))
   {
     cat(paste0(tileName, " already copied.\n"))
@@ -39,7 +40,7 @@ for (tileName in tileIndex$Tile_ID)
     cat(paste0(tileName, " from NV5_Class12...\n"))
     file.copy(processedLasPath, destinationLasPath)
   } else {
-    rawLasPath = file.path(sourcePath, "RawData/OLC Coos County 2021/NV5_Geospatial/LIDAR/Points/LAS", paste0(tileName, ".las"))
+    rawLasPath = file.path(sourcePath, "RawData/ESRF_Initiation2021/NV5_Geospatial/LIDAR/Points/LAS", paste0(tileName, ".las"))
     if (file.exists(rawLasPath))
     {
       cat(paste0(tileName, " from NV5_Geospatial...\n"))

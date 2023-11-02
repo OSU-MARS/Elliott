@@ -1,6 +1,5 @@
 library(data.table)
 library(dplyr)
-library(FNN) # fast nearest neighbor::get.knn() for cleaning segmentation
 library(future)
 library(ggplot2)
 library(lidR)
@@ -35,225 +34,6 @@ metrics_zn = function(returnNumber, z)
 {
   return(data.table(n1 = sum(returnNumber == 1), n2 = sum(returnNumber == 2), n3 = sum(returnNumber == 3), n4 = sum(returnNumber == 4), n5 = sum(returnNumber == 5),
                     z1 = max((returnNumber == 1) * z), z2 = max((returnNumber == 2) * z), z3 = max((returnNumber == 3) * z), z4 = max((returnNumber == 4) * z), z5 = max((returnNumber == 5) * z)))
-}
-
-normalize_stand = function(standID)
-{
-  standBoundary = (elliottStands %>% filter(STD_ID == standID))[1]
-  #standBuffer30m = st_buffer(standBoundary, 30) # m
-  #units::set_units(st_area(standBoundary), acres)
-  #plot(st_geometry(standBuffer30m), col="green")
-  #plot(st_geometry(standBoundary), add=TRUE, col="red")
-  
-  ## point cloud normalization and canopy height model creation
-  segmentationBufferWidth = 30 # ft TODO: is a 30 foot radius is too small for correct segmentation of large trees along the stand boundary?
-  standAndBufferPoints = clip_roi(elliottLidarTiles, st_buffer(standBoundary, segmentationBufferWidth))
-  #standBuffer30m = st_transform(standBuffer30m, st_crs(standPoints)) # TODO: why clip a second time?
-  #standPoints = clip_roi(standPoints, st_buffer(standBoundary, segmentationBufferWidth))
-  #standPoints = las_update(standPoints) # update the header
-  
-  standAndBufferPoints = classify_noise(standAndBufferPoints, ivf(res = 3, n = 1)) #identifies noise using ivf method
-  #cat("noise classification...", fill = TRUE)
-  #table(standPoints@data$Classification)
-  #standPoints.sor=classify_noise(standPoints, sor(treeID=10,m=9)) # identifies noise using sor method
-  #table(standPoints@data$Classification,standPoints.sor@data$Classification)
-  
-  dtm = crop(dtm2021nv5, st_buffer(standBoundary, segmentationBufferWidth + 3)) # crop the large DTM to the point cloud extent, adding additional buffer width so all the points normalize_height() needs to process lie over the DTM TODO: why crop from the large DTM?
-  standAndBufferPoints = normalize_height(standAndBufferPoints, dtm)
-  standAndBufferPoints = filter_poi(standAndBufferPoints, Classification == 1L, Z >= 0, Z <= 400) # exclude ground points and high outliers, Z range in feet
-  #plot(decimate_points(standPoints, random(1)))
-  #rm(standPoints)
-  #gc()
-  
-  return(standAndBufferPoints)
-}
-
-process_stand = function(standID, plotSegmentation = FALSE)
-{
-  ## initial segmentation
-  normalizationStartTime = Sys.time()
-  standAndBufferPoints = normalize_stand(standID)
-  cat(sprintf("%d normalization: %.1f s", standID, difftime(Sys.time(), normalizationStartTime, units = "secs")), fill = TRUE)
-  
-  segmentationStartTime = Sys.time()
-  segmentation = segment_cloud(standAndBufferPoints)
-  minimumTreeHeight = segmentation$minimumTreeHeight
-  standAndBufferPoints = segmentation$standPoints
-  #rm(segmentation)
-  cat(sprintf("%d initial segmentation: %.1f s.", standID, difftime(Sys.time(), segmentationStartTime, units = "secs")), fill = TRUE)
-  #length(standPoints@data$treeID[(standPoints@data$treeID =="NA")])
-  #sum(is.na(standPoints@data$treeID))
-  
-  ## look for trees with outlier points above them, remove outliers if found
-  highPointStartTime = Sys.time()
-  outlierAboveThreshold = 5 # ft
-  outlierAboveTrees = standAndBufferPoints@data %>% filter(is.na(treeID) == FALSE) %>% 
-    group_by(treeID) %>% 
-    reframe(quantiles = c(0.995, 1.0), z = quantile(Z, probs = quantiles, names = FALSE)) %>%
-    pivot_wider(id_cols = "treeID", names_prefix = "q", names_from = "quantiles", values_from = "z") %>%
-    filter((q1 - q0.995) > outlierAboveThreshold)
-  
-  if (nrow(outlierAboveTrees) > 0)
-  {
-    for (treeIndex in 1:nrow(outlierAboveTrees))
-    {
-      treeID = outlierAboveTrees$treeID[treeIndex]
-      zThreshold = outlierAboveTrees$q0.995[treeIndex]
-      standAndBufferPoints@data$Classification[which((standAndBufferPoints@data$Z >= zThreshold) & (standAndBufferPoints@data$treeID == treeID))] = 18L # point class: high
-    }
-    
-    standAndBufferPoints = standAndBufferPoints[(standAndBufferPoints@data$Classification != 7L) & (standAndBufferPoints@data$Classification != 18L),] # remove outlier points
-    standAndBufferPoints = las_update(standAndBufferPoints)
-  }
-  cat(sprintf("%d upper quantile checking: found %d trees with large upper quantile differences in %.1f s.", standID, nrow(outlierAboveTrees), difftime(Sys.time(), highPointStartTime, units = "secs")), fill = TRUE)
-  
-  if (nrow(outlierAboveTrees) > 0)
-  {
-    segmentationStartTime = Sys.time()
-    segmentation = segment_cloud(standAndBufferPoints)
-    standAndBufferPoints = segmentation$standPoints
-    cat(sprintf("%d resegmentation: %.1f s.", standID, difftime(Sys.time(), segmentationStartTime, units = "secs")), fill = TRUE)
-  }
-  
-  #nr.trees.final = length(treeIDs)
-  #TPA = nr.trees.final / st_area(standBuffer30m) * 45360
-  #cat(sprintf("segmentation time: %.1f s.", difftime(Sys.time(), segmentationStartTime, units = "secs")), fill = TRUE)
-  
-  allTreeMetrics = crown_metrics(standAndBufferPoints, func = .stdmetrics, geom = "convex") %>% # crown polygons and various statistics including the percentiles
-    rename(crownArea = area) # ft², projected
-  #allTreeMetrics = st_centroid(allTreeMetrics, of_largest_polygon = FALSE, ensure_within = TRUE) # not needed as crown_metrics() returns a point geometry with centroid coordinates TODO: clear warning st_centroid assumes attributes are constant over geometries
-  #treeCentroidXY = st_coordinates(treeCentroids)
-  #allTreeMetrics %<>% mutate(Xcentroid = treeCentroidXY[,"X"], Ycentroid = treeCentroidXY[,"Y"])
-  
-  
-  ## remove segmented trees whose tops are less than a threshold distance apart (like 7 ft) or are shorter than minimumTreeHeight
-  neighborEliminationStartTime = Sys.time()
-  minimumCrownArea = 15 # ft²
-  acceptedTreeMetrics = allTreeMetrics %>% filter(crownArea > minimumCrownArea, zmax > minimumTreeHeight)
-  acceptedTreeCentroids = st_centroid(st_geometry(acceptedTreeMetrics)) # reduce trees' crown polygons to their centroids (layer's geometry type changes from polygon to point)
-  st_geometry(acceptedTreeMetrics) = acceptedTreeCentroids
-
-  # find three nearest neighbors based on distance between trees' centroids
-  # $nn.index, which identifies the row index of the tree in the st geometry/data frame, is not the tree number. The matching of index with treeID should be done explicitly.
-  acceptedTreeCentroids = st_coordinates(acceptedTreeCentroids) # flatten point geometry to XY matrix
-  treesNearestNeighbor3 = get.knn(acceptedTreeCentroids, 
-                                  k = 3, 
-                                  algorithm = "brute")
-  colnames(treesNearestNeighbor3$nn.index) = c("nn1", "nn2", "nn3")
-  colnames(treesNearestNeighbor3$nn.dist) = c("nn1distance", "nn2distance", "nn3distance")
-  
-  neighborMergeDistance = 7 # ft
-  standAndBufferTrees = bind_cols(acceptedTreeMetrics,
-                                  as_tibble(treesNearestNeighbor3$nn.index), 
-                                  as_tibble(treesNearestNeighbor3$nn.dist)) %>% 
-    mutate(STD_ID = as.integer(standID),
-           treeID = as.integer(treeID),
-           species = "DF", # default all trees to Douglas-fir
-           xCentroid = acceptedTreeCentroids[,"X"], yCentroid = acceptedTreeCentroids[,"Y"],
-           x1 = xCentroid[nn1], x2 = xCentroid[nn2], x3 = xCentroid[nn3], # while they don't need to be stored explicitly, unpack coordinates of each tree's three nearest neighbors for now
-           y1 = yCentroid[nn1], y2 = yCentroid[nn2], y3 = yCentroid[nn3],
-           z1 = zmax[nn1], z2 = zmax[nn2], z3 = zmax[nn3],
-           isShorterThanNearNeighbor = ((nn1distance < neighborMergeDistance) & (zmax < z1)) |
-             ((nn2distance < neighborMergeDistance) & (zmax < z2)) |
-             ((nn3distance < neighborMergeDistance) & (zmax < z3))) %>%
-    relocate(STD_ID, treeID, species, xCentroid, yCentroid, zmax, crownArea)
-  standAndBufferTrees %<>% filter(crownArea > minimumCrownArea, # ft² TODO: vary minimum crown projection area with tree height as a 15 ft² fixed area seems high for short trees and small for tall ones?
-                                  isShorterThanNearNeighbor == FALSE) %>% 
-    select(-isShorterThanNearNeighbor) # for now, update point cloud is not updated merged tree IDs
-  # TODO: update crown area, centroid, and so on based on merge of dropped trees?
-  #nr.standAndBufferTrees = nrow(standAndBufferTrees)
-  #sum(standAndBufferTrees$nn1Dist < neighborMergeDistance)
-  #sum(standAndBufferTrees$FP)
-  cat(sprintf("%d neighbor elimination time: %.1f s.", standID, difftime(Sys.time(), neighborEliminationStartTime, units = "secs")), fill = TRUE)
-  
-  ## find x and y coordinate of tallest point within the crown
-  # Very time consuming as currently implemented. TODO: is group_by() and summarize(Z == acceptedTreeMetrics$zmax) more performant?
-  #trees.max.xy = as.data.frame(matrix(0, length(standMetrics$treeID), 3))
-  #names(trees.max.xy) = c("Xmax","Ymax", "Zmax")
-  #  
-  #time.xymax = Sys.time()
-  #for (kk in 1:length(standMetrics$treeID)) 
-  #{
-  #  treePoints = filter_poi(standPoints, treeID == standMetrics$treeID[kk])
-  #  trees.max.xy[kk,] = treePoints@data[which.max(treePoints@data$Z), c("X","Y","Z")]
-  #}
-  #cat(sprintf("coordinates of highest point in trees: %.1f s.", difftime(Sys.time(),time.xymax,units = "secs")))
-  #  
-  #allTreeMetrics = cbind(allTreeMetrics, trees.max.xy)
-  #rm(tree.max.xy)
-  
-  #plot(chm)
-  #plot(st_geometry(standMetrics), add=TRUE)
-  #plot(st_geometry(allTreeMetrics), add=TRUE, pch=20)
-  #sum(is.na(standMetrics$treeID))
-  
-  # since segmentation area was buffered beyond stand boundary, clip segmentation to stand
-  # Not strictly necessary (there is duplicate segmentation wherever a buffer projects into another stand) but a
-  # per stand segmentation yielding per stand data files is simple.
-  #coordinates(standAndBufferTrees) = ~Xcentroid + Ycentroid # trees 
-  #standAndBufferTrees = st_as_sf(standAndBufferTrees)
-  #st_crs(standAndBufferTrees) = st_crs(treeMetrics)
-  #standAndBufferTrees = st_transform(standAndBufferTrees, st_crs(standBoundary))
-  #st_crs(standBoundary)
-  standBoundary = st_transform((elliottStands %>% filter(STD_ID == standID))[1], st_crs(standAndBufferTrees)) # essentially a no-op transform: both the stand polygon and trees are EPSG:6557 but st_intersection() sees a mismatch and errors out because a vertical CRS isn't set on the stand (even through st_intersection() is a horizontal operation)
-  standTrees = st_intersection(standAndBufferTrees, standBoundary) # TODO: how to avoid warning: attribute variables are assumed to be spatially constant throughout all geometries?
-  
-  # check plot (not directly useful in larger stands but can be ggsaved() at high resolution)
-  if (plotSegmentation)
-  {
-    chmExtent = ext(segmentation$chm)
-    pointSize = 1.5 / as.numeric(units::set_units(st_area(standBoundary), "acres"))
-    standPlot = ggplot() +
-      geom_spatraster(aes(fill = Z), segmentation$chm) +
-      geom_sf(aes(), allTreeMetrics, color = "cyan2", fill = "transparent") +
-      geom_point(aes(x = X, y = Y), as_tibble(acceptedTreeCentroids), color = "cyan2", shape = 16, size = pointSize) +
-      geom_sf(aes(), standTrees, color = "red", shape = 16, size = pointSize) +
-      guides(fill = "none") +
-      labs(fill = "height, ft") +
-      coord_sf(datum = st_crs(segmentation$chm)) + # geom_spatraster() defaults to showing coordinates in degrees rather than using raster's CRS
-      scale_fill_viridis_c(na.value = "transparent") +
-      scale_x_continuous(expand = c(0, 0)) +
-      scale_y_continuous(expand = c(0, 0)) +
-      theme_void()
-    # export to uncompressed .tiff since ggplot() ignores compression settings
-    tiffPath = file.path(dataPath, "segmentation", "604 trees.tiff") # ggsave() doesn't recognize .tiff
-    coordSFaspectRatio = (chmExtent[2] - chmExtent[1]) / (chmExtent[4] - chmExtent[3])
-    ggsave(standPlot, filename = tiffPath, width = 30 * coordSFaspectRatio, height = 30, units = "cm", dpi = 600)
-    # convert .tiff to GeoTIFF
-    standPlotTiff = rast(tiffPath)
-    standPlotPanel1 = ggplot_build(standPlot)$layout$panel_params[[1]]
-    ext(standPlotTiff) = c(standPlotPanel1$x_range, standPlotPanel1$y_range)
-    crs(standPlotTiff) = standPlotPanel1$crs$wkt
-    #standPlotTiff = raster::stack(tiffPath)
-    #standPlotPanel1 = ggplot_build(standPlot)$layout$panel_params[[1]]
-    #raster::extent(standPlotTiff) = c(standPlotPanel1$x_range, standPlotPanel1$y_range)
-    #raster::projection(standPlotTiff) = crs(segmentation$chm)
-    geoTiffPath = file.path(dataPath, "segmentation", "604 trees.tif") # GDAL doesn't recognize .tif
-    writeRaster(standPlotTiff, geoTiffPath, gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9", "PHOTOMETRIC=RGB"), datatype = "INT1U", overwrite = TRUE)
-  }
-  
-  #hist(standMetrics$zmax)
-  #hist(standTrees$zmax)
-  #poly.inv.f$StandID = standBoundary$StandID
-  #plot(st_geometry(standAndBufferTrees), add = TRUE, pch = 20)
-  #plot(st_geometry(poly.inv.f), add = TRUE, pch = 20)
-  
-  #allTreeToNNindices = match(standTrees$treeID, treeMetrics$treeID) # unclear if this check remains relevant
-  #if (all(treeMetrics$treeID[allTreeToNNindices] == standTrees$treeID) == FALSE) # check validity of match operation
-  #{
-  #  stop("Index")
-  #}
-  
-  # write segmented trees
-  # TODO; where is best to convert from EPSG:6557 (ft) to 6556 (m)?
-  st_write(standTrees, file.path(dataPath, "segmentation", paste0(standID, " trees.gpkg")), append = FALSE)
-  writeRaster(segmentation$chm, file.path(dataPath, "segmentation", paste0(standID, " chm.tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"))
-  writeLAS(standAndBufferPoints, file.path(dataPath, "segmentation", paste0(standID, " points.laz")))
-  #st_write(allTreeMetrics, file.path(dataPath, "segmentation", paste0(standID, " metrics.gpkg"), append = FALSE) # crowns for the final segmented trees
-  
-  #plot(chm)
-  #plot(st_geometry(standMetrics), add=TRUE)
-  #plot(st_geometry(standTrees), pch=20, add=TRUE)
 }
 
 remove_redundant_tiles = function(directoryToRetain, directoryToPrune)
@@ -476,3 +256,233 @@ st_write(st_sf(bind_rows(boundingBoxes)), file.path(dataPath, "Points", "tile in
 #  process_stand(standID)
 #})
 #ggsave(file.path(dataPath, "segmentation", "604 trees.tif"), device = tiff(compression = "lzw"), width = 30, height = 30, units = "cm", dpi = 600)
+
+
+## comparative stdmetrics for Clouds unit test
+psmeCells = raster::raster(file.path(getwd(), "../tools/Clouds/UnitTests/PSME ABA grid cells.tif"))
+psme146 = readLAS(file.path(getwd(), "../tools/Clouds/UnitTests/PSME LAS 1.4 point type 6.las"))
+psmeMetrics = pixel_metrics(psme146, ~stdmetrics(X, Y, Z, Intensity, ReturnNumber, Classification, dz = 1, th = 920.52 + 2), zmin = min(psme146$Z), psmeCells)
+psmeMetrics[15, 9]
+psmeMetrics[15, 10]
+
+## no longer used
+#library(FNN) # fast nearest neighbor::get.knn() for cleaning segmentation
+# normalize_stand = function(standID)
+# {
+#   standBoundary = (elliottStands %>% filter(STD_ID == standID))[1]
+#   #standBuffer30m = st_buffer(standBoundary, 30) # m
+#   #units::set_units(st_area(standBoundary), acres)
+#   #plot(st_geometry(standBuffer30m), col="green")
+#   #plot(st_geometry(standBoundary), add=TRUE, col="red")
+#   
+#   ## point cloud normalization and canopy height model creation
+#   segmentationBufferWidth = 30 # ft TODO: is a 30 foot radius is too small for correct segmentation of large trees along the stand boundary?
+#   standAndBufferPoints = clip_roi(elliottLidarTiles, st_buffer(standBoundary, segmentationBufferWidth))
+#   #standBuffer30m = st_transform(standBuffer30m, st_crs(standPoints)) # TODO: why clip a second time?
+#   #standPoints = clip_roi(standPoints, st_buffer(standBoundary, segmentationBufferWidth))
+#   #standPoints = las_update(standPoints) # update the header
+#   
+#   standAndBufferPoints = classify_noise(standAndBufferPoints, ivf(res = 3, n = 1)) #identifies noise using ivf method
+#   #cat("noise classification...", fill = TRUE)
+#   #table(standPoints@data$Classification)
+#   #standPoints.sor=classify_noise(standPoints, sor(treeID=10,m=9)) # identifies noise using sor method
+#   #table(standPoints@data$Classification,standPoints.sor@data$Classification)
+#   
+#   dtm = crop(dtm2021nv5, st_buffer(standBoundary, segmentationBufferWidth + 3)) # crop the large DTM to the point cloud extent, adding additional buffer width so all the points normalize_height() needs to process lie over the DTM TODO: why crop from the large DTM?
+#   standAndBufferPoints = normalize_height(standAndBufferPoints, dtm)
+#   standAndBufferPoints = filter_poi(standAndBufferPoints, Classification == 1L, Z >= 0, Z <= 400) # exclude ground points and high outliers, Z range in feet
+#   #plot(decimate_points(standPoints, random(1)))
+#   #rm(standPoints)
+#   #gc()
+#   
+#   return(standAndBufferPoints)
+# }
+# 
+# process_stand = function(standID, plotSegmentation = FALSE)
+# {
+#   ## initial segmentation
+#   normalizationStartTime = Sys.time()
+#   standAndBufferPoints = normalize_stand(standID)
+#   cat(sprintf("%d normalization: %.1f s", standID, difftime(Sys.time(), normalizationStartTime, units = "secs")), fill = TRUE)
+#   
+#   segmentationStartTime = Sys.time()
+#   segmentation = segment_cloud(standAndBufferPoints)
+#   minimumTreeHeight = segmentation$minimumTreeHeight
+#   standAndBufferPoints = segmentation$standPoints
+#   #rm(segmentation)
+#   cat(sprintf("%d initial segmentation: %.1f s.", standID, difftime(Sys.time(), segmentationStartTime, units = "secs")), fill = TRUE)
+#   #length(standPoints@data$treeID[(standPoints@data$treeID =="NA")])
+#   #sum(is.na(standPoints@data$treeID))
+#   
+#   ## look for trees with outlier points above them, remove outliers if found
+#   highPointStartTime = Sys.time()
+#   outlierAboveThreshold = 5 # ft
+#   outlierAboveTrees = standAndBufferPoints@data %>% filter(is.na(treeID) == FALSE) %>% 
+#     group_by(treeID) %>% 
+#     reframe(quantiles = c(0.995, 1.0), z = quantile(Z, probs = quantiles, names = FALSE)) %>%
+#     pivot_wider(id_cols = "treeID", names_prefix = "q", names_from = "quantiles", values_from = "z") %>%
+#     filter((q1 - q0.995) > outlierAboveThreshold)
+#   
+#   if (nrow(outlierAboveTrees) > 0)
+#   {
+#     for (treeIndex in 1:nrow(outlierAboveTrees))
+#     {
+#       treeID = outlierAboveTrees$treeID[treeIndex]
+#       zThreshold = outlierAboveTrees$q0.995[treeIndex]
+#       standAndBufferPoints@data$Classification[which((standAndBufferPoints@data$Z >= zThreshold) & (standAndBufferPoints@data$treeID == treeID))] = 18L # point class: high
+#     }
+#     
+#     standAndBufferPoints = standAndBufferPoints[(standAndBufferPoints@data$Classification != 7L) & (standAndBufferPoints@data$Classification != 18L),] # remove outlier points
+#     standAndBufferPoints = las_update(standAndBufferPoints)
+#   }
+#   cat(sprintf("%d upper quantile checking: found %d trees with large upper quantile differences in %.1f s.", standID, nrow(outlierAboveTrees), difftime(Sys.time(), highPointStartTime, units = "secs")), fill = TRUE)
+#   
+#   if (nrow(outlierAboveTrees) > 0)
+#   {
+#     segmentationStartTime = Sys.time()
+#     segmentation = segment_cloud(standAndBufferPoints)
+#     standAndBufferPoints = segmentation$standPoints
+#     cat(sprintf("%d resegmentation: %.1f s.", standID, difftime(Sys.time(), segmentationStartTime, units = "secs")), fill = TRUE)
+#   }
+#   
+#   #nr.trees.final = length(treeIDs)
+#   #TPA = nr.trees.final / st_area(standBuffer30m) * 45360
+#   #cat(sprintf("segmentation time: %.1f s.", difftime(Sys.time(), segmentationStartTime, units = "secs")), fill = TRUE)
+#   
+#   allTreeMetrics = crown_metrics(standAndBufferPoints, func = .stdmetrics, geom = "convex") %>% # crown polygons and various statistics including the percentiles
+#     rename(crownArea = area) # ft², projected
+#   #allTreeMetrics = st_centroid(allTreeMetrics, of_largest_polygon = FALSE, ensure_within = TRUE) # not needed as crown_metrics() returns a point geometry with centroid coordinates TODO: clear warning st_centroid assumes attributes are constant over geometries
+#   #treeCentroidXY = st_coordinates(treeCentroids)
+#   #allTreeMetrics %<>% mutate(Xcentroid = treeCentroidXY[,"X"], Ycentroid = treeCentroidXY[,"Y"])
+#   
+#   
+#   ## remove segmented trees whose tops are less than a threshold distance apart (like 7 ft) or are shorter than minimumTreeHeight
+#   neighborEliminationStartTime = Sys.time()
+#   minimumCrownArea = 15 # ft²
+#   acceptedTreeMetrics = allTreeMetrics %>% filter(crownArea > minimumCrownArea, zmax > minimumTreeHeight)
+#   acceptedTreeCentroids = st_centroid(st_geometry(acceptedTreeMetrics)) # reduce trees' crown polygons to their centroids (layer's geometry type changes from polygon to point)
+#   st_geometry(acceptedTreeMetrics) = acceptedTreeCentroids
+#   
+#   # find three nearest neighbors based on distance between trees' centroids
+#   # $nn.index, which identifies the row index of the tree in the st geometry/data frame, is not the tree number. The matching of index with treeID should be done explicitly.
+#   acceptedTreeCentroids = st_coordinates(acceptedTreeCentroids) # flatten point geometry to XY matrix
+#   treesNearestNeighbor3 = get.knn(acceptedTreeCentroids, 
+#                                   k = 3, 
+#                                   algorithm = "brute")
+#   colnames(treesNearestNeighbor3$nn.index) = c("nn1", "nn2", "nn3")
+#   colnames(treesNearestNeighbor3$nn.dist) = c("nn1distance", "nn2distance", "nn3distance")
+#   
+#   neighborMergeDistance = 7 # ft
+#   standAndBufferTrees = bind_cols(acceptedTreeMetrics,
+#                                   as_tibble(treesNearestNeighbor3$nn.index), 
+#                                   as_tibble(treesNearestNeighbor3$nn.dist)) %>% 
+#     mutate(STD_ID = as.integer(standID),
+#            treeID = as.integer(treeID),
+#            species = "DF", # default all trees to Douglas-fir
+#            xCentroid = acceptedTreeCentroids[,"X"], yCentroid = acceptedTreeCentroids[,"Y"],
+#            x1 = xCentroid[nn1], x2 = xCentroid[nn2], x3 = xCentroid[nn3], # while they don't need to be stored explicitly, unpack coordinates of each tree's three nearest neighbors for now
+#            y1 = yCentroid[nn1], y2 = yCentroid[nn2], y3 = yCentroid[nn3],
+#            z1 = zmax[nn1], z2 = zmax[nn2], z3 = zmax[nn3],
+#            isShorterThanNearNeighbor = ((nn1distance < neighborMergeDistance) & (zmax < z1)) |
+#              ((nn2distance < neighborMergeDistance) & (zmax < z2)) |
+#              ((nn3distance < neighborMergeDistance) & (zmax < z3))) %>%
+#     relocate(STD_ID, treeID, species, xCentroid, yCentroid, zmax, crownArea)
+#   standAndBufferTrees %<>% filter(crownArea > minimumCrownArea, # ft² TODO: vary minimum crown projection area with tree height as a 15 ft² fixed area seems high for short trees and small for tall ones?
+#                                   isShorterThanNearNeighbor == FALSE) %>% 
+#     select(-isShorterThanNearNeighbor) # for now, update point cloud is not updated merged tree IDs
+#   # TODO: update crown area, centroid, and so on based on merge of dropped trees?
+#   #nr.standAndBufferTrees = nrow(standAndBufferTrees)
+#   #sum(standAndBufferTrees$nn1Dist < neighborMergeDistance)
+#   #sum(standAndBufferTrees$FP)
+#   cat(sprintf("%d neighbor elimination time: %.1f s.", standID, difftime(Sys.time(), neighborEliminationStartTime, units = "secs")), fill = TRUE)
+#   
+#   ## find x and y coordinate of tallest point within the crown
+#   # Very time consuming as currently implemented. TODO: is group_by() and summarize(Z == acceptedTreeMetrics$zmax) more performant?
+#   #trees.max.xy = as.data.frame(matrix(0, length(standMetrics$treeID), 3))
+#   #names(trees.max.xy) = c("Xmax","Ymax", "Zmax")
+#   #  
+#   #time.xymax = Sys.time()
+#   #for (kk in 1:length(standMetrics$treeID)) 
+#   #{
+#   #  treePoints = filter_poi(standPoints, treeID == standMetrics$treeID[kk])
+#   #  trees.max.xy[kk,] = treePoints@data[which.max(treePoints@data$Z), c("X","Y","Z")]
+#   #}
+#   #cat(sprintf("coordinates of highest point in trees: %.1f s.", difftime(Sys.time(),time.xymax,units = "secs")))
+#   #  
+#   #allTreeMetrics = cbind(allTreeMetrics, trees.max.xy)
+#   #rm(tree.max.xy)
+#   
+#   #plot(chm)
+#   #plot(st_geometry(standMetrics), add=TRUE)
+#   #plot(st_geometry(allTreeMetrics), add=TRUE, pch=20)
+#   #sum(is.na(standMetrics$treeID))
+#   
+#   # since segmentation area was buffered beyond stand boundary, clip segmentation to stand
+#   # Not strictly necessary (there is duplicate segmentation wherever a buffer projects into another stand) but a
+#   # per stand segmentation yielding per stand data files is simple.
+#   #coordinates(standAndBufferTrees) = ~Xcentroid + Ycentroid # trees 
+#   #standAndBufferTrees = st_as_sf(standAndBufferTrees)
+#   #st_crs(standAndBufferTrees) = st_crs(treeMetrics)
+#   #standAndBufferTrees = st_transform(standAndBufferTrees, st_crs(standBoundary))
+#   #st_crs(standBoundary)
+#   standBoundary = st_transform((elliottStands %>% filter(STD_ID == standID))[1], st_crs(standAndBufferTrees)) # essentially a no-op transform: both the stand polygon and trees are EPSG:6557 but st_intersection() sees a mismatch and errors out because a vertical CRS isn't set on the stand (even through st_intersection() is a horizontal operation)
+#   standTrees = st_intersection(standAndBufferTrees, standBoundary) # TODO: how to avoid warning: attribute variables are assumed to be spatially constant throughout all geometries?
+#   
+#   # check plot (not directly useful in larger stands but can be ggsaved() at high resolution)
+#   if (plotSegmentation)
+#   {
+#     chmExtent = ext(segmentation$chm)
+#     pointSize = 1.5 / as.numeric(units::set_units(st_area(standBoundary), "acres"))
+#     standPlot = ggplot() +
+#       geom_spatraster(aes(fill = Z), segmentation$chm) +
+#       geom_sf(aes(), allTreeMetrics, color = "cyan2", fill = "transparent") +
+#       geom_point(aes(x = X, y = Y), as_tibble(acceptedTreeCentroids), color = "cyan2", shape = 16, size = pointSize) +
+#       geom_sf(aes(), standTrees, color = "red", shape = 16, size = pointSize) +
+#       guides(fill = "none") +
+#       labs(fill = "height, ft") +
+#       coord_sf(datum = st_crs(segmentation$chm)) + # geom_spatraster() defaults to showing coordinates in degrees rather than using raster's CRS
+#       scale_fill_viridis_c(na.value = "transparent") +
+#       scale_x_continuous(expand = c(0, 0)) +
+#       scale_y_continuous(expand = c(0, 0)) +
+#       theme_void()
+#     # export to uncompressed .tiff since ggplot() ignores compression settings
+#     tiffPath = file.path(dataPath, "segmentation", "604 trees.tiff") # ggsave() doesn't recognize .tiff
+#     coordSFaspectRatio = (chmExtent[2] - chmExtent[1]) / (chmExtent[4] - chmExtent[3])
+#     ggsave(standPlot, filename = tiffPath, width = 30 * coordSFaspectRatio, height = 30, units = "cm", dpi = 600)
+#     # convert .tiff to GeoTIFF
+#     standPlotTiff = rast(tiffPath)
+#     standPlotPanel1 = ggplot_build(standPlot)$layout$panel_params[[1]]
+#     ext(standPlotTiff) = c(standPlotPanel1$x_range, standPlotPanel1$y_range)
+#     crs(standPlotTiff) = standPlotPanel1$crs$wkt
+#     #standPlotTiff = raster::stack(tiffPath)
+#     #standPlotPanel1 = ggplot_build(standPlot)$layout$panel_params[[1]]
+#     #raster::extent(standPlotTiff) = c(standPlotPanel1$x_range, standPlotPanel1$y_range)
+#     #raster::projection(standPlotTiff) = crs(segmentation$chm)
+#     geoTiffPath = file.path(dataPath, "segmentation", "604 trees.tif") # GDAL doesn't recognize .tif
+#     writeRaster(standPlotTiff, geoTiffPath, gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9", "PHOTOMETRIC=RGB"), datatype = "INT1U", overwrite = TRUE)
+#   }
+#   
+#   #hist(standMetrics$zmax)
+#   #hist(standTrees$zmax)
+#   #poly.inv.f$StandID = standBoundary$StandID
+#   #plot(st_geometry(standAndBufferTrees), add = TRUE, pch = 20)
+#   #plot(st_geometry(poly.inv.f), add = TRUE, pch = 20)
+#   
+#   #allTreeToNNindices = match(standTrees$treeID, treeMetrics$treeID) # unclear if this check remains relevant
+#   #if (all(treeMetrics$treeID[allTreeToNNindices] == standTrees$treeID) == FALSE) # check validity of match operation
+#   #{
+#   #  stop("Index")
+#   #}
+#   
+#   # write segmented trees
+#   # TODO; where is best to convert from EPSG:6557 (ft) to 6556 (m)?
+#   st_write(standTrees, file.path(dataPath, "segmentation", paste0(standID, " trees.gpkg")), append = FALSE)
+#   writeRaster(segmentation$chm, file.path(dataPath, "segmentation", paste0(standID, " chm.tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"))
+#   writeLAS(standAndBufferPoints, file.path(dataPath, "segmentation", paste0(standID, " points.laz")))
+#   #st_write(allTreeMetrics, file.path(dataPath, "segmentation", paste0(standID, " metrics.gpkg"), append = FALSE) # crowns for the final segmented trees
+#   
+#   #plot(chm)
+#   #plot(st_geometry(standMetrics), add=TRUE)
+#   #plot(st_geometry(standTrees), pch=20, add=TRUE)
+# }
+# 
