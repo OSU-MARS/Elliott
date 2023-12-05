@@ -802,23 +802,23 @@ plot_layout(design = "12\n33", heights = c(1, 0)) &
 
 ## Figures S1-4: species level exploratory plots
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), omitXlabels = TRUE) +
+plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S01 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S01 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
 
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S02 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S02 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
   
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S03 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S03 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
 
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S04 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure S04 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
 
 
 ## Figure S5: comparison of accuracy metrics

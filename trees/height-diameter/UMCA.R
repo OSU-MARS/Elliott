@@ -589,10 +589,7 @@ if (umcaOptions$fitHeight & umcaOptions$fitHeightMixed & umcaOptions$fitDbh & um
 }
 
 
-## preferred forms identified (results.R, Figure 7)
-# Oregon myrtle     Prodan            Chapman-Richards physio        REML GAM                Chapman-Richards physio
-#                   Sibbesen          Chapman-Richards BA+L physio   power                   Sibbesen form Physio
-#                   REML GAM                                         parabolic
+## preferred forms identified (results.R, Figure 10)
 if (umcaOptions$fitHeight & umcaOptions$fitDbh)
 {
   umcaHeightFromDiameterPreferred = list(hossfeld = fit_gsl_nls("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) *DBH^b2), umca2016, start = list(a1 = 21.4, a1p = -4.37, b1 = 43.8, b1p = -19.9, b2 = -1.27), folds = 1, repetitions = 1))

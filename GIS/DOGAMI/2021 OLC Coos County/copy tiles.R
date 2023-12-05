@@ -77,3 +77,12 @@ for (tileName in tileIndex$Tile_ID)
     }
   }
 }
+
+## 2009 tiles
+# archive downloaded tiles beyond 400 m buffer distance
+#tiles2009 = list.files("GIS/DOGAMI/2009 OLC South Coast/pointz", "\\.laz$")
+#tileIndex = read_xlsx("GIS/DOGAMI/2009 OLC South Coast/OLC South Coast 2009 ESRF and neighboring tiles.xlsx")
+#tilesToMove = tileIndex %>% filter(bufferDist > 400, paste0(name, ".laz") %in% tiles2009) %>%
+#  mutate(path = file.path(getwd(), "GIS/DOGAMI/2009 OLC South Coast/Pointz", paste0(name, ".laz")),
+#         destination = file.path("E:/Elliott/GIS/DOGAMI/2009 South Coast/pointsz/500+", paste0(name, ".laz")))
+#file.rename(tilesToMove$path, tilesToMove$destination)

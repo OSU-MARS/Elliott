@@ -654,10 +654,7 @@ if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh &
 }
 
 
-## preferred forms identified (results.R, Figure 8)
-# other species  Curtis            REML GAM BA+L                  REML GAM                Sibbesen form physio
-#                power             REML GAM BAL+L physio          parabolic               Chapman-Richards form RelHt
-#                Korf                                             linear
+## preferred forms identified (results.R, Figure 11)
 if (otherOptions$fitHeight & otherOptions$fitDbh)
 {
   otherHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 7, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1))

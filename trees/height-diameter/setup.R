@@ -1970,7 +1970,7 @@ if (htDiaOptions$includeInvestigatory)
     theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
-  #ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 200)
+  #ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 250)
   
   # tree counts
   trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%

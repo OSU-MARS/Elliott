@@ -3,15 +3,57 @@ library(dplyr)
 library(ggplot2)
 library(readr)
 library(readxl)
+library(sf)
 library(stringr)
 library(terra)
 library(tidyr)
 library(writexl)
 
+joinDbhPredictors = FALSE
+recalcDbh = TRUE
+
 theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.border = element_blank()))
 
+# load treetop locations, elevations, and heights, merge other physiological predictor variables
+# Stand level variables (top height, relative height, ABA, AAT) are calculated below based on trees' stand IDs.
+stands2022 = read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx") # from height-diameter/setup.R plus manual revisions to stand 1672, 1807, and 2463 area for boundary shifts and slivers (2016 IDs)
 
-## read trees from .gpkg and predict their DBH
+if (joinDbhPredictors)
+{
+  slope = project(rast("GIS/DOGAMI/bare earth slope Gaussian 10 m EPSG6557.tif"), crs("epsg:6556"), threads = TRUE) # 8.5 s
+  names(slope) = "slope"
+  aspect = project(180/pi * atan2(rast("GIS/DOGAMI/bare earth sin(aspect) Gaussian 10 m EPSG6557.tiff"), rast("GIS/DOGAMI/bare earth cos(aspect) Gaussian 10 m EPSG6557.tiff")), crs("epsg:6556"), threads = TRUE) # ~10 s to load and calculate aspect, ~12 s to reprojet
+  aspect = ifel(aspect >= 0, aspect, 360 + aspect) # dplyr::if_else() computationally intractible
+  names(aspect) = "aspect"
+  topographicShelter = rast("GIS/DOGAMI/horizon/topgraphic shelter Gaussian 10 m.tif") # already EPSG:6556
+  names(topographicShelter) = "topographicShelterIndex"
+  
+  # crop() in terra 1.7-55 is computationally intractable so, for now, reduce from 15.9 M trees to 11.4 M in QGIS
+  # TBD if extract() or intersect() in terra is viable.
+  #elliottBoundaryBuffered = vect("GIS/GIS/ESRF boundary April 2022 + Hakki 400 m buffer EPSG 6556.gpkg")
+  elliottTrees = st_read("GIS/DOGAMI/2021 OLC Coos County/treetops DSM ring/treetops 400 m.gpkg", layer = "treetops", quiet = TRUE) # ~35 s to load with terra::vect() but z is dropped, so 2.7 min with st_read()
+  elliottTrees$elevation = 0.3048 * st_coordinates(elliottTrees)[, 3] # terra drops points' z values, convert elevations in feet to m
+  elliottTrees$height = 0.3048 * elliottTrees$height # convert heights in feet to m
+  elliottTrees$radius = 0.3048 * elliottTrees$radius # not necessary, but included for completeness
+  elliottTrees = project(vect(elliottTrees), crs("epsg:6556")) # 3.7 min in vect(), ~30 s to project 15.9 M trees in EPSG:6557 (ft) to 6556 (m)
+  
+  # join stands
+  # Slow in R (>>10 minutes, likely 2+ orders of magnitude) compared to join by location in QGIS.
+  #elliotStateForestStands2016 = vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2016")
+  #elliottTrees = terra::extract(elliotStateForestStands2016, elliottTrees)
+
+  # join physiographic predictors besides elevation
+  elliottTrees = terra::extract(slope, elliottTrees, bind = TRUE) # 2.2 minutes with 15.9 M trees, 18.2 s with 11.4 M tree crop
+  elliottTrees = terra::extract(aspect, elliottTrees, bind = TRUE)
+  elliottTrees = terra::extract(topographicShelter, elliottTrees, bind = TRUE)
+  
+  writeVector(elliottTrees, "GIS/DOGAMI/2021 OLC Coos County/treetops DSM ring/treetops with predictors.gpkg", layer = "treetops", overwrite = TRUE)
+} else {
+  elliottTrees = vect("GIS/DOGAMI/2021 OLC Coos County/treetops DSM ring/treetops with predictors.gpkg", layer = "treetops")
+}
+
+
+## assign species and predict DBH
 # QGIS preparation
 #  1) spatially index ESRF_Trees2021 shapefile
 #  2) GIS/fieldCalculations.py: join ESRF_Trees2021 shapefile with Elliott_CruiseStands_All_20160111 by location to add standID2016
@@ -27,29 +69,16 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.bo
 #
 # Parallel evaluation not viable due to chronic furrr 0.3.1 future_map() failures of the form MultisessionFuture (<none>) failed to call grmall() on cluster RichSOCKnode #1 (PID 21712 on localhost ‘localhost’). The reason reported was ‘error writing to connection’. Post-mortem diagnostic: No process exists with this PID, i.e. the localhost worker is no longer alive.
 # Circumstantial evidence suggests worker processes may be exiting due to lack of thread safety in mgcv::predict.gam().
-startTime = Sys.time()
-elliottTrees = as_tibble(vect("GIS/Trees/2021 OLC Coos County/ESRF_Trees2021.gpkg", layer = "ESRF_Trees2021 StandID2016 physio")) # ~1.3 minutes @ ~2.6 GB, 10.3 million trees
-Sys.time() - startTime
-
-stands2022 = read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx") # from height-diameter/setup.R plus manual revisions to stand 1672, 1807, and 2463 area for boundary shifts and slivers (2016 IDs)
-
-
-# 26 s dplyr + prediction time (~25 seconds for three nonlinear iterations), Zen 3 4.7 GHz
 if (recalcDbh)
 {
   load("trees/height-diameter/data/segmentationDbhModels.Rdata")
   
   startTime = Sys.time()
-  elliottTreesMod = left_join(elliottTrees %>% select(-StandID, -STD_ID), # drop other stand IDs to avoid errors
-                              stands2022,
+  elliottTreesMod = left_join(as.data.frame(elliottTrees, geom = "XY"), # 25 s dplyr + prediction time (~24 seconds for three nonlinear iterations), Zen 3 4.7 GHz
+                              stands2022 %>% select(-standArea),
                               by = "standID2016") %>% # ~1 s for join
-    rename(treeID = TreeID, TotalHt = Ht) %>% # change Ht to TotalHt to integrate with DBH model fits
-    filter(treeID != "NA", TotalHt >= 1.5 * 3.2808) %>%  # remove total of 1271 rows missing TreeIDs, remove 273805 rows below iLand's definition of tree height as 4.0 m (TODO: translate these rows to iLand saplings?)
-    mutate(species = factor(species, levels = c("DF", "WH", "HW")),
-           TotalHt = 0.3048 * TotalHt,
-           x = 0.3048 * x, # convert from English units to metric, assuming input is in EPSG:6557 (nudge trees off resource unit boundaries: - if_else(id %in% c(281406309, 342014985, 412900427), 0.06, 0))
-           y = 0.3048 * y,
-           elevation = 0.3048 * elevation, # slope, aspect, and topographic shelter index are already in degrees
+    rename(TotalHt = height) %>% # change height to TotalHt to integrate with DBH model fits
+    mutate(species = factor(if_else((conifer + nonForest) > (hardwood + unknown), "PSME", "ALRU"), levels = c("PSME", "ALRU", "TSHE")),
            resourceUnitX = as.integer(x / 100), # dropped in final select
            resourceUnitY = as.integer(y / 100)) %>% 
     group_by(standID2016) %>%
@@ -62,9 +91,9 @@ if (recalcDbh)
            relativeHeight = TotalHt / topHeight) %>%
     select(-measureTreeTphContribution) %>%
     group_by(species) %>%
-    mutate(dbhBootstrap = case_when(cur_group()$species == "DF" ~ predict(psmeRuarkRelHtPhysio, pick(everything())),
-                                    cur_group()$species == "HW" ~ predict(alruChapmanRichardsPhysio, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
-                                    cur_group()$species == "WH" ~ predict(tsheRuarkRelHt, pick(everything()))),
+    mutate(dbhBootstrap = case_when(cur_group()$species == "PSME" ~ predict(psmeRuarkRelHtPhysio, pick(everything())),
+                                    cur_group()$species == "ALRU" ~ predict(alruChapmanRichardsPhysio, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
+                                    cur_group()$species == "TSHE" ~ predict(tsheRuarkRelHt, pick(everything()))),
            # for now, skip GAM-based DBH prediction due to prediction of implausibly slender trees and trees with negative DBHes up to -45 m
            # Difficulty here is the range of GAM DBH underprediction is wide enough it's complex to justify any particular choice
            # of weighting scheme for blending GAM predictions with those from nonlinear regression in order to obtain an ensemble 
@@ -75,9 +104,9 @@ if (recalcDbh)
            # convert isPlantation to a two level factor. Levels are specified as c(FALSE, TRUE) to match the order R uses
            # when factor() is called on a boolean variable.
            # Also, Douglas-fir GAM, at least, seems prone to failure with zero rank after access within future_map()
-           #dbhGam = case_when(cur_group()$species == "DF" ~ predict(psmeGamRelHtPhysio, pick(everything()) %>% mutate(isPlantation = factor(isPlantation, levels = c(FALSE, TRUE)))), # 37211 DBHes < 3 mm: 0.39% physically impossible
-           #                   cur_group()$species == "HW" ~ predict(alruGamRelHtPhysio, pick(everything()) %>% mutate(isPlantation = factor(isPlantation, levels = c(FALSE, TRUE)))), # for now, approximate all hardwoods as red alder
-           #                   cur_group()$species == "WH" ~ predict(tsheGamRelHtPhysio, pick(everything()) %>% mutate(isPlantation = factor(isPlantation, levels = c(FALSE, TRUE)))))) %>%
+           #dbhGam = case_when(cur_group()$species == "PSME" ~ predict(psmeGamRelHtPhysio, pick(everything()) %>% mutate(isPlantation = factor(isPlantation, levels = c(FALSE, TRUE)))), # 37211 DBHes < 3 mm: 0.39% physically impossible
+           #                   cur_group()$species == "ALRU" ~ predict(alruGamRelHtPhysio, pick(everything()) %>% mutate(isPlantation = factor(isPlantation, levels = c(FALSE, TRUE)))), # for now, approximate all hardwoods as red alder
+           #                   cur_group()$species == "TSHE" ~ predict(tsheGamRelHtPhysio, pick(everything()) %>% mutate(isPlantation = factor(isPlantation, levels = c(FALSE, TRUE)))))) %>%
            basalArea = pi/4 * (0.01 * dbhBootstrap)^2) %>% # initial estimate of tree's basal area in m²
     group_by(standID2016) %>%
     arrange(desc(TotalHt), .by_group = TRUE) %>% 
@@ -86,9 +115,9 @@ if (recalcDbh)
            standBasalAreaApprox = basalAreaAdjustmentFactor * standBasalAreaApprox,
            tallerApproxBasalArea = basalAreaAdjustmentFactor * cumsum(lag(basalArea, default = 0)) / standArea) %>%  # basal area of taller trees in m²/ha
     group_by(species) %>%
-    mutate(dbh = case_when(cur_group()$species == "DF" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
-                           cur_group()$species == "HW" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
-                           cur_group()$species == "WH" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
+    mutate(dbh = case_when(cur_group()$species == "PSME" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
+                           cur_group()$species == "ALRU" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
+                           cur_group()$species == "TSHE" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
     group_by(standID2016) %>%
     arrange(desc(TotalHt), .by_group = TRUE) %>% 
     mutate(standBasalAreaBootstrap = standBasalAreaApprox,
@@ -100,9 +129,9 @@ if (recalcDbh)
            tallerApproxBasalArea = basalAreaAdjustmentFactor * cumsum(lag(basalArea, default = 0)) / standArea) %>%
     # further iteration results in small changes at most percentiles but drives the smallest <0.5% of trees to negative DBH
     #group_by(species) %>%
-    #mutate(dbh = case_when(cur_group()$species == "DF" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
-    #                       cur_group()$species == "HW" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
-    #                       cur_group()$species == "WH" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
+    #mutate(dbh = case_when(cur_group()$species == "PSME" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
+    #                       cur_group()$species == "ALRU" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
+    #                       cur_group()$species == "TSHE" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
     #group_by(standID2016) %>%
     #mutate(standBasalAreaInitial = standBasalAreaApprox,
     #       tallerApproxBasalAreaInitial = tallerApproxBasalArea,
@@ -110,9 +139,9 @@ if (recalcDbh)
     #       standBasalAreaApprox = 1 / 1 * sum(basalArea) / standArea,
     #       tallerApproxBasalArea = cumsum(lag(basalArea, default = 0)) / standArea) %>%
     #group_by(species) %>%
-    #mutate(dbh2 = case_when(cur_group()$species == "DF" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
-    #                        cur_group()$species == "HW" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
-    #                        cur_group()$species == "WH" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
+    #mutate(dbh2 = case_when(cur_group()$species == "PSME" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
+    #                        cur_group()$species == "ALRU" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
+    #                        cur_group()$species == "TSHE" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
     #group_by(standID2016) %>%
     #mutate(standBasalArea2 = standBasalAreaApprox,
     #       tallerApproxBasalArea2 = tallerApproxBasalArea,
@@ -120,16 +149,29 @@ if (recalcDbh)
     #       standBasalAreaApprox = 1 / 1 * sum(basalArea) / standArea,
     #       tallerApproxBasalArea = cumsum(lag(basalArea, default = 0)) / standArea) %>%
     #group_by(species) %>%
-    #mutate(dbh = case_when(cur_group()$species == "DF" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
-    #                       cur_group()$species == "HW" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
-    #                       cur_group()$species == "WH" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
+    #mutate(dbh = case_when(cur_group()$species == "PSME" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
+    #                       cur_group()$species == "ALRU" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
+    #                       cur_group()$species == "TSHE" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
     ungroup() %>%
     rename(height = TotalHt)
   Sys.time() - startTime
-  save(file = "trees/height-diameter/data/segmentationDbh.Rdata", elliottTreesMod)
+  save(file = "trees/height-diameter/data/trees DSM ring.Rdata", elliottTreesMod) # slow, writes 836 MB
 } else {
-  load("trees/height-diameter/data/segmentationDbh.Rdata")
+  load("trees/height-diameter/data/trees DSM ring.Rdata")
 }
+
+
+## write trees for iLand
+elliottTreesArrow = arrow_table(elliottTreesMod %>%
+                                  filter(height >= 4.0) %>%  # remove 273805 trees below iLand's definition of tree height as 4.0 m (TODO: translate these rows to iLand saplings)
+                                  mutate(fiaCode = case_match(as.character(species), "PSME" ~ 202, "ALRU" ~ 351, "TSHE" ~ 263)) %>% # case_match() breaks on factors as of dplyr 1.1.4 (2023-12)
+                                  arrange(resourceUnitY, resourceUnitX, species, y, x) %>%
+                                  rename(standID = standID2016) %>%
+                                  select(standID, treeID, fiaCode, dbh, height, x, y),
+                                schema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
+                                                dbh = float32(), height = float32(), x = float32(), y = float32()))
+write_feather(elliottTreesArrow, "iLand/init/ESRF trees 2023-12.feather", compression = "uncompressed") # 232 MB uncompressed for considerably faster iLand startup
+
 
 elliottStandsMod = left_join(elliottTreesMod %>% group_by(standID2016) %>% 
                                summarize(segmentedTrees = n(),
@@ -373,17 +415,6 @@ ggplot(elliottTreesMod) +
   scale_y_continuous(labels = scales::label_comma()) +
 plot_layout(guides = "collect") &
   theme(legend.spacing.y = unit(0.3, "line"))
-
-
-## write trees for iLand
-elliottTreesArrow = arrow_table(elliottTreesMod %>%
-                                  mutate(fiaCode = recode(species, "DF" = 202, "WH" = 263, "HW" = 351)) %>% # for now, approximate all hardwoods as red alder
-                                  arrange(resourceUnitY, resourceUnitX, species, y, x) %>%
-                                  rename(standID = standID2016) %>%
-                                  select(standID, treeID, fiaCode, dbh, height, x, y),
-                                schema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
-                                                dbh = float32(), height = float32(), x = float32(), y = float32()))
-write_feather(elliottTreesArrow, "iLand/init/ESRF trees 2023-05.feather")
 
 
 ## transcode .csv files exported from QGIS to .feather

@@ -205,3 +205,14 @@ ggplot(standSummary) +
   labs(x = "rotation length, years", y = bquote("net present value, US$ ha"^-1), color = "thin age,\nyears") +
   scale_color_viridis_c(limits = c(34, 56)) +
   scale_y_continuous(labels = scales::label_comma())
+
+# mortality
+trees2021organon = read_feather(file.path(getwd(), "trees/Organon/Elliott tree lists 2016-2116.feather"), mmap = FALSE)
+                             
+ggplot() +
+  geom_segment(aes(x = 0, y = 0, xend = 1000, yend = 1000), color = "grey70", linetype = "longdash", linewidth = 0.3) +
+  geom_bin_2d(aes(x = liveExpansionFactor2016, y = liveExpansionFactor2021), trees2021organon %>% filter(year <= 2021) %>% select(stand, plot, tag, year, liveExpansionFactor) %>% pivot_wider(id_cols = c("stand", "plot", "tag"), names_from = year, names_prefix = "liveExpansionFactor", values_from = liveExpansionFactor), binwidth = c(0.1, 0.1)) +
+  labs(x = "trees per hectare, 2016", y = "trees per hectare, 2021", fill = "tree records") +
+  scale_fill_viridis_c(labels = scales::label_comma(), trans = "log10") +
+  scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 10000), minor_breaks = c(3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900), trans = scales::transform_pseudo_log()) +
+  scale_y_continuous(breaks = c(0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 10000), minor_breaks = c(3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900), trans = scales::transform_pseudo_log())

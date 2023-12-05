@@ -588,7 +588,7 @@ if (acmaOptions$fitHeight & acmaOptions$fitHeightMixed & acmaOptions$fitDbh & ac
 }
 
 
-## preferred forms identified (results.R, Figure 6)
+## preferred forms identified (results.R, Figure 9)
 if (acmaOptions$fitHeight & acmaOptions$fitDbh)
 {
   acmaHeightFromDiameterPreferred = list(chapmanRichards = fit_gsl_nls("Chapman-Richards", TotalHt ~ 1.37 + a1*(1 - exp(b1*DBH))^(b2 + b2p*isPlantation), acma2016, start = list(a1 = 27, b1 = -0.03, b2 = 1.1, b2p = -0.2), folds = 1, repetitions = 1))

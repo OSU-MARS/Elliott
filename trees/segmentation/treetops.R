@@ -92,7 +92,25 @@ diff %>% filter((treeID == TRUE) | (x == TRUE) | (y == TRUE) | (z == TRUE) | (he
 referenceTreetops %>% arrange(desc(y), x, z)
 newTreetops %>% arrange(desc(y), x, z)
 
+# break 2009 DSM from dsmDtmJob.R and resampled to EPSG:6557 alignment in QGIS into tiles matching 2021 flight
+# https://gis.stackexchange.com/questions/441960/qgis-clipping-virtual-raster-into-tiles-using-grid-layer-polygons
+tiles = st_read(file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County/Elliott tile index.gpkg"), quiet = TRUE)
+dsm2009 = rast("D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM 2009 tiles/DSM.tif")
+
+tile = tiles %>% filter(Tile_ID == "s03840w07290")
+
+lapply(1:nrow(tiles), function(tileIndex) {
+  tile = tiles[tileIndex,]
+  dsmTile = crop(dsm2009, tile, ext = TRUE)
+  writeRaster(dsmTile, file.path("D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM", paste0(tile$Tile_ID, ".tif")), datatype = "FLT4S", gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL9"), overwrite = TRUE)
+})
+
+dsm2009tiles = file.path(list.files("D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM", pattern = "\\.tif$"))
+vrt(file.path("D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM", dsm2009tiles), "D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM/DSM.vrt", overwrite = TRUE)
+
+
 # merge treetops into single GeoPackage after Get-Treetops has processed all tiles
+# Now handled by MergeTreetops cmdlet in Clouds.
 #treetopSourcePath = file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County/treetops DSM ring")
 #treetopFilePaths = file.path(treetopSourcePath, list.files(treetopSourcePath, "\\.gpkg$"))
 #treetopLayers = list()

@@ -34,13 +34,14 @@ read_tile = function(tilePath)
 chunkIndex = 1
 chunkSize =  133
 
-dataSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
+dataSourcePath = "D:/Elliott/GIS/DOGAMI/2009 South Coast"
+#dataSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 dataDestinationPath = dataSourcePath
 
 jobStartTime = Sys.time()
 setwd(file.path(getwd(), "../../.."))
 
-fileNames = list.files(file.path(dataSourcePath, "pointz"), pattern = "\\.laz$")
+tileNames = list.files(file.path(dataSourcePath, "pointz"), pattern = "\\.laz$")
 startIndex = chunkSize * (chunkIndex - 1) + 1
 endIndex = min(chunkSize * chunkIndex, length(tileNames))
 tileNames = tileNames[startIndex:endIndex]
@@ -67,5 +68,11 @@ for (tileName in tileNames)
   #tileDtm = rasterize_terrain(tile, res = 1.5)
   #writeRaster(tileDtm, file.path(dataDestinationPath, "DTM", paste0(tileBaseName, ".tif")), gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
 }
+
+#if (exists("generateVrt"))
+#{
+#  dsmTilePaths = list.files(file.path(dataDestinationPath, "DSM"), pattern = "\\.tif$")
+#  vrt(file.path(dataDestinationPath, "DSM", dsmTilePaths), file.path(dataDestinationPath, "DSM", "DSM.vrt"))
+#}
 
 cat(paste0(length(tileNames), " tiles in ", format(Sys.time() - jobStartTime), ".\n"))

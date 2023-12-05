@@ -154,7 +154,7 @@ load(file.path(getwd(), "trees/segmentation/speciesSvmFits 20 m grid metrics.Rda
 # 104k    ranger      2x50               5            1       41 m        0.999       0.999   from non-normalized clouds with heights relative to mean ground elevation added
 # 104k    ranger      2x50               5            1       37 m        0.999       0.999   ibid with low importance non-normalized z statistics dropped
 fitStart = Sys.time()
-randomForestFit = train(species ~., data = trainingData %>% select(-polygon), method = "ranger", trControl = repeatedCrossValidation, 
+randomForestFit = train(species ~ ., data = trainingData %>% select(-polygon), method = "ranger", trControl = repeatedCrossValidation, 
                         tuneGrid = expand.grid(mtry = floor(sqrt(dim(trainingData)[2] - 1)),
                                                splitrule = 'gini',
                                                min.node.size = c(2:6)))

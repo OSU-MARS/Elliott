@@ -1,3 +1,5 @@
+#.libPaths(.libPaths()[2])
+#install.packages(c("arrow", "caret", "data.table", "FNN", "lidR", "ranger", "sf", "terra", "tidyterra"))
 library(data.table)
 library(dplyr)
 library(future)
@@ -98,13 +100,13 @@ stdmetrics_z_simple = function(z) # reduced from https://github.com/r-lidar/lidR
 
 # setup
 # 2021 tile naming convention: s<easting>w<northing> where easting ≥ 03450 and northing ≥ 06360 increment in steps of 30 (units are 100 ft)
-#dataPath = "E:/Elliott/GIS/DOGAMI/2009 OLC South Coast"
-dataPath = "E:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
+dataPath = "E:/Elliott/GIS/DOGAMI/2009 OLC South Coast"
+#dataPath = "E:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 
 dtm2021nv5 = rast("GIS/DOGAMI/2021 OLC Coos County/DTM_NV5_2021.tif")
 elliottStands = st_read("GIS/Planning/ESRF_Stands062022Fixed.shp") # June 2022 stand boundaries
 elliottStands = st_transform(elliottStands, 6557) # override EPSG:2992 to 6557 - same projection and units, just different EPSG
-elliottLidarTiles = readLAScatalog(file.path(dataPath, "Points"), progress = FALSE) # progress = FALSE turns off plotting of tiles during clip_roi() calls, many warnings: only 2 bytes until point block
+elliottLidarTiles = readLAScatalog(file.path(dataPath, "points"), progress = FALSE) # progress = FALSE turns off plotting of tiles during clip_roi() calls, many warnings: only 2 bytes until point block
 
 # check assignment of stand IDs
 # STD_ID: Oregon Department of Forestry-Oregon Department of State Lands stand ID
@@ -238,9 +240,9 @@ get_trees = function(segmentation)
 
 
 ## problems with lack of parallel support in terra
-library(furrr)
+#library(furrr)
 #options(future.debug = TRUE)
-plan(multisession, workers = 8)
+#plan(multisession, workers = 8)
 boundingBoxes = future_map(elliottLidarTiles$filename, function(tilePath)
 {
   boundingBox = merge(st_as_sfc(st_bbox(readLASheader(tilePath))),

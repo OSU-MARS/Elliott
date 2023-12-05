@@ -831,7 +831,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitH
 }
 
 
-## preferred forms identified (results.R, Figure 7)
+## preferred forms identified (results.R, Figure 8)
 if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & psmeOptions$fitDbhPrimary & psmeOptions$fitDbhNlrobAndFixedWeight)
 {
   psmeHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, folds = 1, repetitions = 1))

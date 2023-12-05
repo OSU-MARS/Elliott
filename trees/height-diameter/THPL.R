@@ -605,7 +605,7 @@ if (thplOptions$fitHeight & thplOptions$fitHeightMixed & thplOptions$fitDbh & th
 }
 
 
-## preferred forms identified (results.R, Figure 7)
+## preferred forms identified (results.R, Figure 10)
 if (thplOptions$fitHeight & thplOptions$fitDbh)
 {
   thplHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1))

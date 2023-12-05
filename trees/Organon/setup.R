@@ -12,15 +12,15 @@ load("trees/height-diameter/data/other preferred models.Rdata")
 ## adjust stands2022 and trees2016 for use with Organon
 # TODO: site index accuracy, site indices for species besides Douglas-fir
 organonStands = stands2022 %>% 
-  mutate(siteIndex = 0.3048 * if_else(is.na(Cruised_Si) == FALSE, Cruised_Si, pmin(ODSL_Site_, ODSL_Physi)), # take measured SI if available, otherwise lowest modeled value
+  mutate(siteIndex = 0.3048 * if_else(is.na(Cruised_Si) == FALSE, Cruised_Si, pmin(ODSL_Site_, ODSL_Physi)), # convert measured SI from ft to m if available, otherwise use lowest modeled value
          siteIndex = replace_na(siteIndex, mean(siteIndex, na.rm = TRUE)), # absent any other approach, fill missing site indices using mean imputation (nearest neighbors or such could be done to clear this, in GIS or elsewhere)
-         slopeInPercent = 100 * tan(pi/180 * SlopeMedian),
+         slopeInPercent = 100 * tan(pi/180 * SlopeMedian), # %
          forwardingRoad = 30, # m
          forwardingUntethered = pmin(15, 2 * RoadDistMean), # m
          forwardingTethered = 2 * RoadDistMean - forwardingUntethered,
-         plantingDensityPerHa = 2.47 * 360, # 
-         yardingFactor = if_else(RoadDistMedian > 0, 0.5 * RoadDistMean / RoadDistMedian, 0.5),
-         slopeAbove100PercentFraction = SlopeAbove100PercentFraction) %>%
+         plantingDensityPerHa = 2.47 * 360, # trees per hectare
+         yardingFactor = if_else(RoadDistMedian > 0, 0.5 * RoadDistMean / RoadDistMedian, 0.5), # dimensionless
+         slopeAbove100PercentFraction = SlopeAbove100PercentFraction) %>% # fraction
   rename(id = StandID, area = standArea, age = standAge2016, allocation = April2021_Allocation) %>%
   select(id, area, siteIndex, age, slopeInPercent, forwardingRoad, forwardingUntethered, forwardingTethered, yardingFactor, plantingDensityPerHa, slopeAbove100PercentFraction)
 
@@ -44,7 +44,7 @@ organonTrees = trees2016 %>% filter(isLive, is.na(DBH) == FALSE) %>%
   mutate(species = fct_collapse(factor(Species, levels = c("BC", "BM", "CA", "CH", "CX", "DF", "GC", "GF", "HX", "LP", "OA", "OM", "PC", "PD", "PM", "PY", "RA", "RC", "SS", "TO", "WH", "WI", "WO", "XX")),
                                 RA = c("BC"), GC = c("CA"), WI = c("CH"), IC = c("CX", "XX"), PM = c("HX"), WH = c("LP", "SS"), BM = c("OA", "OM"), RC = c("PC"))) %>%
   group_by(speciesGroup) %>%
-  mutate(expansionFactor = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand,
+  mutate(expansionFactor = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, # trees per hectare
          imputedHeight = case_when(speciesGroup == "DF" ~ if_else(is.na(elevation) == FALSE, predict(psmeHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh, .[cur_group_rows(), ]), predict(psmeHeightFromDiameterPreferred$sharmaPartonBalRelDbh, .[cur_group_rows(), ])),
                                    speciesGroup == "RA" ~ if_else(is.na(elevation) == FALSE, predict(alruHeightFromDiameterPreferred$sharmaPartonBalPhysio, .[cur_group_rows(), ]), predict(alruHeightFromDiameterPreferred$sharmaPartonBal, .[cur_group_rows(), ])),
                                    speciesGroup == "WH" ~ predict(tsheHeightFromDiameterPreferred$gamBalRelDbh, .[cur_group_rows(), ]),
@@ -52,9 +52,10 @@ organonTrees = trees2016 %>% filter(isLive, is.na(DBH) == FALSE) %>%
                                    speciesGroup == "OM" ~ predict(umcaHeightFromDiameterPreferred$sharmaPartonPhysio, .[cur_group_rows(), ]),
                                    speciesGroup == "RC" ~ predict(thplHeightFromDiameterPreferred$sharmaPartonPhysio, .[cur_group_rows(), ]),
                                    speciesGroup == "other" ~ predict(otherHeightFromDiameterPreferred$gamBal, .[cur_group_rows(), ]))) %>% # a few seconds, likely mainly due to GAM prediction
-  rename(stand = StandID, plot = PlotID, dbh = DBH, height = imputedHeight, codes = CompCode, heightToBrokenTop = Ht2) %>%
-  select(speciesGroup, stand, plot, species, dbh, height, expansionFactor, codes, heightToBrokenTop) %>%
-  ungroup()
+  rename(stand = StandID, plot = PlotID, tag = TreeID, dbh = DBH, height = imputedHeight, codes = CompCode, heightToBrokenTop = Ht2) %>%
+  select(speciesGroup, stand, plot, tag, species, dbh, height, expansionFactor, codes, heightToBrokenTop) %>% # dbh in cm, heights in m, expansion factor in TPH
+  ungroup() %>%
+  arrange(stand, plot, tag)
 
 # sanity checks
 organonStands %>% reframe(quantiles = c(0, 1), age = quantile(age, probs = quantiles, na.rm = TRUE), 

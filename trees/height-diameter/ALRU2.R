@@ -730,7 +730,7 @@ if (alruOptions$fitHeight & alruOptions$fitHeightMixed & alruOptions$fitDbh & al
 }
 
 
-## preferred forms identified (results.R, Figure 7)
+## preferred forms identified (results.R, Figure 8)
 if (alruOptions$fitHeight & alruOptions$fitDbh)
 {
   alruHeightFromDiameterPreferred = list(chapmanRichards = fit_gsl_nls("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), alru2016, start = list(a1 = 26.4, a1p = 2.74, b1 = -0.041, b2 = 1.11, b2p = 0.027), folds = 1, repetitions = 1))

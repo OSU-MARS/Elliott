@@ -589,7 +589,7 @@ if (tsheOptions$fitHeight & tsheOptions$fitHeightMixed & tsheOptions$fitDbh & ts
 }
 
 
-## preferred forms identified (results.R, Figure 8)
+## preferred forms identified (results.R, Figure 9)
 if (tsheOptions$fitHeight & tsheOptions$fitDbh)
 {
   tsheHeightFromDiameterPreferred = list(chapmanRichardsBalPhysio = fit_gsl_nls("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + a4 * elevation + a5 * slope) * (1 - exp(b1*DBH))^b2, tshe2016physio, start = list(a1 = 51, a2 = -0.15, a2p = 0.9, a3 = 0.21, a3p = -0.14, a4 = -0.014, a5 = -0.12, b1 = -0.021, b2 = 1.27), folds = 1, repetitions = 1))
