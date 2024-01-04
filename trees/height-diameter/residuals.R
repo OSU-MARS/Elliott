@@ -108,7 +108,7 @@ modeledVariance = crossing(tibble(DBH = seq(0, 250), TotalHt = seq(1.37, 85, len
   mutate(speciesGroup = factor(if_else(speciesGroup != "Other", speciesGroup, "other"), levels = levels(predictionError$speciesGroup)))
 #print(modeledVariance, n = 100)
 
-## Figure S05: residual variance model
+## Figure S4: residual variance model
 speciesGroupColors = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")
 speciesGroupNames = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")
 ggplot() +
@@ -138,7 +138,7 @@ plot_layout(guides = "collect") &
   scale_shape_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(16, 18)) &
   scale_size_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(1.5, 1.9)) &
   theme(legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"), strip.text = element_text(size = 8))
-#ggsave("trees/height-diameter/figures/Figure S05 error model gsl_nls.png", height = 15, width = 22, units = "cm", dpi = 200)
+#ggsave("trees/height-diameter/figures/Figure S04 error model gsl_nls.png", height = 15, width = 22, units = "cm", dpi = 200)
 
 
 ## height interquartile ranges
@@ -542,7 +542,7 @@ residualPower %>% select(species, ht_b1, ht_b1p, dia_b1, dia_b1p) %>%
 residualPower %>% summarize(ht_b1 = mean(ht_b1), ht_b1p = mean(ht_b1 + if_else(is.na(ht_b1p), 0, ht_b1p)), dia_b1 = mean(dia_b1), dia_b1p = mean(dia_b1 + dia_b1p))
 
 
-## Figures S4-6: estimates of residual variance
+## Figures S11-13: estimates of residual variance
 # heightIqr, diameterIqr, and residualPower are calculated in residuals.R
 ggplot() +
   geom_line(aes(x = seq(0, 250), y = seq(0, 250)^0.5), color = "grey70", linetype = "longdash") +
@@ -561,7 +561,7 @@ ggplot() +
   scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = speciesGroupColors) +
   theme(legend.justification = c(1, 0), legend.position = "none") +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-ggsave("trees/height-diameter/figures/Figure S04 height interquartile range.png", height = 10, width = 18, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S11 height interquartile range.png", height = 10, width = 18, units = "cm", dpi = 150)
 
 ggplot() +
   geom_line(aes(x = seq(0, 100), y = 80/80*seq(0, 100)^0.9), color = "grey70", linetype = "longdash") +
@@ -582,7 +582,7 @@ ggplot() +
   scale_color_manual(breaks = levels(heightIqr$species), limits = levels(heightIqr$species), values = speciesGroupColors) +
   theme(legend.justification = c(1, 0), legend.position = "none") +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-ggsave("trees/height-diameter/figures/Figure S05 diameter interquartile range.png", height = 10, width = 18, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S12 diameter interquartile range.png", height = 10, width = 18, units = "cm", dpi = 150)
 
 ggplot(residualPower) +
   geom_errorbar(aes(xmin = ht_b1_min, xmax = ht_b1_max, y = htName, color = species), width = 0.25) +
@@ -611,44 +611,44 @@ plot_layout(nrow = 1, guides = "collect") &
   scale_color_manual(breaks = levels(residualPower$species), limits = levels(residualPower$species), values = speciesGroupColors) &
   scale_shape_manual(breaks = c("b1", "b1p"), labels = c("base power", "plantations"), values = c(15, 17)) &
   theme(legend.position = "bottom")
-ggsave("trees/height-diameter/figures/Figure S06 residual power estimates.png", height = 14, width = 20, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S13 residual power estimates.png", height = 14, width = 20, units = "cm", dpi = 150)
 
 
-## Figures S7-12: Q-Q plots
+## Figures S14-20: Q-Q plots
 plot_qq(psmeHeightFromDiameterPreferred$chapmanRichards, psmeHeightFromDiameterPreferred$michaelisMenten, psmeHeightFromDiameterPreferred$sharmaParton, psmeHeightFromDiameterPreferred$sharmaZhang,
         psmeDiameterFromHeightPreferred$ChapmanRichards, psmeDiameterFromHeightPreferred$chapmanForm, psmeDiameterFromHeightPreferred$ruark, psmeDiameterFromHeightPreferred$sibbesenForm,
         "Douglas-fir")
-ggsave("trees/height-diameter/figures/Figure S07 PSME Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S14 PSME Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 plot_qq(alruHeightFromDiameterPreferred$chapmanRichards, alruHeightFromDiameterPreferred$michaelisMenten, alruHeightFromDiameterPreferred$sharmaParton, alruHeightFromDiameterPreferred$sharmaZhang,
         alruDiameterFromHeightPreferred$chapmanRichards, alruDiameterFromHeightPreferred$chapmanForm, alruDiameterFromHeightPreferred$ruark, alruDiameterFromHeightPreferred$sibbesenForm,
         "red alder", tDegreesOfFreedom = 8, tSkew = 2.1)
-ggsave("trees/height-diameter/figures/Figure S08 ALRU2 Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S15 ALRU2 Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 plot_qq(tsheHeightFromDiameterPreferred$chapmanRichards, tsheHeightFromDiameterPreferred$michaelisMenten, tsheHeightFromDiameterPreferred$sharmaParton, tsheHeightFromDiameterPreferred$sharmaZhang,
         tsheDiameterFromHeightPreferred$chapmanRichards, tsheDiameterFromHeightPreferred$chapmanForm, tsheDiameterFromHeightPreferred$ruark, tsheDiameterFromHeightPreferred$sibbesenForm,
         "western hemlock", tDegreesOfFreedom = 7, tSkew = 2)
-ggsave("trees/height-diameter/figures/Figure S08 TSHE Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S16 TSHE Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 plot_qq(acmaHeightFromDiameterPreferred$chapmanRichards, acmaHeightFromDiameterPreferred$michaelisMenten, acmaHeightFromDiameterPreferred$sharmaParton, acmaHeightFromDiameterPreferred$sharmaZhang,
         acmaDiameterFromHeightPreferred$chapmanRichards, acmaDiameterFromHeightPreferred$chapmanForm, acmaDiameterFromHeightPreferred$ruark, acmaDiameterFromHeightPreferred$sibbesenForm,
         "bigleaf maple", tDegreesOfFreedom = 10, tSkew = 4)
-ggsave("trees/height-diameter/figures/Figure S09 ACMA3 Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S17 ACMA3 Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 plot_qq(umcaHeightFromDiameterPreferred$chapmanRichards, umcaHeightFromDiameterPreferred$michaelisMenten, umcaHeightFromDiameterPreferred$sharmaParton, umcaHeightFromDiameterPreferred$sharmaZhang,
         umcaDiameterFromHeightPreferred$chapmanRichards, umcaDiameterFromHeightPreferred$chapmanForm, umcaDiameterFromHeightPreferred$ruark, umcaDiameterFromHeightPreferred$sibbesenForm,
         "Oregon myrtle", tDegreesOfFreedom = 8, tSkew = 4)
-ggsave("trees/height-diameter/figures/Figure S10 UMCA Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S18 UMCA Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 plot_qq(thplHeightFromDiameterPreferred$chapmanRichards, thplHeightFromDiameterPreferred$michaelisMenten, thplHeightFromDiameterPreferred$sharmaParton, thplHeightFromDiameterPreferred$sharmaZhang,
         thplDiameterFromHeightPreferred$chapmanRichards, thplDiameterFromHeightPreferred$chapmanForm, thplDiameterFromHeightPreferred$ruark, thplDiameterFromHeightPreferred$sibbesenForm,
         "western redcedar", tDegreesOfFreedom = 8, tSkew = 3)
-ggsave("trees/height-diameter/figures/Figure S11 THPL Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S19 THPL Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 plot_qq(otherHeightFromDiameterPreferred$chapmanRichards, otherHeightFromDiameterPreferred$michaelisMenten, otherHeightFromDiameterPreferred$sharmaParton, otherHeightFromDiameterPreferred$sharmaZhang,
         otherDiameterFromHeightPreferred$chapmanRichards, otherDiameterFromHeightPreferred$chapmanForm, otherDiameterFromHeightPreferred$ruark, otherDiameterFromHeightPreferred$sibbesenForm,
         "other species", tDegreesOfFreedom = 3, tSkew = 1)
-ggsave("trees/height-diameter/figures/Figure S12 other Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
+ggsave("trees/height-diameter/figures/Figure S20 other Q-Q.png", height = 11, width = 16, units = "cm", dpi = 150)
 
 
 ## companion variance structure summary from GNLS

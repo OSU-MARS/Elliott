@@ -417,33 +417,30 @@ heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>%
 # fittings which failed
 heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable, species, name) %>% arrange(desc(fitSet))
 
-# Figure 1 in GIS
-# Figute 2 in 
-
-## Figure 3: overall dataset summary
+## Figure 1: overall dataset summary
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel = "conifer", maxTreesMeasured = 170, omitLegends = TRUE, omitXlabels = TRUE) /
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxTreesMeasured = 170, plotLetters = c("d)", "e)", "f)")) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure 03 height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)
 #plot_exploratory(trees2016) + plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure 03 height-diameter distribution.png", height = 10, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.png", height = 10, width = 20, units = "cm", dpi = 150)
 
 
-## Figure 4: height-diameter AUCs
+## Figure 2: height-diameter AUCs
 heightFromDiameterModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "height") %>%
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "height"))$name)))
 plot_auc_bank(heightFromDiameterModelComparison)
-#ggsave("trees/height-diameter/figures/Figure 04 height accuracy AUC median.png", height = 16, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.png", height = 16, width = 20, units = "cm", dpi = 150)
 
 
-## Figure 5: diameter AUCs
+## Figure 3: diameter AUCs
 diameterFromHeightModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "DBH") %>%
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "DBH"))$name)))
 plot_auc_bank(diameterFromHeightModelComparison)
-#ggsave("trees/height-diameter/figures/Figure 05 diameter accuracy AUC median.png", height = 17.5, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.png", height = 17.5, width = 20, units = "cm", dpi = 150)
 
 
-## Figure 6: fitting success, model significance, and predictor variable use
+## Figure 4: fitting success, model significance, and predictor variable use
 modelFitStats = primaryResults %>% group_by(responseVariable, species, name) %>%
   summarize(modelFit = is.na(nse[1]) == FALSE, .groups = "drop_last") %>% 
   summarize(fitPct = 100 * mean(modelFit), .groups = "drop") %>%
@@ -521,10 +518,10 @@ plot_layout(nrow = 2, ncol = 6, widths = c(1.7, 1.7, 2.2, 1.7, 2.7, 1.2), guides
   scale_fill_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
   scale_size_area(max_size = 5.0) &
   theme(legend.position = "none")
-#ggsave("trees/height-diameter/figures/Figure 06 predictor variables.png", height = 10, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 04 predictor variables.png", height = 10, width = 20, units = "cm", dpi = 150)
 
 
-## Figure 7: model efficiency
+## Figure 5: model efficiency
 # Long tail of negative model efficiencies is suppressed as histogram plotting becomes very slow even if bins
 # are not within the display window set by coord_cartesian().
 smallTreeEfficiency = left_join(trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>% mutate(species = factor(speciesGroup, labels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other"))) %>%
@@ -571,10 +568,10 @@ plot_layout(nrow = 2, ncol = 2, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.6, "line"), legend.position = "bottom", legend.text = element_text(margin = margin(l = -2.5, r = 6.5)))
-#ggsave("trees/height-diameter/figures/Figure 07 model efficiency - no small stems.png", height = 10, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 05 model efficiency - no small stems.png", height = 10, width = 20, units = "cm")
 
 
-## Figure 8: Douglas-fir and red alder preferred models
+## Figure 6: Douglas-fir and red alder preferred models
 # preferred forms from 10x10 cross validation
 #print(preferredForms %>% filter(species %in% c("Douglas-fir", "red alder")) %>% select(-mabName, -aucMab, -nseName, -aucNse) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 28, ellipsis = ""), rmseName = str_trunc(rmseName, 28, ellipsis = ""), aicName = str_trunc(aicName, 28, ellipsis = "")), n = 33)
 if (exists("psmeHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/PSME preferred models.Rdata") }
@@ -633,10 +630,10 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
-#ggsave("trees/height-diameter/figures/Figure 08 PSME-ALRU2 curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.png", height = 12, width = 20, units = "cm")
 
 
-## Figure 9: western hemlock and bigleaf maple preferred models
+## Figure 7: western hemlock and bigleaf maple preferred models
 #print(preferredForms %>% filter(species %in% c("western hemlock", "bigleaf maple")) %>% select(-mabName, -aucMab, -nseName, -aucNse) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 28, ellipsis = ""), rmseName = str_trunc(rmseName, 28, ellipsis = ""), aicName = str_trunc(aicName, 28, ellipsis = "")), n = 32)
 if (exists("tsheHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/TSHE preferred models.Rdata") }
 if (exists("acmaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ACMA3 preferred models.Rdata") }
@@ -694,10 +691,10 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
-#ggsave("trees/height-diameter/figures/Figure 09 TSHE-ACMA3 curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.png", height = 12, width = 20, units = "cm")
 
 
-## Figure 10: Oregon myrtle and western redcedar preferred models
+## Figure 8: Oregon myrtle and western redcedar preferred models
 #print(preferredForms %>% filter(species %in% c("Oregon myrtle", "western redcedar")) %>% select(-mabName, -aucMab, -nseName, -aucNse) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "THPL", "TSHE", "ALRU2", "ACMA3", "UMCA", "other"), levels = c("Douglas-fir", "western redcedar", "western hemlock", "red alder", "bigleaf maple", "Oregon myrtle", "other species")), maeName = str_trunc(maeName, 28, ellipsis = ""), rmseName = str_trunc(rmseName, 28, ellipsis = ""), aicName = str_trunc(aicName, 28, ellipsis = "")), n = 32)
 if (exists("umcaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/UMCA preferred models.Rdata") }
 if (exists("thplHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/THPL preferred models.Rdata") }
@@ -755,10 +752,10 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
-#ggsave("trees/height-diameter/figures/Figure 10 UMCA-THPL curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.png", height = 12, width = 20, units = "cm")
 
 
-## Figure 11: preferred models for other species group
+## Figure 9: preferred models for other species group
 # preferred forms from 10x10 cross validation
 #                height                                           DBH
 #                base              generalized                    base                    generalized
@@ -797,31 +794,10 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(design = "12\n33", heights = c(1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
-#ggsave("trees/height-diameter/figures/Figure 11 other species curves.png", height = 17/3 + 0.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 09 other species curves.png", height = 17/3 + 0.5, width = 20, units = "cm")
 
 
-## Figures S1-4: species level exploratory plots
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
-plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S01 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
-
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
-plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S02 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
-  
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
-plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S03 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
-
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
-plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure S04 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
-
-
-## Figure S5: comparison of accuracy metrics
+## Figure S1: comparison of accuracy metrics
 accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(responseVariable == "height") %>% 
                                                     select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
                                   rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
@@ -847,10 +823,10 @@ ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) +
   plot_layout(nrow = 1, ncol = 2, guides = "collect") &
   scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
   theme(legend.spacing.y = unit(0.5, "line"))
-#ggsave("trees/height-diameter/figures/Figure S05 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure S01 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
 
 
-# Figure S6: height prediction accuracy
+# Figure S2: height prediction accuracy
 # If axis limits, vertical dodges, or aesthetics are changed Figure S6 should be updated.
 heightFromDiameterAccuracyLevels = primaryResults %>% 
   filter(responseVariable == "height") %>%
@@ -922,10 +898,10 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
-#ggsave("trees/height-diameter/figures/Figure S06 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S02 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
 
 
-# Figure S7: DBH prediction accuracy
+# Figure S3: DBH prediction accuracy
 # If axis limits, vertical dodges, or aesthetics are changed Figure S4 should be updated.
 diameterFromHeightAccuracyLevels = primaryResults %>% 
   filter(responseVariable == "DBH") %>%
@@ -998,14 +974,12 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
-#ggsave("trees/height-diameter/figures/Figure S07 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S03 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
 
 
-# Figure S8 in residuals.R
-# Table S1 in setup.R
+# Figure S4 in residuals.R
 
-
-# Tables S2-15
+# Tables S1-14
 # Top 10 height and DBH model forms by species.
 preferredModelForms = heightDiameterModelRanking %>% filter(significant) %>% 
   mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%

@@ -1629,7 +1629,7 @@ if (htDiaOptions$includeInvestigatory)
 ## data tabulation and basic plotting
 if (htDiaOptions$includeInvestigatory)
 {
-  # Table S1
+  # Table 1
   trees2016summary = trees2016 %>%
     #group_by(Species) %>%
     group_by(speciesGroup) %>% 
@@ -1768,10 +1768,30 @@ if (htDiaOptions$includeInvestigatory)
     guides(color = "none", fill = "none") &
     scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65"))
+
+  ## Figures A1-4: species level exploratory plots
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
+  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  #ggsave("trees/height-diameter/figures/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
+  
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
+  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  #ggsave("trees/height-diameter/figures/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
+    
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
+  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  #ggsave("trees/height-diameter/figures/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
+  
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
+  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  #ggsave("trees/height-diameter/figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
 }
 
 
-## stand-level summaries and Figure 2
+## stand-level summaries and clustering
 if (htDiaOptions$includeInvestigatory)
 {
   treesByStand2016 = trees2016 %>% 
@@ -1943,7 +1963,7 @@ if (htDiaOptions$includeInvestigatory)
            topHeightLabelColor = if_else(meanTotalBasalArea > 10, "white", "black"),
            topHeightLabelX = if_else(meanTotalBasalArea > 10, 1, meanTotalBasalArea + 1))
   
-  # Figure 2
+  # clustering
   speciesBasalAreaOneRowPerClusterSlice = speciesBasalAreaByCluster %>% group_by(clusterID) %>% slice(1)
 
   ggplot() +
@@ -1970,7 +1990,7 @@ if (htDiaOptions$includeInvestigatory)
     theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
-  #ggsave("trees/height-diameter/figures/Figure 02 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 250)
+  #ggsave("trees/height-diameter/figures/Figure S90 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 250)
   
   # tree counts
   trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%

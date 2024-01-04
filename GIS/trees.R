@@ -32,11 +32,15 @@ if (joinDbhPredictors)
   # TBD if extract() or intersect() in terra is viable.
   #elliottBoundaryBuffered = vect("GIS/GIS/ESRF boundary April 2022 + Hakki 400 m buffer EPSG 6556.gpkg")
   elliottTrees = st_read("GIS/DOGAMI/2021 OLC Coos County/treetops DSM ring/treetops 400 m.gpkg", layer = "treetops", quiet = TRUE) # ~35 s to load with terra::vect() but z is dropped, so 2.7 min with st_read()
-  elliottTrees$elevation = 0.3048 * st_coordinates(elliottTrees)[, 3] # terra drops points' z values, convert elevations in feet to m
+  elliottTrees$elevation = 0.3048 * st_coordinates(elliottTrees)[, 3] # use sf since terra drops points' z values, convert elevations in feet to m
   elliottTrees$height = 0.3048 * elliottTrees$height # convert heights in feet to m
   elliottTrees$radius = 0.3048 * elliottTrees$radius # not necessary, but included for completeness
   elliottTrees = project(vect(elliottTrees), crs("epsg:6556")) # 3.7 min in vect(), ~30 s to project 15.9 M trees in EPSG:6557 (ft) to 6556 (m)
-  
+
+  # extract() in terra 1.7-55 is computationally intractable so, for now, pick up stand ID with join by location in QGIS  
+  #elliottStands2016 = vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2016") # EPSG:6556
+  #elliottStands2016 = terra::extract(elliottStands2016[, "standID2016"], elliottTrees)
+
   # join stands
   # Slow in R (>>10 minutes, likely 2+ orders of magnitude) compared to join by location in QGIS.
   #elliotStateForestStands2016 = vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2016")
@@ -78,7 +82,7 @@ if (recalcDbh)
                               stands2022 %>% select(-standArea),
                               by = "standID2016") %>% # ~1 s for join
     rename(TotalHt = height) %>% # change height to TotalHt to integrate with DBH model fits
-    mutate(species = factor(if_else((conifer + nonForest) > (hardwood + unknown), "PSME", "ALRU"), levels = c("PSME", "ALRU", "TSHE")),
+    mutate(species = factor(if_else((conifer + nonForest) > (hardwood + unknown), "PSME", if_else(TotalHt <= 50, "ALRU", "PSME")), levels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other")), # suppress hardwood classification above 50 m as no such trees are present in 2015-16 Elliott cruise data
            resourceUnitX = as.integer(x / 100), # dropped in final select
            resourceUnitY = as.integer(y / 100)) %>% 
     group_by(standID2016) %>%
