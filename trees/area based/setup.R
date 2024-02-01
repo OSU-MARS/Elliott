@@ -486,7 +486,27 @@ plotHeightsScaled = plotHeights %>% mutate(treesMatched = if_else(n < 8, n, 8),
 ## exploratory analysis
 if (abaOptions$includeInvestigatory)
 {
+  # trees of questionable height: simple test for incompletely classified noise
+  highTreesByTile = trees2021lidar %>% group_by(tile) %>% reframe(treetops = n(), quantiles = c(0, 10, 25, 50, 75, 90, 100), heightQ = quantile(height, probs = 0.01 * quantiles), heightMean = mean(height), heightOver75 = sum(height > 75)) # 75 m threshold
+  highTreesByTileWide = highTreesByTile %>% pivot_wider(id_cols = c("tile", "trees", "heightMean", "heightOver75"), names_prefix = "heightQ", names_from = "quantiles", values_from = "heightQ")
+  highTreesByTileWide %>% slice_max(heightOver75, n = 10)
+  highTreesByTile %>% filter(tile == "s04080w06720")
+  
+  ggplot() +
+    geom_histogram(aes(x = heightOver75), highTreesByTileWide, binwidth = 5) +
+    labs(x = "trees more than 75 m tall", y = "tiles")
+
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 75, yend = 75), color = "grey70", linetype = "longdash", linewidth = 0.3) +
+    geom_bin2d(aes(x = heightQ90, y = heightQ100), highTreesByTileWide, binwidth = 1) +
+    coord_equal() +
+    labs(x = bquote("tile 90"^th*" percentile tree height, m"), y = "tile maximum tree height, m", fill = "tiles") +
+    scale_fill_viridis_c()
+  
+  #writexl::write_xlsx(highTreesByTileWide, "trees/tile treetops.xlsx")
+
   # distribution of trees per plot after resizing to ABA cells
+  # 250 feet = 76.2 m
   ggplot() +
     geom_histogram(aes(x = n, y = after_stat(..count.. / sum(..count..))), plotHeights, binwidth = 1) +
     labs(x = "plot trees expanded to ABA cell", y = "probability of plot") +

@@ -108,6 +108,36 @@ lapply(1:nrow(tiles), function(tileIndex) {
 dsm2009tiles = file.path(list.files("D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM", pattern = "\\.tif$"))
 vrt(file.path("D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM", dsm2009tiles), "D:/Elliott/GIS/DOGAMI/2009 OLC South Coast/DSM/DSM.vrt", overwrite = TRUE)
 
+# ring DSM diagnostics: statistics
+library(dplyr)
+library(ggplot2)
+library(terra)
+
+dsmTileDiagnostics = as_tibble(rast("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/DSM with outlier rejection/ring diagnostics/s04230w06810.tif"))
+treetops = as_tibble(vect("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/DSM with outlier rejection/ring diagnostics/s04230w06810.gpkg")) %>%
+  rename(netProminence = `1`, rangeProminence = `2`, totalProminence = `3`, totalRange = `4`, radius2 = `5`) %>%
+  mutate(netPromTotalRangeRatio = totalRange / netProminence)
+suspectTops = as_tibble(vect("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/DSM with outlier rejection/ring diagnostics/suspect tops.gpkg")) %>%
+  rename(netProminence = `1`, rangeProminence = `2`, totalProminence = `3`, totalRange = `4`, radius2 = `5`) %>%
+  mutate(netPromTotalRangeRatio = totalRange / netProminence) %>%
+  select(-netProminenceNormalized)
+
+ggplot() +
+  geom_segment(aes(x = 0.02, xend = 0.02, y = 0, yend = 1.4), color = "grey70", linewidth = 0.3, linetype = "longdash") +
+  geom_bin2d(aes(x = `net prominence normalized`, y = `total prominence normalized`), dsmTileDiagnostics, binwidth = c(0.03333, 0.01)) +
+  labs(x = "net prominence, normalized", y = "total prominence, normalized", fill = "treetop\ncandidates", title = "(a) candidates") +
+ggplot() +
+  geom_segment(aes(x = 0.02, xend = 0.02, y = 0, yend = 1.4), color = "grey70", linewidth = 0.3, linetype = "longdash") +
+  geom_bin2d(aes(x = netProminence, y = totalProminence), treetops, binwidth = c(0.03333, 0.01)) +
+  labs(x = "net prominence, normalized", y = NULL, fill = "treetop\ncandidates", title = "(b) accepted") +
+plot_annotation(theme = theme(plot.margin = margin())) +
+plot_layout(widths = c(4.5, 3), guides = "collect") &
+  scale_fill_viridis_c(limits = c(0, 220))
+
+suspectTops %>% filter(type == "branch")
+
+ggplot() +
+  geom_histogram(aes(x = totalProminence), treetops %>% filter(totalProminence > -100))
 
 # merge treetops into single GeoPackage after Get-Treetops has processed all tiles
 # Now handled by MergeTreetops cmdlet in Clouds.

@@ -12,7 +12,7 @@ library(writexl)
 joinDbhPredictors = FALSE
 recalcDbh = TRUE
 
-theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.border = element_blank()))
+theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.border = element_blank(), plot.title = element_text(size = 10)))
 
 # load treetop locations, elevations, and heights, merge other physiological predictor variables
 # Stand level variables (top height, relative height, ABA, AAT) are calculated below based on trees' stand IDs.

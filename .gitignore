@@ -19,6 +19,8 @@ GIS/**/*.gdb
 GIS/**/*.hdf
 GIS/**/*.qmd
 GIS/**/*.gpkg
+GIS/**/*.gpkg-shm
+GIS/**/*.gpkg-wal
 GIS/**/*.cpg
 GIS/**/*.dbf
 GIS/**/*.html
@@ -57,6 +59,7 @@ Woodstock/
 # QGIS and RStudio user data
 Elliott.qgz
 Elliott\ ABA.qgz
+Elliott\ orthoimage.qgz
 Elliott.Rproj
 **/*.jpg
 **/*.png
