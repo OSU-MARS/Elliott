@@ -6,38 +6,6 @@ library(magrittr)
 library(terra)
 library(tidyr)
 
-get_polygon_classification_metrics = function(chm, orthoimage)
-{
-  rasterData = as_tibble(c(chm, orthoimage)) %>% # stack CHM Z and RGB+NIR raster bands
-    mutate(r = as.numeric(r), # convert RGB+NIR from 32 bit integers to doubles to avoid integer overflows when calculating CVI and integer truncation in other indices
-           g = as.numeric(g),
-           b = as.numeric(b),
-           nir = as.numeric(nir),
-           ndvi = (nir - r) / (nir + r), # NDVI
-           ngrdi = (g - r) / (g + r), # normalized Green-Red Difference Index (Tucker 1979)
-           cig = nir / g - 1, # Gitelson et al. 2003
-           cvi = nir * r / g^2) # Vinciniet et al. 2008)
-  quantiles = seq(0, 1, b = 0.1)
-  statistics = bind_cols(rasterData %>% summarize(zMean = mean(Z, na.rm = TRUE), rMean = mean(r, na.rm = TRUE), gMean = mean(g, na.rm = TRUE), bMean = mean(b, na.rm = TRUE), nirMean = mean(nir, na.rm = TRUE), ndviMean = mean(ndvi, na.rm = TRUE), ngrdiMean = mean(ngrdi, na.rm = TRUE), cigMean = mean(cig, na.rm = TRUE), cviMean = mean(cvi, na.rm = TRUE),
-                                                  zStdDev = sd(Z, na.rm = TRUE), rStdDev = sd(r, na.rm = TRUE), gStdDev = sd(g, na.rm = TRUE), bStdDev = sd(b, na.rm = TRUE), nirStdDev = sd(nir, na.rm = TRUE)),
-                         rasterData %>% reframe(quantile = 100 * quantiles, 
-                                                z = quantile(Z, quantiles, na.rm = TRUE),
-                                                r = quantile(r, quantiles, na.rm = TRUE),
-                                                g = quantile(g, quantiles, na.rm = TRUE),
-                                                b = quantile(b, quantiles, na.rm = TRUE),
-                                                nir = quantile(nir, quantiles, na.rm = TRUE),
-                                                ndvi = quantile(ndvi, quantiles, na.rm = TRUE),
-                                                ngrdi = quantile(ngrdi, quantiles, na.rm = TRUE),
-                                                cig = quantile(cig, quantiles, na.rm = TRUE),
-                                                cvi = quantile(cvi, quantiles, na.rm = TRUE)) %>%
-                           pivot_wider(names_from = "quantile", 
-                                       names_sep = "Q",
-                                       values_from = -quantile)) %>%
-    mutate(polygon = trainingPolygonIndex,
-           species = trainingPolygon$Species)
-  return(statistics)
-}
-
 
 ## assemble training data
 trainingPolygons = vect(file.path(getwd(), "GIS/Trees/segmentation/SpeciesITC.gpkg"), layer = "training polygons + height") # manually designated ground truth polygons
@@ -45,9 +13,9 @@ trainingPolygons = vect(file.path(getwd(), "GIS/Trees/segmentation/SpeciesITC.gp
 
 dataSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 #chm = rast(file.path(dataSourcePath, "CHM", "CHM.vrt"))
-orthoimagery = rast(file.path(dataSourcePath, "orthoimage", "orthoimage.vrt"))
+orthoimagery = rast(file.path(dataSourcePath, "orthoimage v2 16", "orthoimage.vrt"))
 orthoimageCellSize = max(res(orthoimagery))
-gridMetrics = rast(file.path(dataSourcePath, "metrics", "grid metrics 10 m non-normalized.tif"))
+gridMetrics = rast(file.path(dataSourcePath, "metrics", "grid metrics 10 m non-normalized.tif")) # TODO: once recalced, disambiguate intensity naming
 names(gridMetrics)[45] = "intensityPground" # temporary workaround for C# typo
 
 trainingData = list()
@@ -73,18 +41,66 @@ for (trainingPolygonIndex in 1:nrow(trainingPolygons))
   }
   polygonOrthoimage = crop(orthoimagery, trainingPolygon, touches = FALSE) # take only cells with centroids within the training polygon
   polygonGridMetrics = resample(crop(gridMetrics, buffer(trainingPolygon, orthoimageCellSize)), polygonOrthoimage) # defaults to bilinear for rasters whose first layer is numeric
+  
+  polygonOrthoimageCrs = crs(polygonOrthoimage, describe = TRUE)
+  polygonGridMetricsCrs = crs(polygonGridMetrics, describe = TRUE)
+  if ((polygonOrthoimageCrs$authority == polygonGridMetricsCrs$authority) & (polygonOrthoimageCrs$code == polygonGridMetricsCrs$code))
+  {
+    crs(polygonGridMetrics) = crs(polygonOrthoimage) # give grid metrics the orthoimage's vertical CRS
+  }
+  
   trainingStatistics = as_tibble(c(polygonOrthoimage, polygonGridMetrics)) %>% # stack rasters
     mutate(polygon = trainingPolygonIndex,
            classification = trainingPolygon$classification)
   #polygonChm = resample(crop(chm, buffer(trainingPolygon, orthoimageCellSize)), polygonOrthoimage)
-  #trainingStatistics = get_polygon_classification_metrics(polygonChm, polygonOrthoimage)
   trainingData[[trainingPolygonIndex]] = trainingStatistics
 }
 
 trainingData = bind_rows(trainingData) %>%
-  filter(is.na(r) == FALSE, is.na(zMax) == FALSE, is.na(zGroundMean) == FALSE) %>% # drops most NAs from incomplete imagery and unpopulated imagery but retains some NA normalized entropies
+  filter(firstReturns > 0, is.na(n) == FALSE) %>% # drops image pixels with no hits and unpopulated metrics grid cells
+  filter(is.na(zGroundMean) == FALSE) %>% # TODO; for now, drop metrics cells without any ground hits
   select(-areaOfPointBoundingBox, -n, -intensityTotal) %>% # drop nonstructural grid metrics
   mutate(classification = as.factor(classification),
+         intensitySecondReturn = if_else(intensitySecondReturn == 65535, 0, intensitySecondReturn), # replace NAs with 0
+         greenness = green / red, # greenness, NDGR, MGRV @ 98+% correlation, 96% to WBI
+         redBlueRatio = red / blue, # rNormalized, WBI, NDGR 98+% correlation, coloration, bNormalized 95%
+         nirBlueRatio = nir / blue, # bNDVI, BAI 98%, GEMI 94%
+         nirGreenRatio = nir / green, # gNDVI 97%
+         nirRedRatio = nir / red, # SAVI 94%, eviBackup 96%
+         normalizedGreen = green / (nir + red + green),
+         normalizedNir = nir / (nir + red + green),
+         normalizedBlue	= blue / (nir + red + green), # NDVI, gNDVI, TVI 95+%
+         coloration	= (red - blue) / red, # NDGB, WBI, bNormalized 98+% correlation
+         chlorophyllGreen = nir / green - 1, # gNDVI 97%
+         chlorophyllVegetation = nir * as.numeric(red) / green^2, # bNDVI 96%, convert explicitly to avoid integer overflow
+         ndvi = (nir - red) / (nir + red),
+         gndvi = (nir - green) / (nir + green),
+         bndvi = (nir - blue) / (nir + blue),
+         sipi = (nir - blue) / (nir + red),
+         #bai = (blue - nir) / (blue + nir), # bai = -bndvi
+         ndgb = (green - blue) / (green + blue),
+         ndgr = (green - red) / (green + red),
+         wbi = (blue - red) / (blue + red),
+         mgrv = (green^2 - red^2) / (green^2 + red^2),
+         rgbv = (green^2 - red * as.numeric(blue)) / (green^2 + red * as.numeric(blue)), # convert explicitly to avoid integer overflow
+         gli = (2*green - blue - red) / (2*green + blue + red),
+         mexg = 1.62 * green - 0.884 * red - 0.311 * blue,
+         luminosity = 0.299 * red + 0.587 * green + 0.114 * blue, # NTSC, ITU BT.610
+         rNormalized = red / luminosity, # 99% correlation with redBlueRatio, -97% WBI, 94% luminosity
+         gNormalized = green / luminosity,
+         bNormalized = blue / luminosity,
+         nirNormalized = nir / luminosity, # gNDVI 98%
+         luminosity709 = 0.2126 * red + 0.7152 * green + 0.0722 * blue, # ITU BT.709
+         gemi = (2 * (nir^2 - red^2) + 1.5 * nir + 0.5 * red) / (nir + red + 0.5),
+         tvi = sqrt(ndvi + 0.5), # NDVI, MTVI2 99%
+         evi = 2.5 * (nir - red) / (nir + 6 * red - 7.5 * blue + 1), # coefficients from MODIS Vegetation Index User's Guide
+         triangularVegIndex = 0.5 * (120 * (nir - green) - 200 * (red - green)), # RGBV 93%
+         mtvi2 = 1.5 * (2.5 * (nir - green) - 2.5 * (red - green)) / sqrt((2 * nir + 1)^2 - 6 * nir - 5 * sqrt(red) - 0.5),
+         eviBackup = 2.5 * (nir - red) / (nir + 2.4 * red + 1),
+         savi = 1.5 * (nir - red) / (nir + red + 0.5), # NDVI 100%, eviBackup, oSAVI 99% correlation
+         msavi = (2 * nir + 1 - sqrt(2 * (2 * nir + 1)^2 - 8 * (nir - red))) / 2, # mSAVI 94%
+         osavi = 1.16 * (nir - red) / (nir + red + 0.16),
+         vari = (green - red) / (green + red - blue), # NaNs
          zNormalizedEntropy = replace_na(zNormalizedEntropy, 0), # might be better to replace NAs with 1?
          zMaxNormalized = zMax - zGroundMean,
          zMeanNormalized = zMean - zGroundMean,
@@ -109,27 +125,43 @@ trainingData = bind_rows(trainingData) %>%
          zQ95normalized = zQ95 - zGroundMean) %>%
   relocate(polygon, classification)
 
+sum(colSums(is.na(trainingData))) # random forest requires complete cases
+cor(as.matrix(trainingData %>% select(ndgr, ndvi, gndvi, bndvi, intensity, intensitySecondReturn)))
+#cor(as.matrix(trainingData %>% select(-polygon, -classification)))[, "ndvi"]
+
 filterVarImp(x = trainingData %>% select(-classification, -polygon), y = trainingData$classification) %>%
   mutate(max = pmax(bare, conifer, hardwood, shadow), mean = 0.25 * (bare + conifer + hardwood + shadow)) %>%
   #mutate(mean = 0.333 * (bare + conifer + hardwood)) %>%
-  arrange(desc(max)) %>%
+  arrange(desc(max), desc(mean)) %>%
   mutate(var = row_number()) %>%
   relocate(var)
-colSums(is.na(trainingData)) # random forest requires complete cases
 
 #crossValidationCluster = makePSOCKcluster(10) # ~14 GB DDR in R @ one core per cross validation repeat
 #registerDoParallel(crossValidationCluster)
 
 # drop non-normalized heights with low importance relative to normalized ones
 # with shadow class
-trainingData %<>% select(-zQ05, -zQ10, -zQ15, -zQ20, -zQ25, -zQ30, -zQ35, -zQ40, -zQ45, -zQ50, -zQ55, -zQ60, -zQ65, -zQ70, -zQ75, -zQ80, -zQ85, -zQ90, -zQ95, -zKurtosis, -zMax, -zMean, -zPcumulative10) # mean or max variable importance < ~0.68: κ ~0.9997 with 56 predictor variables
-trainingData %<>% select(-intensityMax, -intensitySkew, -pCumulativeZQ10, -pCumulativeZQ30, -pCumulativeZQ50, -pCumulativeZQ70, -pCumulativeZQ90, -pFifthReturn, -zGroundMean, -zPcumulative20, -zPcumulative30, -zNormalizedEntropy) # 44 predictor variables: κ ~0.9999
-trainingData %<>% select(-intensityKurtosis, -intensityStdDev, -pFourthReturn, -pZaboveZmean, -zPcumulative40, -zPcumulative50, -zPcumulative60, -zPcumulative70, -zPcumulative80, -zPcumulative90, -zQ05normalized, -zSkew) # 32 predictor variables (all with max variable importance < 0.90 dropped), no shadow κ = 1
+#trainingData %<>% select(-zQ05, -zQ10, -zQ15, -zQ20, -zQ25, -zQ30, -zQ35, -zQ40, -zQ45, -zQ50, -zQ55, -zQ60, -zQ65, -zQ70, -zQ75, -zQ80, -zQ85, -zQ90, -zQ95, -zKurtosis, -zMax, -zMean, -zPcumulative10) # mean or max variable importance < ~0.68: κ ~0.9997 with 56 predictor variables
+#trainingData %<>% select(-intensityMax, -intensitySkew, -pCumulativeZQ10, -pCumulativeZQ30, -pCumulativeZQ50, -pCumulativeZQ70, -pCumulativeZQ90, -pFifthReturn, -zGroundMean, -zPcumulative20, -zPcumulative30, -zNormalizedEntropy) # 44 predictor variables: κ ~0.9999
+#trainingData %<>% select(-intensityKurtosis, -intensityStdDev, -pFourthReturn, -pZaboveZmean, -zPcumulative40, -zPcumulative50, -zPcumulative60, -zPcumulative70, -zPcumulative80, -zPcumulative90, -zQ05normalized, -zSkew) # 32 predictor variables (all with max variable importance < 0.90 dropped), no shadow κ = 1
 #trainingData %<>% select(-intensityMean, -pFirstReturn, -pSecondReturn, -pThirdReturn, -zQ10normalized, -zQ75normalized, -zQ80normalized, -zQ85normalized, -zQ90normalized, -zQ95normalized, -zMaxNormalized, -zStdDev) # 20 variables: κ ~0.9998 but degraded predictive performance on actual landscape
 #trainingData %<>% select(-zMeanNormalized, -zQ15normalized, -zQ25normalized, -zQ35normalized, -zQ45normalized, -zQ50normalized, -zQ55normalized, -zQ60normalized, -zQ65normalized, -zQ70normalized) # 10 variables: κ ~0.9993 but also poor predictive performance
-#trainingData %<>% select(-zQ20normalized, -zQ30normalized, -zQ40normalized) # 7 variables (RDB+NIR, intensityPground, pGround, pZaboveThreshold): κ ~0.986, importance r = 100, g = 41, nir = 39, pGround = 5.8, intensityPground = 2.9, b = 1.8, pZaboveThreshold = 0.0
-#trainingData %<>% select(-pZaboveThreshold) # κ ~0.973, r = 100, nir = 34, g = 20, pGround = 6.8, intensityPground = 6.0, b = 0.0
+#trainingData %<>% select(-zQ20normalized, -zQ30normalized, -zQ40normalized) # 7 variables (RDB+NIR, intensityPground, pGround, pZaboveThreshold): κ ~0.986, importance red = 100, green = 41, nir = 39, pGround = 5.8, intensityPground = 2.9, blue = 1.8, pZaboveThreshold = 0.0
+#trainingData %<>% select(-pZaboveThreshold) # κ ~0.973, red = 100, nir = 34, green = 20, pGround = 6.8, intensityPground = 6.0, blue = 0.0
 #trainingData %<>% select(-intensityPground, -pGround) # reduce to RGB+NIR control: κ ~0.8913
+#trainingData %<>% select(classification, polygon, rNormalized, greenness, mgrv, ndgr, redBlueRatio, coloration, wbi, bNormalized, ndgb, savi, eviBackup, osavi, nirRedRatio, ndvi, tvi, mtvi2, msavi, normalizedNir, rgbv, triangularVegIndex, nirNormalized, gemi, mexg, nirGreenRatio, chlorophyllGreen, gndvi, normalizedBlue, vari, nirBlueRatio, bndvi, bai, normalizedGreen, gli, evi, chlorophyllVegetation) # 35 normalized vegetation indices: κ ~
+#trainingData %<>% select(classification, polygon, luminosity, rNormalized, greenness, mgrv, ndgr, redBlueRatio, coloration, wbi, bNormalized, ndgb, savi, eviBackup, osavi, nirRedRatio, ndvi, tvi, mtvi2, msavi, normalizedNir, rgbv, triangularVegIndex, nirNormalized) # luminosity + 20 normalized vegetation indices: not run due to slow fitting
+#trainingData %<>% select(classification, polygon, luminosity, rNormalized, greenness, mgrv, ndgr, redBlueRatio, coloration, wbi, bNormalized) # luminosity + 10 normalized vegetation indices: κ ~ 
+#predictorVariables = c("classification", "polygon", "luminosity", "rNormalized", "greenness", "mgrv", "ndgr", "redBlueRatio") # luminosity + 5 normalized vegetation indices: κ ~0.872, 55 minutes to fit
+#predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "msavi", "rgbv", "gemi", "mexg", "normalizedGreen", "gli", "evi") # κ ~0.905, 47 minutes to fit
+#predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "ndgb", "ndgr", "wbi") # κ ~0.886, 58 minutes to fit
+#predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "ndgb", "ndgr") # κ ~0.886, 60 minutes to fit
+predictorVariables = c("classification", "ndgr", "ndvi", "gndvi", "bndvi", "intensity", "intensitySecondReturn") # κ ~0.898, 14 minutes to fit (8 without RGB+NIR no data)
+#predictorVariables = c("classification", "ndgr", "ndvi", "bndvi", "intensity", "intensitySecondReturn") # κ ~0.896, 13 minutes to fit
+#predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "intensity", "intensitySecondReturn") # κ ~0.893, 7 minutes to fit
+#predictorVariables = c("classification", "ndvi", "gndvi", "bndvi") # κ ~0.884, 42 minutes to fit
+#predictorVariables = c("classification", "rNormalized", "gNormalized", "bNormalized", "nirNormalized") # κ ~0.885, 58 minutes to fit
+
 #trainingData %<>% select(-intensityMax, -pCumulativeZQ10, -pCumulativeZQ30, -pCumulativeZQ50, -pCumulativeZQ90, -zGroundMean, -zNormalizedEntropy, -zPcumulative20) # additional drops: increase κ from ~0.9997 to ~0.9999
 # without shadow class
 #trainingData %<>% select(-nir, -pCumulativeZQ10, -zQ05, -zQ10, -zQ15, -zQ20, -zQ25, -zQ30, -zQ35, -zQ40, -zQ45, -zQ50, -zQ55, -zQ60, -zQ65, -zQ70, -zQ75, -zQ80, -zQ85, -zQ90, -zQ95, -zGroundMean, -zKurtosis, -zMax, -zMean, -zNormalizedEntropy, -zPcumulative10)
@@ -137,6 +169,21 @@ trainingData %<>% select(-intensityKurtosis, -intensityStdDev, -pFourthReturn, -
 repeatedCrossValidation = trainControl(method = "repeatedcv", number = 2, repeats = 50, verboseIter = TRUE)
 #trainingDataSubset = sample_n(trainingData, 10000)
 #trainingDataSubset2 = trainingDataSubset %>% select(-zNormalizedEntropy, -pCumulativeZQ90, -pCumulativeZQ50, -pFifthReturn, -intensitySkew, -intensityStdDev, -pCumulativeZQ30, -pCumulativeZQ70, -zPcumulative10, -intensityMax, -zKurtosis, -pCumulativeZQ10, -intensityTotal)
+
+# random forest
+# cells   method      cross validation   node sizes   cores   fit time    accuracy    κ       grid metrics
+# 103k    ranger      2x50               5            1       27 m        0.999       0.999   from normalized point clouds
+# 104k    ranger      2x50               5            1       41 m        0.999       0.999   from non-normalized clouds with heights relative to mean ground elevation added
+# 104k    ranger      2x50               5            1       37 m        0.999       0.999   ibid with low importance non-normalized z statistics dropped
+fitStart = Sys.time()
+randomForestFit = train(classification ~ ., data = trainingData %>% select(predictorVariables), method = "ranger", trControl = repeatedCrossValidation, # importance = "impurity_corrected", 
+                        tuneGrid = expand.grid(mtry = floor(sqrt(length(predictorVariables) - 1)),
+                                               splitrule = 'gini',
+                                               min.node.size = c(8, 10, 12)))
+randomForestFitTime = Sys.time() - fitStart # ~25 minutes with shadow, ~15 minutes @ RGB+NIR+16 grid metrics, ~14 minutes @ RGB+NIR+6 grid metrics
+#varImp(randomForestFit)
+#save(randomForestFit, file = file.path(getwd(), "trees/segmentation/classificationRandomForestFit NDGR+rgbNDVI+intensity12.Rdata"))
+load(file.path(getwd(), "trees/segmentation/classificationRandomForestFit 20 m grid metrics.Rdata"))
 
 # linear SVM
 # κmax = 0.905 with polygon statistics and 10x10 cross validation
@@ -166,21 +213,6 @@ svmFitTimeRadial = Sys.time() - fitStart # κmax = 0.935 with polygon statistics
 #save(svmFitLinear, svmFitRadial, file = file.path(getwd(), "trees/segmentation/classificationSvmFits 20 m grid metrics.Rdata"))
 #load(file.path(getwd(), "trees/segmentation/classificationSvmFits 20 m grid metrics.Rdata"))
 #stopCluster(crossValidationCluster)
-
-# random forest
-# cells   method      cross validation   node sizes   cores   fit time    accuracy    κ       grid metrics
-# 103k    ranger      2x50               5            1       27 m        0.999       0.999   from normalized point clouds
-# 104k    ranger      2x50               5            1       41 m        0.999       0.999   from non-normalized clouds with heights relative to mean ground elevation added
-# 104k    ranger      2x50               5            1       37 m        0.999       0.999   ibid with low importance non-normalized z statistics dropped
-fitStart = Sys.time()
-randomForestFit = train(classification ~ ., data = trainingData %>% select(-polygon), method = "ranger", trControl = repeatedCrossValidation, # importance = "impurity_corrected", 
-                        tuneGrid = expand.grid(mtry = floor(sqrt(dim(trainingData)[2] - 1)),
-                                               splitrule = 'gini',
-                                               min.node.size = c(2:6)))
-randomForestFitTime = Sys.time() - fitStart # ~25 minutes with shadow, ~15 minutes @ 20 variables, ~14 minutes @ 10 variables
-#varImp(randomForestFit)
-#save(randomForestFit, file = file.path(getwd(), "trees/segmentation/classificationRandomForestFit 10 m non-normalized grid metrics 44 var.Rdata"))
-load(file.path(getwd(), "trees/segmentation/classificationRandomForestFit 20 m grid metrics.Rdata"))
 
 # gradient boosting
 # cells   method      cross validation   nrounds         cores   fit time    accuracy    κ       cost scaling
@@ -222,7 +254,7 @@ for (tileFileName in orthoimageTiles)
   tileStatistics = c(tileOrthoimage, tileGridMetrics)
   tileStatistics$cellID = 1:(nrow(tileStatistics) * ncol(tileStatistics))
   tileStatisticsTibble = as_tibble(tileStatistics) %>% # ~15 s
-    filter(is.na(r) == FALSE, is.na(g) == FALSE, is.na(n) == FALSE, is.na(zNormalizedEntropy) == FALSE) # ranger prediction requires complete cases
+    filter(is.na(red) == FALSE, is.na(green) == FALSE, is.na(n) == FALSE, is.na(zNormalizedEntropy) == FALSE) # ranger prediction requires complete cases
 
   predictStart = Sys.time()
   tileClassifications = predict(randomForestFit$finalModel, data = tileStatisticsTibble) # predict(randomForestFit, newdata = ...) fails on internal matrix datatype error
@@ -240,18 +272,37 @@ for (tileFileName in orthoimageTiles)
 ## one time setup
 # Since gdalbuildvrt doesn't flow metadata (https://github.com/OSGeo/gdal/issues/3627) VRTs need manual editing
 # after creation to add <VRTRasterBand/Description> elements naming raster bands. This is needed to set CHM band
-# name to Z and orthoimage names to r, g, b, and nir.
+# name to Z and orthoimage names to red, green, blue, nir, intensity, intensitySecondReturn, firstReturns, and 
+# secondReturns.
 # create .vrt for CHM after chmJob.R has processed all tiles
 chmSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/CHM"
 chmFilePaths = file.path(chmSourcePath, list.files(orthoimageSourcePath, "\\.tif$"))
 vrt(chmFilePaths, file.path(chmSourcePath, "CHM.vrt"), overwrite = TRUE)
 
 # create .vrt for orthoimages after orthoImageJob.R has processed all tiles
-orthoimageSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/orthoimage"
+orthoimageSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/orthoimage v2"
 orthoimageFilePaths = file.path(orthoimageSourcePath, list.files(orthoimageSourcePath, "\\.tif$"))
 vrt(orthoimageFilePaths, file.path(orthoimageSourcePath, "orthoimage.vrt"), overwrite = TRUE)
 
 # create .vrt for species classifications after speciesJob.R has processed all tiles
-speciesSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/classification 10 m non-normalized 32 var no shadow"
+speciesSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/classification 10 m non-normalized 44 var"
 speciesFilePaths = file.path(speciesSourcePath, list.files(speciesSourcePath, "\\.tif$"))
 vrt(speciesFilePaths, file.path(speciesSourcePath, "classification.vrt"), overwrite = TRUE)
+
+# recode 32 bit signed orthoimages as 16 bit unsigned
+orthoimageDestinationPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/orthoimage v2 16"
+for (orthoimageSourcePath in orthoimageFilePaths)
+{
+  tileName = basename(orthoimageSourcePath)
+  orthoimageDestinationFilePath = file.path(orthoimageDestinationPath, tileName)
+  if (file.exists(orthoimageDestinationFilePath) == FALSE)
+  {
+    orthoimage = rast(orthoimageSourcePath)
+    writeRaster(orthoimage, orthoimageDestinationFilePath, datatype = "INT2U", gdal = c("COMPRESS=DEFLATE", "PREDICTOR=2", "ZLEVEL=9"), overwrite = TRUE)
+  }
+}
+
+
+## tile checking
+orthoimageTile = rast("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/orthoimage v2 16/s03480w06540.tif")
+as_tibble(orthoimageTile) %>% filter(firstReturns > 0, is.na(green))
