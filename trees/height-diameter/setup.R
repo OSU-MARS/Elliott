@@ -35,6 +35,7 @@ htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
                       includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
+plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
 
 append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
 {
@@ -1167,33 +1168,33 @@ plot_auc_bank = function(aucs, fillLabel = "median\nAUC", omitMab = FALSE, xLimi
   {
     aucBank = ggplot(aucs) +
         geom_raster(aes(x = species, y = name, fill = aucMae)) +
-        labs(title = "a) MAE", x = NULL, y = NULL, fill = fillLabel) +
+        labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, fill = fillLabel) +
         scale_y_discrete(limits = rev)
-    titles = c("b) RMSE", "c) AIC", "d) model efficiency")
+    letterOffset = 1
   } else {
     aucBank = ggplot(aucs) +
         geom_raster(aes(x = species, y = name, fill = aucMab)) +
-        labs(title = "a) MAB", x = NULL, y = NULL, fill = fillLabel) +
+        labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, fill = fillLabel) +
         scale_y_discrete(limits = rev) +
       ggplot(aucs) +
         geom_raster(aes(x = species, y = name, fill = aucMae)) +
-        labs(title = "b) MAE", x = NULL, y = NULL, fill = fillLabel) +
+        labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, fill = fillLabel) +
         scale_y_discrete(labels = NULL, limits = rev)
-    titles = c("c) RMSE", "d) AIC", "e) model efficiency")
+    letterOffset = 2
   }
 
   aucBank = aucBank +
     ggplot(aucs) +
       geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-      labs(title = titles[1], x = NULL, y = NULL, fill = fillLabel) +
+      labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, fill = fillLabel) +
       scale_y_discrete(labels = NULL, limits = rev) +
     ggplot(aucs) +
       geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-      labs(title = titles[2], x = NULL, y = NULL, fill = fillLabel) +
+      labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"AIC"), x = NULL, y = NULL, fill = fillLabel) +
       scale_y_discrete(labels = NULL, limits = rev) +
     ggplot(aucs) +
       geom_raster(aes(x = species, y = name, fill = aucNse)) +
-      labs(title = titles[3], x = NULL, y = NULL, fill = fillLabel) +
+      labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, fill = fillLabel) +
       scale_y_discrete(labels = NULL, limits = rev) +
     plot_annotation(theme = theme(plot.margin =  margin())) +
     plot_layout(nrow = 1, guides = "collect") &
@@ -1205,7 +1206,7 @@ plot_auc_bank = function(aucs, fillLabel = "median\nAUC", omitMab = FALSE, xLimi
   return(aucBank)
 }
 
-plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)"), speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE)
+plot_exploratory = function(liveUnbrokenTrees, plotLetters = plotLetters, speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE)
 {
   dbhQuantiles = liveUnbrokenTrees %>% mutate(diameterClass = 2.5 * (ceiling(DBH / 2.5) - 0.5)) %>% group_by(diameterClass) %>%
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), height = quantile(TotalHt, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(TotalHt, na.rm = TRUE), .groups = "drop") %>%
@@ -1238,9 +1239,8 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)")
     #geom_path(aes(x = diameterClass, y = median, color = "median height", linetype = "median height"), dbhQuantiles %>% filter(count > 10), na.rm = TRUE) +
     geom_path(aes(x = mean, y = heightClass, color = "mean DBH", linetype = "mean DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
     #geom_path(aes(x = median, y = heightClass, color = "median DBH", linetype = "median DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
-    annotate("text", x = 0, y = 81.5, label = paste(plotLetters[1], speciesLabel), hjust = 0, size = 3.5) +
     coord_cartesian(xlim = c(0, 250), ylim = c(0, 80)) +
-    labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL) +
+    labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(bold(.(plotLetters[1]))~.(speciesLabel))) +
     guides(color = guide_legend(order = 1), fill = guide_colorbar(order = 2), linetype = guide_legend(order = 1)) +
     scale_color_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("green2", "green2", "burlywood2", "burlywood2")) +
     scale_fill_viridis_c(breaks = c(1, 3, 10, 33, 100, 330), limits = c(1, maxTreesMeasured), trans = "log10") +
@@ -1267,12 +1267,11 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)")
       geom_path(aes(x = diameterClass, y = 100 * (q80 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       #geom_path(aes(x = diameterClass, y = 100 * (q90 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       geom_path(aes(x = diameterClass, y = 100 * (max - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      annotate("text", x = 0, y = 154, label = paste(plotLetters[2], speciesLabel), hjust = 0, size = 3.5) +
       coord_cartesian(xlim = c(0, 196), ylim = c(-50, 150)) +
       scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
       scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
       scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-      labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL) +
+      labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[2]))~.(speciesLabel))) +
       theme(legend.position = "none") +
     ggplot(heightQuantiles) +
       geom_ribbon(aes(x = heightClass, ymin = 100 * (q025 - mean) / mean^dbhPower, ymax = 100 * (q975 - mean) / mean^dbhPower, alpha = "95% probability"), fill = "burlywood4") +
@@ -1289,13 +1288,12 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = c("a)", "b)", "c)")
       geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      annotate("text", x = 0, y = 154, label = paste(plotLetters[3], speciesLabel), hjust = 0, size = 3.5) +
       coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
       guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
       scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
       scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
       scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-      labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL) +
+      labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[3]))~.(speciesLabel))) +
       theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition) +
     plot_layout(nrow = 1, ncol = 3, widths = c(260, 200, 200))
   return(exploratoryPlots)

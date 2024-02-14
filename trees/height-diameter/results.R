@@ -21,7 +21,7 @@ heightDiameterCoefficients = bind_rows(psmeCoefficients, alruCoefficients, tsheC
 #             filter(fitSet == "primary", is.na(fixedWeight), fitting != "gam") %>%
 #             select(-fitSet, -fixedWeight, -a0, -starts_with("a1r"), -starts_with("a3r"), -starts_with("Har"), -X, -starts_with("Xr"), -starts_with("s(")) %>%
 #             relocate(responseVariable, species, name, fitting, significant),
-#           "trees/height-diameter/data/height-diameter model coefficients.xlsx") # slow on full results (74+ MB .xlsx), suppress GAM coefficients since 1) they're not meaningful outside of mgcv and 2) doing so reduces the primary fit set's .xlsx from 20+ MB to 4.6 MB, trim empty GAM and nlme() columns
+#           "trees/height-diameter/data/Elliott height-diameter model coefficients.xlsx") # slow on full results (74+ MB .xlsx), suppress GAM coefficients since 1) they're not meaningful outside of mgcv and 2) doing so reduces the primary fit set's .xlsx from 20+ MB to 4.6 MB, trim empty GAM and nlme() columns
 
 heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
                                   umcaResults, thplResults, otherResults) %>%
@@ -419,11 +419,10 @@ heightDiameterResults %>% filter(is.na(nse)) %>% select(fitSet, responseVariable
 
 ## Figure 1: overall dataset summary
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel = "conifer", maxTreesMeasured = 170, omitLegends = TRUE, omitXlabels = TRUE) /
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxTreesMeasured = 170, plotLetters = c("d)", "e)", "f)")) +
+plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxTreesMeasured = 170, plotLetters = plotLetters[3:5]) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
 #ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)
-#plot_exploratory(trees2016) + plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-#ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.png", height = 10, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.tiff", height = 13, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 2: height-diameter AUCs
@@ -431,6 +430,7 @@ heightFromDiameterModelComparison = heightDiameterModelRanking %>% filter(respon
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "height"))$name)))
 plot_auc_bank(heightFromDiameterModelComparison)
 #ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.png", height = 16, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.tiff", height = 16, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 3: diameter AUCs
@@ -438,6 +438,7 @@ diameterFromHeightModelComparison = heightDiameterModelRanking %>% filter(respon
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "DBH"))$name)))
 plot_auc_bank(diameterFromHeightModelComparison)
 #ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.png", height = 17.5, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.tiff", height = 17.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 4: fitting success, model significance, and predictor variable use
@@ -449,66 +450,66 @@ modelFitStats = primaryResults %>% group_by(responseVariable, species, name) %>%
 ggplot(modelFitStats %>% filter(responseVariable == "height")) +
   geom_col(aes(x = fitPct, y = species, fill = species), width = 0.6) + 
   coord_cartesian(xlim = c(0, 100)) +
-  labs(x = NULL, y = NULL, fill = NULL, title = "a) height fits") +
+  labs(x = NULL, y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[1]))~"height fits")) +
   scale_y_discrete(limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableStats %>% filter(responseVariable == "height")) +
   geom_col(aes(x = significantPct, y = species, fill = species), width = 0.6) + 
   coord_cartesian(xlim = c(0, 100)) +
-  labs(x = NULL, y = NULL, fill = NULL, title = "b) height forms") +
+  labs(x = NULL, y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[2]))~"height forms")) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(primaryResults %>% filter(responseVariable == "height", significant)) +
   geom_violin(aes(x = meanAbsolutePercentPlantationEffect, y = species, color = species, group = species), draw_quantiles = c(0.25, 0.5, 0.75), na.rm = TRUE, width = 1.2) +
   coord_cartesian(xlim = c(0, 125)) +
-  labs(x = NULL, y = NULL, color = NULL, title = "c) height") +
+  labs(x = NULL, y = NULL, color = NULL, title = bquote(bold(.(plotLetters[3]))~"height")) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "height", hasBasalArea)) +
   geom_count(aes(x = nBasalAreaSignificant, y = species, color = species)) + 
   coord_cartesian(xlim = c(-0.2, 2.2)) +
-  labs(x = NULL, y = NULL, fill = NULL, title = "d) BA+L") +
+  labs(x = NULL, y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[4]))~"BA+L")) +
   scale_x_continuous(breaks = seq(0, 2), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "height", hasPhysio)) +
   geom_count(aes(x = nPhysioSignificant, y = species, color = species)) + 
   coord_cartesian(xlim = c(-0.3, 5.3)) +
-  labs(x = NULL, y = NULL, fill = NULL, title = "e) height physiographic") +
+  labs(x = NULL, y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[5]))~"height physiographic")) +
   scale_x_continuous(breaks = seq(0, 5), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "height", hasRelDbh)) +
   geom_count(aes(x = significantRelDbh, y = species, color = species)) + 
-  labs(x = NULL, y = NULL, fill = NULL, title = "f) RelDbh") +
+  labs(x = NULL, y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[6]))~"RelDbh")) +
   coord_cartesian(xlim = c(-0.3, 1.3)) +
   scale_x_continuous(breaks = seq(0, 1), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(modelFitStats %>% filter(responseVariable == "DBH")) +
   geom_col(aes(x = fitPct, y = species, fill = species), width = 0.6) + 
   coord_cartesian(xlim = c(0, 100)) +
-  labs(x = "model forms\nfit, %", y = NULL, fill = NULL, title = "g) DBH fits") +
+  labs(x = "model forms\nfit, %", y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[7]))~"DBH fits")) +
   scale_y_discrete(limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableStats %>% filter(responseVariable == "DBH")) +
   geom_col(aes(x = significantPct, y = species, fill = species), width = 0.6) + 
   coord_cartesian(xlim = c(0, 100)) +
-  labs(x = "significant\nfits, %", y = NULL, fill = NULL, title = "h) DBH forms") +
+  labs(x = "significant\nfits, %", y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[8]))~"DBH forms")) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(primaryResults %>% filter(responseVariable == "DBH", significant)) +
   geom_violin(aes(x = meanAbsolutePercentPlantationEffect, y = species, color = species, group = species), draw_quantiles = c(0.25, 0.5, 0.75), na.rm = TRUE, width = 1.2) +
   coord_cartesian(xlim = c(0, 125)) +
-  labs(x = "mean absolute\nplantation effect, %", y = NULL, color = NULL, title = "i) DBH") +
+  labs(x = "mean absolute\nplantation effect, %", y = NULL, color = NULL, title = bquote(bold(.(plotLetters[9]))~"DBH")) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasBasalArea)) +
   geom_count(aes(x = nBasalAreaSignificant, y = species, color = species)) + 
   coord_cartesian(xlim = c(-0.2, 2.2)) +
-  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = "j) ABA+T") +
+  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[10]))~"ABA+T")) +
   scale_x_continuous(breaks = seq(0, 2), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasPhysio)) +
   geom_count(aes(x = nPhysioSignificant, y = species, color = species)) + 
   coord_cartesian(xlim = c(-0.3, 5.3)) +
-  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = "k) DBH physiographic") +
+  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[11]))~"DBH physiographic")) +
   scale_x_continuous(breaks = seq(0, 5), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasRelHt)) +
   geom_count(aes(x = significantRelHt, y = species, color = species)) + 
-  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = "l) RelHt") +
+  labs(x = "predictors\nretained", y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[12]))~"RelHt")) +
   coord_cartesian(xlim = c(-0.3, 1.3)) +
   scale_x_continuous(breaks = c(0, 1), minor_breaks = NULL) +
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
@@ -519,6 +520,7 @@ plot_layout(nrow = 2, ncol = 6, widths = c(1.7, 1.7, 2.2, 1.7, 2.7, 1.2), guides
   scale_size_area(max_size = 5.0) &
   theme(legend.position = "none")
 #ggsave("trees/height-diameter/figures/Figure 04 predictor variables.png", height = 10, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 04 predictor variables.tiff", height = 10, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 5: model efficiency
@@ -533,12 +535,12 @@ smallTreeEfficiency = left_join(trees2016 %>% filter(isLiveUnbroken, is.na(Total
 ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
-  labs(x = NULL, y = "fraction of fits, %", fill = NULL, title = "a) base height prediction") +
+  labs(x = NULL, y = "fraction of fits, %", fill = NULL, title = bquote(bold(.(plotLetters[1]))~"base height prediction")) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
-  labs(x = NULL, y = NULL, fill = NULL, title = "b) base DBH prediction") +
+  labs(x = NULL, y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[2]))~"base DBH prediction")) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 #ggplot(smallTreeEfficiency) + 
 #  #geom_violin(aes(x = pctSmall, y = nse, color = species, group = species), draw_quantiles = c(0.25, 0.50, 0.75), fill = alpha("white", 0.5), position = position_identity(), width = 2) + # too stretched to be useful due to tail of negative model efficiencies
@@ -551,12 +553,12 @@ ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm)) +
 ggplot(primaryResults %>% filter(responseVariable == "height", isBaseForm == FALSE)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
-  labs(x = "model efficiency", y = "fraction of fits, %", fill = NULL, title = "c) generalized height prediction") +
+  labs(x = "model efficiency", y = "fraction of fits, %", fill = NULL, title = bquote(bold(.(plotLetters[3]))~"generalized height prediction")) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 ggplot(primaryResults %>% filter(responseVariable == "DBH", isBaseForm == FALSE)) +
   geom_histogram(aes(x = if_else(nse > -0.05, nse, NA_real_), y = 100 * after_stat(count / sum(count)), fill = species), binwidth = 0.025, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1), ylim = c(0, 24)) +
-  labs(x = "model efficiency", y = NULL, fill = NULL, title = "d) generalized DBH prediction") +
+  labs(x = "model efficiency", y = NULL, fill = NULL, title = bquote(bold(.(plotLetters[4]))~"generalized DBH prediction")) +
   scale_x_continuous(breaks = seq(0, 1, by = 0.2)) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 #plot_layout(nrow = 3, ncol = 3, design = "123\n453", guides = "collect") &
@@ -568,7 +570,8 @@ plot_layout(nrow = 2, ncol = 2, guides = "collect") &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(16, 18, 3), drop = FALSE) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.6, "line"), legend.position = "bottom", legend.text = element_text(margin = margin(l = -2.5, r = 6.5)))
-#ggsave("trees/height-diameter/figures/Figure 05 model efficiency - no small stems.png", height = 10, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 05 model efficiency.png", height = 10, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 05 model efficiency.tiff", height = 10, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 6: Douglas-fir and red alder preferred models
@@ -583,10 +586,9 @@ ggplot() +
   geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterPreferred$gam), color = "REML GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = predict(psmeHeightFromDiameterPreferred$sibbesen), color = "Sibbesen", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "a) Douglas-fir height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = NULL, y = "height, m", color = NULL, linetype = NULL) +
+  labs(x = NULL, y = "height, m", color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[1]))~"Douglas-fir height")) +
   scale_color_manual(breaks = c("REML GAM", "Sibbesen", "Sharma-Parton BA+L RelDbh physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey60")) +
   theme(legend.key = element_rect(fill = alpha("white", 0.5)), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
@@ -595,10 +597,9 @@ ggplot() +
   geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$gam), y = psme2016$TotalHt, color = "REML GAM", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = predict(psmeDiameterFromHeightPreferred$ruark), y = psme2016$TotalHt, color = "Ruark", group = psme2016$isPlantation, linetype = psme2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "b) Douglas-fir DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
+  labs(x = NULL, y = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[2]))~"Douglas-fir DBH")) +
   scale_color_manual(breaks = c("REML GAM", "Ruark", "REML GAM ABA+T physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
@@ -607,10 +608,9 @@ ggplot() +
   geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterPreferred$gam), color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = alru2016$DBH, y = predict(alruHeightFromDiameterPreferred$ratkowsky), color = "Ratkowsky", group = alru2016$isPlantation, linetype = alru2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "c) red alder height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = "height, m", color = NULL, linetype = NULL) +
+  labs(x = "DBH, cm", y = "height, m", color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[3]))~"red alder height")) +
   scale_color_manual(breaks = c("REML GAM", "Ratkowsky", "Sharma-Parton BA+L physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
@@ -619,10 +619,9 @@ ggplot() +
   geom_line(aes(x = predict(alruDiameterFromHeightPreferred$ruark), y = alru2016$TotalHt, color = "Ruark", group = alru2016$isPlantation, linetype = alru2016$isPlantation), orientation = "y") +
   geom_line(aes(x = predict(alruDiameterFromHeightPreferred$gam), y = alru2016$TotalHt, color = "REML GAM", group = alru2016$isPlantation, linetype = alru2016$isPlantation), orientation = "y") +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "d) red alder DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = NULL, color = NULL, linetype = NULL) +
+  labs(x = "DBH, cm", y = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[4]))~"red alder DBH")) +
   scale_color_manual(breaks = c("REML GAM", "Ruark", "REML GAM ABA+T RelHt physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 get_preferred_model_linetype_legend() +
@@ -631,6 +630,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.tiff", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 7: western hemlock and bigleaf maple preferred models
@@ -644,10 +644,9 @@ ggplot() +
   geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterPreferred$gam), color = "REML GAM", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = tshe2016$DBH, y = predict(tsheHeightFromDiameterPreferred$sibbesen), color = "Prodan", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "a) western hemlock height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = NULL, y = "height, m", color = NULL, linetype = NULL) +
+  labs(x = NULL, y = "height, m", color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[1]))~"western hemlock height")) +
   scale_color_manual(breaks = c("REML GAM", "Prodan", "REML GAM BA+L RelDbh", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
@@ -656,10 +655,9 @@ ggplot() +
   geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$linear), y = tshe2016$TotalHt, color = "linear", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = predict(tsheDiameterFromHeightPreferred$gam), y = tshe2016$TotalHt, color = "REML GAM", group = tshe2016$isPlantation, linetype = tshe2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "b) western hemlock DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
+  labs(x = NULL, y = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[2]))~"western hemlock DBH")) +
   scale_color_manual(breaks = c("REML GAM", "linear", "REML GAM ABA+T physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
@@ -668,10 +666,9 @@ ggplot() +
   geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$michaelisMenten), color = "Michaelis-Menten", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = acma2016$DBH, y = predict(acmaHeightFromDiameterPreferred$richardsW), color = "unified Richards", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "c) bigleaf maple height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = "height, m", color = NULL) +
+  labs(x = "DBH, cm", y = "height, m", color = NULL, title = bquote(bold(.(plotLetters[3]))~"bigleaf maple height")) +
   scale_color_manual(breaks = c("Michaelis-Menten", "unified Richards", "Sharma-Parton", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
@@ -680,10 +677,9 @@ ggplot() +
   geom_line(aes(x = predict(acmaDiameterFromHeightPreferred$gam), y = acma2016$TotalHt, color = "REML GAM", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = predict(acmaDiameterFromHeightPreferred$ruark), y = acma2016$TotalHt, color = "Ruark", group = acma2016$isPlantation, linetype = acma2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "d) bigleaf maple DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = NULL, color = NULL) +
+  labs(x = "DBH, cm", y = NULL, color = NULL, title = bquote(bold(.(plotLetters[4]))~"bigleaf maple DBH")) +
   scale_color_manual(breaks = c("REML GAM", "Ruark", "REML GAM ABA+T RelHt physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 get_preferred_model_linetype_legend() +
@@ -692,6 +688,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.tiff", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 8: Oregon myrtle and western redcedar preferred models
@@ -705,10 +702,9 @@ ggplot() +
   geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPreferred$hossfeld), color = "Hossfeld IV", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = umca2016$DBH, y = predict(umcaHeightFromDiameterPreferred$prodan), color = "Prodan", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "a) Oregon myrtle height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = NULL, y = "height, m", color = NULL) +
+  labs(x = NULL, y = "height, m", color = NULL, title = bquote(bold(.(plotLetters[1]))~"Oregon myrtle height")) +
   scale_color_manual(breaks = c("Hossfeld IV", "Prodan", "Sharma-Parton physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
@@ -717,10 +713,9 @@ ggplot() +
   geom_line(aes(x = predict(umcaDiameterFromHeightPreferred$gam), y = umca2016$TotalHt, color = "REML GAM", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = predict(umcaDiameterFromHeightPreferred$linear), y = umca2016$TotalHt, color = "linear", group = umca2016$isPlantation, linetype = umca2016physio$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "b) Oregon myrtle DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = NULL, y = NULL, color = NULL) +
+  labs(x = NULL, y = NULL, color = NULL, title = bquote(bold(.(plotLetters[2]))~"Oregon myrtle DBH")) +
   scale_color_manual(breaks = c("REML GAM", "linear", "REML GAM RelHt physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 0.90)) +
 ggplot() +
@@ -729,10 +724,9 @@ ggplot() +
   geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterPreferred$hossfeld), color = "Hossfeld IV", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation), alpha = 0.8) +
   geom_line(aes(x = thpl2016$DBH, y = predict(thplHeightFromDiameterPreferred$prodan), color = "Prodan", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation), alpha = 0.8) + # Hossfeld and Michaelis-Menten fits are visually indistinguishable
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "c) western redcedar height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = "height, m", color = NULL) +
+  labs(x = "DBH, cm", y = "height, m", color = NULL, title = bquote(bold(.(plotLetters[3]))~"western redcedar height")) +
   scale_color_manual(breaks = c("Hossfeld IV", "Prodan", "Sharma-Parton physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 ggplot() +
@@ -741,10 +735,9 @@ ggplot() +
   geom_line(aes(x = predict(thplDiameterFromHeightPreferred$gam), y = thpl2016$TotalHt, color = "REML GAM", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
   geom_line(aes(x = predict(thplDiameterFromHeightPreferred$parabolic), y = thpl2016$TotalHt, color = "parabolic", group = thpl2016$isPlantation, linetype = thpl2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "d) western redcedar DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = NULL, color = NULL) +
+  labs(x = "DBH, cm", y = NULL, color = NULL, title = bquote(bold(.(plotLetters[4]))~"western redcedar DBH")) +
   scale_color_manual(breaks = c("REML GAM", "parabolic", "REML GAM ABA+T physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 get_preferred_model_linetype_legend() +
@@ -753,6 +746,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.tiff", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 9: preferred models for other species group
@@ -771,10 +765,9 @@ ggplot() +
   geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterPreferred$gam), color = "REML GAM", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = other2016$DBH, y = predict(otherHeightFromDiameterPreferred$parabolic), color = "parabolic", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "a) other species height", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = "height, m", color = NULL) +
+  labs(x = "DBH, cm", y = "height, m", color = NULL, title = bquote(bold(.(plotLetters[1]))~"other species height")) +
   scale_color_manual(breaks = c("REML GAM", "parabolic", "REML GAM BA+L", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "green2", "grey70")) +
   theme(legend.justification = c(1, 1), legend.position = c(1, 1)) +
 ggplot() +
@@ -783,10 +776,9 @@ ggplot() +
   geom_line(aes(x = predict(otherDiameterFromHeightPreferred$gam), y = other2016$TotalHt, color = "REML GAM", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = predict(otherDiameterFromHeightPreferred$parabolic), y = other2016$TotalHt, color = "parabolic", group = other2016$isPlantation, linetype = other2016$isPlantation)) +
   geom_line(aes(x = psme2016$DBH, y = 1.3 + exp(5.7567 - 6.7792*psme2016$DBH^-0.2795), linetype = "reference curve"), color = "grey70") + # Temesgen et al. 2007, Eq. 4
-  annotate("text", x = 0, y = 85, label = "b) other species DBH", hjust = 0, size = 3.5) +
   coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
   guides(linetype = "none") +
-  labs(x = "DBH, cm", y = NULL, color = NULL) +
+  labs(x = "DBH, cm", y = NULL, color = NULL, title = bquote(bold(.(plotLetters[2]))~"other species DBH")) +
   scale_color_manual(breaks = c("REML GAM", "parabolic", "REML GAM physio", "Temesgen et al. 2007"), values = c("dodgerblue2", "red2", "cyan", "grey70")) +
   theme(legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
 get_preferred_model_linetype_legend() +
@@ -795,6 +787,7 @@ plot_layout(design = "12\n33", heights = c(1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 09 other species curves.png", height = 17/3 + 0.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 09 other species curves.tiff", height = 17/3 + 0.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure S1: comparison of accuracy metrics
@@ -812,18 +805,19 @@ accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(resp
 ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) + 
   coord_equal() +
   geom_raster(aes(x = metricX, y = metricY, fill = correlation)) +
-  labs(x = NULL, y = NULL, fill = "correlation", title = "a) height prediction") +
+  labs(x = NULL, y = NULL, fill = "correlation", title = bquote(bold(.(plotLetters[1]))~"height prediction")) +
   scale_y_discrete(limits = rev) +
   ggplot(accuracyCorrelation %>% filter(responseVariable == "DBH")) + 
   geom_raster(aes(x = metricX, y = metricY, fill = correlation)) +
   coord_equal() +
-  labs(x = NULL, y = NULL, fill = "correlation", title = "b) DBH prediction") +
+  labs(x = NULL, y = NULL, fill = "correlation", title = bquote(bold(.(plotLetters[2]))~"DBH prediction")) +
   scale_y_discrete(labels = NULL, limits = rev) +
   plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
   plot_layout(nrow = 1, ncol = 2, guides = "collect") &
   scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
   theme(legend.spacing.y = unit(0.5, "line"))
-#ggsave("trees/height-diameter/figures/Figure S01 accuracy metric correlation.png", height = 8.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.png", height = 8.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.tiff", height = 8.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 # Figure S2: height prediction accuracy
@@ -899,6 +893,7 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
 #ggsave("trees/height-diameter/figures/Figure S02 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S02 height accuracy.tiff", height = 22, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 # Figure S3: DBH prediction accuracy
@@ -975,16 +970,18 @@ plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
 #ggsave("trees/height-diameter/figures/Figure S03 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
+#ggsave("trees/height-diameter/figures/Figure S03 DBH accuracy.tiff", height = 22, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 # Figure S4 in residuals.R
 
 # Tables S1-14
-# Top 10 height and DBH model forms by species.
+# Top height and DBH model forms by species.
+topN = 50
 preferredModelForms = heightDiameterModelRanking %>% filter(significant) %>% 
   mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
   group_by(responseVariable, species) %>% 
-  slice_max(aucBlended, n = 10, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
+  slice_max(aucBlended, n = topN, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
   mutate(rank = row_number()) %>% 
   arrange(desc(responseVariable), species, isBaseForm, rank) %>%
   select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
@@ -992,7 +989,7 @@ preferredModelForms = heightDiameterModelRanking %>% filter(significant) %>%
 preferredModelFormsHeightNonPhysio = heightDiameterModelRanking %>% filter(significant, hasPhysio == FALSE) %>% 
   mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
   group_by(responseVariable, species) %>% 
-  slice_max(aucBlended, n = 10, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
+  slice_max(aucBlended, n = topN, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
   mutate(rank = row_number()) %>% 
   arrange(desc(responseVariable), species, isBaseForm, rank) %>%
   select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
@@ -1000,9 +997,10 @@ preferredModelFormsHeightNonPhysio = heightDiameterModelRanking %>% filter(signi
 preferredModelFormsInitialDbh = heightDiameterModelRanking %>% filter(significant, hasStand == FALSE) %>% 
   mutate(species = fct_relevel(species, c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))) %>%
   group_by(responseVariable, species) %>% 
-  slice_max(aucBlended, n = 10, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
+  slice_max(aucBlended, n = topN, na_rm = TRUE) %>% arrange(desc(aucBlended)) %>% 
   mutate(rank = row_number()) %>% 
   arrange(desc(responseVariable), species, isBaseForm, rank) %>%
   select(-aucBlended, -fitting, -starts_with("has"), -isBaseForm, -significant, -speciesFraction) %>%
   relocate(responseVariable, species, rank, name, aucMab, aucMae, aucRmse, aucDeltaAicN, aucNse)
-write_xlsx(list(preferred = preferredModelForms, heightNonPhysio = preferredModelFormsHeightNonPhysio, initialDbh = preferredModelFormsInitialDbh), "trees/height-diameter/figures/Tables S02-15 model AUCs.xlsx")
+#write_xlsx(list(preferred = preferredModelForms, heightNonPhysio = preferredModelFormsHeightNonPhysio, initialDbh = preferredModelFormsInitialDbh), "trees/height-diameter/figures/Elliott height-diameter model AUCs.xlsx")
+write_xlsx(list(preferred = preferredModelForms, initialDbh = preferredModelFormsInitialDbh), "trees/height-diameter/figures/Elliott height-diameter model AUCs.xlsx")

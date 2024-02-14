@@ -50,8 +50,8 @@ varianceForHeight$acma = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionEr
 varianceForHeight$umca = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "Umca"), start = list(a1 = 1, b1 = 1), weight = pmin(TreeCount/(varianceForHeightWeightMultiplier$umca*DBH^varianceForHeightWeightPower$umca), 5*TreeCount))
 varianceForHeight$thpl = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "Thpl"), start = list(a1 = 1, b1 = 1), weight = pmin(TreeCount/(varianceForHeightWeightMultiplier$thpl*DBH^varianceForHeightWeightPower$thpl), 5*TreeCount))
 varianceForHeight$other = gsl_nls(heightResidualSquared ~ a1*DBH^b1, predictionError %>% filter(speciesGroup == "other"), start = list(a1 = 1, b1 = 1), weight = pmin(TreeCount/(varianceForHeightWeightMultiplier$other*DBH^varianceForHeightWeightPower$other), 5*TreeCount))
-bind_rows(imap(varianceForHeight, function(model, name) { return(c(responseVariable = "height", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% mutate(a1 = round(as.numeric(a1), 2), b1 = round(as.numeric(b1), 2), b1p = round(as.numeric(b1p), 3))
-#bind_rows(imap(varianceForHeight, function(model, name) { return(c(responseVariable = "height", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% summarize(a1 = mean(as.numeric(a1)), b1 = mean(as.numeric(b1)))
+bind_rows(purrr::imap(varianceForHeight, function(model, name) { return(c(responseVariable = "height", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% mutate(a1 = round(as.numeric(a1), 2), b1 = round(as.numeric(b1), 2), b1p = round(as.numeric(b1p), 3))
+#bind_rows(purrr::imap(varianceForHeight, function(model, name) { return(c(responseVariable = "height", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% summarize(a1 = mean(as.numeric(a1)), b1 = mean(as.numeric(b1)))
 #lapply(varianceForHeight, confint2, level = 0.99)
 
 varianceForDbhWeightMultiplier = list(psme = 5.7, alru = 27, tshe = 1.1, acma = 9.7, umca = 3.5, thpl = 2.4, other = 1.3)
@@ -63,8 +63,8 @@ varianceForDbh$acma = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predi
 varianceForDbh$umca = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "Umca"), start = list(a1 = 1, b1 = 1), weight = pmin(TreeCount/(varianceForDbhWeightMultiplier$umca*(TotalHt - 1.37)^varianceForDbhWeightPower$umca), 5*TreeCount))
 varianceForDbh$thpl = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "Thpl"), start = list(a1 = 1, b1 = 1), weight = pmin(TreeCount/(varianceForDbhWeightMultiplier$thpl*(TotalHt - 1.37)^varianceForDbhWeightPower$thpl), 5*TreeCount))
 varianceForDbh$other = gsl_nls(dbhResidualSquared ~ a1*(TotalHt - 1.37)^b1, predictionError %>% filter(speciesGroup == "other"), start = list(a1 = 1, b1 = 1), weight = pmin(TreeCount/(varianceForDbhWeightMultiplier$other*(TotalHt - 1.37)^varianceForDbhWeightPower$other), 5*TreeCount))
-bind_rows(imap(varianceForDbh, function(model, name) { return(c(responseVariable = "DBH", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% mutate(a1 = round(as.numeric(a1), 2), b1 = round(as.numeric(b1), 2), b1p = round(as.numeric(b1p), 2))
-#bind_rows(imap(varianceForDbh, function(model, name) { return(c(responseVariable = "DBH", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% summarize(a1 = mean(as.numeric(a1)), b1 = mean(as.numeric(b1)))
+bind_rows(purrr::imap(varianceForDbh, function(model, name) { return(c(responseVariable = "DBH", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% mutate(a1 = round(as.numeric(a1), 2), b1 = round(as.numeric(b1), 2), b1p = round(as.numeric(b1p), 2))
+#bind_rows(purrr::imap(varianceForDbh, function(model, name) { return(c(responseVariable = "DBH", name = name, converged = model$convInfo$isConv, round(model$m$getPars(), 3))) })) %>% summarize(a1 = mean(as.numeric(a1)), b1 = mean(as.numeric(b1)))
 #lapply(varianceForDbh, confint2, level = 0.99)
 
 predict_gsl_nls = function(model, newData, weights, level = 0.95)
@@ -118,7 +118,7 @@ ggplot() +
   geom_path(aes(x = DBH, y = estHeightVar[,1], color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 220), ylim = c(0, 125)) +
   facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
-  labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = "a) height prediction") +
+  labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(bold(.(plotLetters[1]))~"height prediction")) +
   scale_x_continuous(breaks = seq(0, 300, by = 100)) +
 ggplot() +
   geom_errorbar(aes(xmin = varianceQ025, xmax = varianceQ975, y = heightClass, alpha = n), empiricalDbhVariance, color = "grey50", linewidth = 0.3, na.rm = TRUE, orientation = "y") +
@@ -127,7 +127,7 @@ ggplot() +
   geom_path(aes(x = estDbhVar[,1], y = TotalHt, color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1550), ylim = c(0, 83)) +
   facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
-  labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = "b) DBH prediction") +
+  labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(bold(.(plotLetters[2]))~"DBH prediction")) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(guides = "collect") &
   guides(alpha = guide_legend(order = 3, reverse = TRUE), color = guide_legend(order = 1), fill = guide_legend(order = 1), linetype = guide_legend(order = 2), shape = guide_legend(order = 2), size = guide_legend(order = 2)) &
@@ -138,7 +138,8 @@ plot_layout(guides = "collect") &
   scale_shape_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(16, 18)) &
   scale_size_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(1.5, 1.9)) &
   theme(legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"), strip.text = element_text(size = 8))
-#ggsave("trees/height-diameter/figures/Figure S04 error model gsl_nls.png", height = 15, width = 22, units = "cm", dpi = 200)
+#ggsave("trees/height-diameter/figures/Figure S04 variance model.png", height = 15, width = 22, units = "cm", dpi = 200)
+#ggsave("trees/height-diameter/figures/Figure S04 variance model.tiff", height = 17.7, width = 22, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## height interquartile ranges

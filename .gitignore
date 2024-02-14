@@ -4,6 +4,7 @@
 # GIS and other data files
 **/*.csv
 **/*.mdb
+**/*.tiff
 **/*.xlsx
 **/*.zip
 GIS/**/*.adf
@@ -17,6 +18,7 @@ GIS/**/*.docx
 GIS/**/*.fgb
 GIS/**/*.gdb
 GIS/**/*.hdf
+GIS/**/*.las
 GIS/**/*.qmd
 GIS/**/*.gpkg
 GIS/**/*.gpkg-shm
@@ -43,7 +45,6 @@ GIS/**/*.spx
 GIS/**/*.tfw
 GIS/**/*.tif
 GIS/**/*.tif.ovr
-GIS/**/*.tiff
 GIS/**/*.txt
 GIS/**/*.vrt
 GIS/**/*.xml
