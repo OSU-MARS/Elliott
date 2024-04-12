@@ -12,9 +12,12 @@ GIS/**/*.asc
 GIS/**/*.atx
 GIS/**/*.aux
 GIS/**/*.aux.xml
+GIS/**/*.bak
 GIS/**/*.bin
 GIS/**/*.dbf.xml
+GIS/**/*.dgn
 GIS/**/*.docx
+GIS/**/*.dxf
 GIS/**/*.fgb
 GIS/**/*.gdb
 GIS/**/*.hdf

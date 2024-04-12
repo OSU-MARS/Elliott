@@ -16,13 +16,13 @@ other2016defaultWeight = other2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*
                                               heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 other2016defaultWeightPhysio = other2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-otherOptions = tibble(fitHeight = TRUE, 
-                      fitHeightNlrob = fitHeight,
+otherOptions = tibble(fitHeight = FALSE, 
+                      fitHeightNlrob = FALSE,
                       fitHeightGnls = FALSE,
-                      fitHeightMixed = fitHeight,
-                      fitDbh = FALSE,
-                      fitDbhNlrob = fitDbh,
-                      fitDbhMixed = fitDbh)
+                      fitHeightMixed = FALSE,
+                      fitDbh = TRUE,
+                      fitDbhNlrob = FALSE,
+                      fitDbhMixed = FALSE)
 
 if (otherOptions$fitHeight)
 {
@@ -325,7 +325,7 @@ if (otherOptions$fitDbh)
   #otherDiameterFromHeight$powerPhysio = fit_gsl_nls("power physio", DBH ~ (a1 + a4 * elevation)*(TotalHt - 1.37)^b1, other2016physio, start = list(a1 = 2.7, a4 = -0.001, b1 = 0.8), significant = FALSE) # a1p, a4, a5, a6, a7, a8 not significant
   #otherDiameterFromHeight$powerRelHt = fit_gsl_nls("power RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^b1, other2016, start = list(a1 = 3.0, a9 = 2.3, b1 = 0.4), significant = FALSE) # a1p, a9, b1p not significant
   otherDiameterFromHeight$ruark = fit_gsl_nls("Ruark", DBH ~ a1*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.8, b1 = 0.24, b2 = 0.07)) # b1p, b2p not significant, step factor with a1p
-  otherDiameterFromHeight$ruarkAbat = fit_gsl_nls("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.6, a2 = 0.03, b1 = 0.5, b2 = 0.04), significant = FALSE) # a2, a3, a2p, a3p, b1p, b2p not significant
+  otherDiameterFromHeight$ruarkAbat = fit_gsl_nls("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.4, a2 = 0.03, b1 = 0.4, b2 = 0.05)) # a3, a2p, a3p, b1p, b2p not significant
   otherDiameterFromHeight$ruarkAbatPhysio = fit_gsl_nls("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a4 * elevation)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016physio, start = list(a1 = 3.0, a2 = 0.02, a4 = -0.002, b1 = 0.5, b2 = 0.04), significant = FALSE) # a2, a3, a4 not significant, drop ABA on slight AIC
   otherDiameterFromHeight$ruarkAbatPhysioRelHt = fit_gsl_nls("Ruark ABA+T RelHt physio", DBH ~ (a1 + a3 * standBasalAreaApprox + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016physio, start = list(a1 = 3.0, a3 = 0.01, a4 = -0.002, a9 = 2, b1 = 0.42, b2 = 0.0033), significant = FALSE) # a2, a3, a4 not significant, no AIC discrimination
   otherDiameterFromHeight$ruarkAbatRelHt = fit_gsl_nls("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), other2016, start = list(a1 = 2.4, a2 = 0.04, a9 = 3, b1 = 0.4, b2 = 0.03), significant = FALSE) # a9, a9p not significant
@@ -343,6 +343,8 @@ if (otherOptions$fitDbh)
   otherDiameterFromHeight$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), other2016, start = list(a1 = 3.0, a9 = -0.7, b1 = 0.3, b2 = 0.348), significant = FALSE) # a1p, a2p, a9, b1p, b2p not significant
   otherDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a8 * topographicShelterIndex + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), other2016physio, start = list(a1 = 3.5, a8 = -0.01, a9 = 0, b1 = 0.3, b2 = 0.33), significant = FALSE) # a8, a9 not significant
   otherDiameterFromHeight$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, other2016, start = list(a1 = -100, b1 = 0.09, b2 = 0.5)) # a1p not significant, NaN-inf with b1p, occasional step factor with nlrob()
+  #lapply(otherDiameterFromHeight$sibbesenReplaceAbat$fit, confint2, level = 0.99)
+  #lapply(otherDiameterFromHeight$chapmanReplaceAbat$fit, get_model_coefficients)
   
   if (otherOptions$fitDbhNlrob)
   {
@@ -651,20 +653,45 @@ if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh &
   
   check_plot_results(otherResults)
   save(file = "trees/height-diameter/data/other results.Rdata", otherCoefficients, otherResults)
+} else if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh & otherOptions$fitDbhMixed)
+{
+  if (exists("otherHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/other TotalHt.Rdata") }
+  if (exists("otherDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/other DBH.Rdata") }
+
+  otherCoefficients = bind_rows(bind_rows(bind_rows(lapply(otherHeightFromDiameter, get_list_coefficients))) %>%
+                                  mutate(responseVariable = "height"),
+                                bind_rows(bind_rows(lapply(otherDiameterFromHeight, get_list_coefficients))) %>%
+                                  mutate(responseVariable = "DBH")) %>%
+    mutate(species = "other")
+  otherResults = bind_rows(bind_rows(bind_rows(lapply(otherHeightFromDiameter, get_list_stats))) %>%
+                             mutate(responseVariable = "height"),
+                           bind_rows(bind_rows(lapply(otherDiameterFromHeight, get_list_stats)),
+                                     create_model_stats(name = "Schnute inverse", fitSet = "primary", fittingMethod = "gsl_nls")) %>%
+                             mutate(responseVariable = "DBH")) %>%
+    mutate(species = "other")
+  
+  check_plot_results(otherResults)
+  save(file = "trees/height-diameter/data/other results.Rdata", otherCoefficients, otherResults)
 }
 
 
-## preferred forms identified (results.R, Figure 11)
+
+## preferred forms identified (results.R, Figure 9)
 if (otherOptions$fitHeight & otherOptions$fitDbh)
 {
   otherHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 7, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1))
-  otherHeightFromDiameterPreferred$gamBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  #otherHeightFromDiameterPreferred$gamBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
   #otherHeightFromDiameterPreferred$gamBalPhysio = fit_gam("REML GAM BA+L physio", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 23, pc = gamConstraint), data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  otherHeightFromDiameterPreferred$gamRelDbhPhysio = fit_gam("REML GAM RelDbh physio", TotalHt ~ s(DBH, elevation, topographicShelterIndex, relativeDiameter, bs = "ts", k = 22, by = as.factor(isPlantation), pc = gamConstraint), data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  otherHeightFromDiameterPreferred$linear = fit_lm("linear", TotalHt ~ 0 + DBH + I(isPlantation*DBH), other2016, folds = 1, repetitions = 1)
   otherHeightFromDiameterPreferred$parabolic = fit_lm("parabolic", TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I(isPlantation*DBH^2), other2016, folds = 1, repetitions = 1)
   
   otherDiameterFromHeightPreferred = list(gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1))
   otherDiameterFromHeightPreferred$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  otherDiameterFromHeightPreferred$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = other2016, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  otherDiameterFromHeightPreferred$naslund = fit_gsl_nls("Näslund inverse", DBH ~ a1*sqrt(TotalHt - 1.37) / (1 + a2*sqrt(TotalHt - 1.37)), other2016, start = list(a1 = 2.3, a2 = -0.13), control = gsl_nls_control(maxiter = 250), folds = 1, repetitions = 1)
   otherDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I((TotalHt - 1.37)^2), other2016, folds = 1, repetitions = 1)
+  otherDiameterFromHeightPreferred$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^((b1 + b1p * isPlantation)*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016, start = list(a1 = 0.67, a1p = 1.84, b1 = 1.70, b1p = -1.26, b2 = -0.063, b2p = 0.30), folds = 1, repetitions = 1)
   otherDiameterFromHeightPreferred$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), other2016physio, start = list(a1 = 3.47, a1p = -0.43, a8 = -0.001, b1 = 0.34, b2 = 0.28, b2p = 0.019), significant = FALSE, folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/other preferred models.Rdata", otherHeightFromDiameterPreferred, otherDiameterFromHeightPreferred)

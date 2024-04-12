@@ -13,13 +13,13 @@ thpl2016defaultWeight = thpl2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*Tr
                                             heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 thpl2016defaultWeightPhysio = thpl2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-thplOptions = tibble(fitHeight = TRUE, 
-                     fitHeightNlrob = fitHeight,
+thplOptions = tibble(fitHeight = FALSE, 
+                     fitHeightNlrob = FALSE,
                      fitHeightGnls = FALSE,
-                     fitHeightMixed = fitHeight,
+                     fitHeightMixed = FALSE,
                      fitDbh = TRUE,
-                     fitDbhNlrob = fitDbh,
-                     fitDbhMixed = fitDbh)
+                     fitDbhNlrob = FALSE,
+                     fitDbhMixed = FALSE)
 
 if (thplOptions$fitHeight)
 {
@@ -335,7 +335,7 @@ if (thplOptions$fitDbh)
   #thplDiameterFromHeight$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), thpl2016, start = list(a1 = 0.00005, a2 = 0.001, b1 = 1.05, Ha = 30), control = gsl_nls_control(maxiter = 200)) # singular gradient with nlrob() and gsl_nls()
   thplDiameterFromHeight$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(TotalHt - 1.37)) - 1)^b4, thpl2016, start = list(a1 = 100, b1 = -0.15, b2 = 0.01, b4 = 1.1), control = gsl_nls_control(maxiter = 250, xtol = 0.025)) # a1-b2 evaporation, b1, b3 not significant, NaN-inf with nls() from nls_multstart() point, NaN-inf, singular gradient, or code syntax error with nlrob()
   thplDiameterFromHeight$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016, start = list(a1 = 3.4, b1 = 0.8, b2 = 0.12)) # no significant plantation effects
-  thplDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016, start = list(a1 = 1.39, a2 = -0.00036, b1 = 1.31, b2 = -0.029)) # no significant plantation effects
+  thplDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016, start = list(a1 = 1.39, a2 = -0.00036, b1 = 1.31, b2 = -0.029), significant = FALSE) # no significant plantation effects
   thplDiameterFromHeight$sibbesenReplaceAbatPhysio = fit_gsl_nls("Sibbesen replace ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a8 * topographicShelterIndex)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016physio, start = list(a1 = 3.6, a2 = 0, a8 = -0.01, b1 = 0.7, b2 = 0.1), significant = FALSE) # a2, a3, a8 not significant, drop ABA on AIC
   thplDiameterFromHeight$sibbesenReplaceAbatPhysioRelHt = fit_gsl_nls("Sibbesen replace ABA+T RelHt physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a8 * topographicShelterIndex + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016physio, start = list(a1 = 3.3, a2 = 0, a8 = -0.017, a9 = 1.0, b1 = 0.7, b2 = 0), significant = FALSE) # a2, a3, a8, a9, b2 not significant, no a2-a3 AIC discrimination
   thplDiameterFromHeight$sibbesenReplaceAbatRelHt = fit_gsl_nls("Sibbesen replace ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + (a9 + a9p * isPlantation) * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016, start = list(a1 = 3.5, a2 = 0, a9 = 0, a9p = 0, b1 = 0.6, b2 = 0.12), significant = FALSE) # a2, a9, a9p, b2 not significant
@@ -343,6 +343,8 @@ if (thplOptions$fitDbh)
   thplDiameterFromHeight$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016, start = list(a1 = 3.3, a9 = 0, b1 = 0.6, b2 = 0.1), significant = FALSE)
   thplDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a8 * topographicShelterIndex + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016physio, start = list(a1 = 3.6, a8 = -0.01, a9 = 0.7, b1 = 0.7, b2 = 0.1), significant = FALSE) # a9 not significant
   thplDiameterFromHeight$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, thpl2016, start = list(a1 = -300, b1 = 0.04, b2 = 0.55), control = gsl_nls_control(maxiter = 250, xtol = 1E-4)) # a1p, b1p, b2p not significant, a1-b1 parameter evaporation: NaN-inf with nlrob()
+  #lapply(thplDiameterFromHeight$chapmanReplaceAbat$fit, confint2, level = 0.99)
+  #lapply(thplDiameterFromHeight$chapmanReplaceAbat$fit, get_model_coefficients)
   
   if (thplOptions$fitDbhNlrob)
   {
@@ -602,13 +604,32 @@ if (thplOptions$fitHeight & thplOptions$fitHeightMixed & thplOptions$fitDbh & th
   
   check_plot_results(thplResults)
   save(file = "trees/height-diameter/data/THPL results.Rdata", thplCoefficients, thplResults)
+} else if (thplOptions$fitHeight & thplOptions$fitHeightMixed & thplOptions$fitDbh & thplOptions$fitDbhMixed)
+{
+  if (exists("thplHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/THPL TotalHt.Rdata") }
+  if (exists("thplDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/THPL DBH.Rdata") }
+
+  thplCoefficients = bind_rows(bind_rows(bind_rows(lapply(thplHeightFromDiameter, get_list_coefficients))) %>%
+                                 mutate(responseVariable = "height"),
+                               bind_rows(bind_rows(lapply(thplDiameterFromHeight, get_list_coefficients))) %>%
+                                 mutate(responseVariable = "DBH")) %>%
+    mutate(species = "THPL")
+  thplResults = bind_rows(bind_rows(bind_rows(lapply(thplHeightFromDiameter, get_list_stats))) %>%
+                            mutate(responseVariable = "height"),
+                          bind_rows(bind_rows(lapply(thplDiameterFromHeight, get_list_stats))) %>%
+                            mutate(responseVariable = "DBH")) %>%
+    mutate(species = "THPL")
+  
+  check_plot_results(thplResults)
+  save(file = "trees/height-diameter/data/THPL results.Rdata", thplCoefficients, thplResults)
 }
 
 
-## preferred forms identified (results.R, Figure 10)
+## preferred forms identified (results.R, Figure 8)
 if (thplOptions$fitHeight & thplOptions$fitDbh)
 {
-  thplHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1))
+  thplHeightFromDiameterPreferred = list(chapmanRichards = fit_gsl_nls("Chapman-Richards", TotalHt ~ 1.37 + a1 * (1 - exp(b1*DBH))^b2, thpl2016, start = list(a1 = 48.2, b1 = -0.015, b2 = 1.131), folds = 1, repetitions = 1))
+  thplHeightFromDiameterPreferred$gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
   thplHeightFromDiameterPreferred$gamBalPhysio = fit_gam("REML GAM BA+L physio", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 20, pc = gamConstraint), data = thpl2016physio, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
   thplHeightFromDiameterPreferred$hossfeld = fit_gsl_nls("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) *DBH^b2), thpl2016, start = list(a1 = 70.3, a1p = -18.7, b1 = 200, b1p = -68.2, b2 = -1.176), folds = 1, repetitions = 1)
   thplHeightFromDiameterPreferred$michaelisMenten = fit_gsl_nls("Michaelis-Menten", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), thpl2016, start = list(a1 = 70.3, a1p = -18.7, a2 = 200, a2p = -68.2, b1 = 1.176), folds = 1, repetitions = 1)
@@ -620,10 +641,12 @@ if (thplOptions$fitHeight & thplOptions$fitDbh)
   #AIC(thplHeightFromDiameterPreferred$hossfeld, thplHeightFromDiameterPreferred$michaelisMenten, thplHeightFromDiameterPreferred$prodan, thplHeightFromDiameterPreferred$ratkowsky)
   
   thplDiameterFromHeightPreferred = list(gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1))
+  thplDiameterFromHeightPreferred$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, start = list(a1 = 100, a9 = 2.3, b1 = 0.01, b2 = 0.8), control = gsl_nls_control(maxiter = 500), folds = 1, repetitions = 1)
   thplDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I(isPlantation*(TotalHt - 1.37)^2), thpl2016, folds = 1, repetitions = 1)
   thplDiameterFromHeightPreferred$power = fit_gsl_nls("power", DBH ~ a1*(TotalHt - 1.37)^b1, thpl2016, start = list(a1 = 1.93, b1 = 1.08), folds = 1, repetitions = 1)
-  thplDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
-  thplDiameterFromHeightPreferred$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, slope, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = thpl2016physio, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
+  #thplDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
+  #thplDiameterFromHeightPreferred$gamAbatPhysio = fit_gam("REML GAM ABA+T physio", DBH ~ s(TotalHt, tallerApproxBasalArea, slope, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = thpl2016physio, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
+  thplDiameterFromHeightPreferred$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/THPL preferred models.Rdata", thplHeightFromDiameterPreferred, thplDiameterFromHeightPreferred)
 }

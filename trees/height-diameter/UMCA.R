@@ -11,13 +11,13 @@ umca2016defaultWeight = umca2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*Tr
                                             heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 umca2016defaultWeightPhysio = umca2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-umcaOptions = tibble(fitHeight = TRUE, 
-                     fitHeightNlrob = fitHeight,
+umcaOptions = tibble(fitHeight = FALSE, 
+                     fitHeightNlrob = FALSE,
                      fitHeightGnls = FALSE,
-                     fitHeightMixed = fitHeight,
+                     fitHeightMixed = FALSE,
                      fitDbh = TRUE,
-                     fitDbhNlrob = fitDbh,
-                     fitDbhMixed = fitDbh)
+                     fitDbhNlrob = FALSE,
+                     fitDbhMixed = FALSE)
 
 if (umcaOptions$fitHeight)
 {
@@ -310,7 +310,7 @@ if (umcaOptions$fitDbh)
   umcaDiameterFromHeight$ruark = fit_gsl_nls("Ruark", DBH ~ a1*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016, start = list(a1 = 3.95, b1 = 0.45, b2 = 0.06)) # a1p, b1p, b2p not significant
   umcaDiameterFromHeight$ruarkAbat = fit_gsl_nls("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016, start = list(a1 = 4.0, a2 = 0, b1 = 0.55, b2 = 0.045), significant = FALSE) # a1p, a2, a2p, a3, a3p, b1p, b2p not significant
   umcaDiameterFromHeight$ruarkAbatPhysio = fit_gsl_nls("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, start = list(a1 = 5.5, a2 = 0, a5 = -1, b1 = 0.5, b2 = 0.04), significant = FALSE) # a2, a3 not significant
-  umcaDiameterFromHeight$ruarkAbatPhysioRelHt = fit_gsl_nls("Ruark ABA+T RelHt physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, start = list(a1 = 5.5, a2 = -0.02, a5 = 0, a9 = -4, b1 = 0.6, b2 = 0.07)) # a2, a3, a5 not significant
+  umcaDiameterFromHeight$ruarkAbatPhysioRelHt = fit_gsl_nls("Ruark ABA+T RelHt physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, start = list(a1 = 5.5, a2 = -0.02, a5 = 0, a9 = -4, b1 = 0.6, b2 = 0.07), significant = FALSE) # a2, a3, a5 not significant
   umcaDiameterFromHeight$ruarkAbatRelHt = fit_gsl_nls("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016, start = list(a1 = 4.7, a2 = -0.03, a9 = -5.5, b1 = 0.55, b2 = 0.079)) # a2, a9p not significant
   umcaDiameterFromHeight$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2 * (TotalHt - 1.37)), umca2016physio, start = list(a1 = 6, a5 = 0, b1 = 0.6, b2 = 0.04), significant = FALSE) # a1p, a4, a5, a6, a7, a8, b1p, b2p not significant
   umcaDiameterFromHeight$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), umca2016, start = list(a1 = 4, a9 = -2, b1 = 0.7, b1p = -0.5, b2 = 0.04, b2p = 0.08), significant = FALSE) # a9, a9p not significant
@@ -321,12 +321,13 @@ if (umcaOptions$fitDbh)
   umcaDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 4.0, a2 = 0, b1 = 0.5, b2 = 0.18), significant = FALSE) # a2 not significant
   umcaDiameterFromHeight$sibbesenReplaceAbatPhysio = fit_gsl_nls("Sibbesen replace ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a4 * elevation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 4.1, a2 = 0, a4 = 0, b1 = 0.49, b2 = 0.19), significant = FALSE) # a2, a3, a4 not significant
   umcaDiameterFromHeight$sibbesenReplaceAbatPhysioRelHt = fit_gsl_nls("Sibbesen replace ABA+T RelHt physio", DBH ~ (a1 + a3 * standBasalAreaApprox + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 5.0, a3 = -0.014, a4 = -0.001, a9 = -5.3, b1 = 0.53, b2 = 0.22)) # a2, a3, a4 not significant
-  umcaDiameterFromHeight$sibbesenReplaceAbatRelHt = fit_gsl_nls("Sibbesen replace ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 4.4, a2 = -0.025, a9 = -5, b1 = 0.53, b2 = 0.22)) # a2, a9p not significant
+  umcaDiameterFromHeight$sibbesenReplaceAbatRelHt = fit_gsl_nls("Sibbesen replace ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 4.4, a2 = -0.025, a9 = -5, b1 = 0.53, b2 = 0.22), significant = FALSE) # a2, a9p not significant
   umcaDiameterFromHeight$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a4 * elevation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 3.3, a4 = 0.002, b1 = 0.48, b2 = 0.21), significant = FALSE) # a1p, a4, a5, a6, a7, a8 not significant, step factor with b1p
   umcaDiameterFromHeight$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.496, a9 = -0.188, b1 = 2.31, b2 = -0.12), significant = FALSE) # a9 not significant
   umcaDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 4.2, a4 = 0, a9 = -3, b1 = 0.53, b2 = 0.20)) # a4 not significant
   umcaDiameterFromHeight$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, umca2016, start = list(a1 = -200, b1 = 0.027, b2 = 0.8), control = gsl_nls_control(maxiter = 500)) # NaN-inf with nlrob()
-  #confint_nlrob(umcaDiameterFromHeight$weibull, level = 0.99)
+  #lapply(umcaDiameterFromHeight$sibbesenReplaceAbatRelHt$fit, confint2, level = 0.99)
+  #lapply(umcaDiameterFromHeight$sibbesenReplaceAbat$fit, get_model_coefficients)
   
   if (umcaOptions$fitDbhNlrob)
   {
@@ -352,6 +353,7 @@ if (umcaOptions$fitDbh)
     umcaDiameterFromHeightNlrob$sibbesenReplacePhysio = fit_nlrob("Sibbesen replace physio", DBH ~ (a1 + a4 * elevation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, start = list(a1 = 3.3, a4 = 0.002, b1 = 0.48, b2 = 0.21), significant = FALSE)
     umcaDiameterFromHeightNlrob$sibbesenReplaceRelHt = fit_nlrob("Sibbesen replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.496, a9 = -0.188, b1 = 2.31, b2 = -0.12), significant = FALSE)
     #umcaDiameterFromHeightNlrob$sibbesenReplaceRelHtPhysio = fit_nlrob("Sibbesen replace RelHt physio", DBH ~ (a1 + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016physio, maxit = 500, start = list(a1 = 4.2, a4 = 0, a9 = -2.8, b1 = 0.53, b2 = 0.18)) # >500 steps to converge
+    #confint_nlrob(umcaDiameterFromHeight$weibull, level = 0.99)
   } else {
     umcaDiameterFromHeightNlrob = list()
   }
@@ -586,15 +588,35 @@ if (umcaOptions$fitHeight & umcaOptions$fitHeightMixed & umcaOptions$fitDbh & um
 
   check_plot_results(umcaResults)
   save(file = "trees/height-diameter/data/UMCA results.Rdata", umcaCoefficients, umcaResults)
+} else if (umcaOptions$fitHeight & umcaOptions$fitHeightMixed & umcaOptions$fitDbh & umcaOptions$fitDbhMixed)
+{
+  if (exists("umcaHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/UMCA TotalHt.Rdata") }
+  if (exists("umcaDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/UMCA DBH.Rdata") }
+
+  umcaCoefficients = bind_rows(bind_rows(bind_rows(lapply(umcaHeightFromDiameter, get_list_coefficients))) %>%
+                                 mutate(responseVariable = "height"),
+                               bind_rows(bind_rows(lapply(umcaDiameterFromHeight, get_list_coefficients))) %>%
+                                 mutate(responseVariable = "DBH")) %>%
+    mutate(species = "UMCA")
+  umcaResults = bind_rows(bind_rows(bind_rows(lapply(umcaHeightFromDiameter, get_list_stats))) %>%
+                            mutate(responseVariable = "height"),
+                          bind_rows(bind_rows(lapply(umcaDiameterFromHeight, get_list_stats))) %>%
+                            mutate(responseVariable = "DBH")) %>%
+    mutate(species = "UMCA")
+  
+  check_plot_results(umcaResults)
+  save(file = "trees/height-diameter/data/UMCA results.Rdata", umcaCoefficients, umcaResults)
 }
 
 
-## preferred forms identified (results.R, Figure 10)
+
+## preferred forms identified (results.R, Figure 8)
 if (umcaOptions$fitHeight & umcaOptions$fitDbh)
 {
   umcaHeightFromDiameterPreferred = list(hossfeld = fit_gsl_nls("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) *DBH^b2), umca2016, start = list(a1 = 21.4, a1p = -4.37, b1 = 43.8, b1p = -19.9, b2 = -1.27), folds = 1, repetitions = 1))
-  umcaHeightFromDiameterPreferred$prodan = fit_gsl_nls("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.040, a1p = 0.017, a2 = 1.01, a2p = -0.40, a3 = 1.46), folds = 1, repetitions = 1)
   umcaHeightFromDiameterPreferred$michaelisMenten = fit_gsl_nls("Michaelis-Menten", TotalHt ~ 1.37 + (a1 + a1p*isPlantation)*DBH^b1 / (a2 + a2p * isPlantation + DBH^b1), umca2016, start = list(a1 = 21.4, a1p = -4.37, a2 = 43.8, a2p = -20.0, b1 = 1.27), folds = 1, repetitions = 1)
+  umcaHeightFromDiameterPreferred$parabolic = fit_lm("parabolic", TotalHt ~ 0 + DBH + I(DBH^2) + I(isPlantation*DBH) + I(isPlantation*DBH^2), umca2016, folds = 1, repetitions = 1)
+  umcaHeightFromDiameterPreferred$prodan = fit_gsl_nls("Prodan", TotalHt ~ 1.37 + DBH^2 / ((a1 + a1p * isPlantation) * DBH^2 + (a2 + a2p * isPlantation)*DBH + a3), umca2016, start = list(a1 = 0.040, a1p = 0.017, a2 = 1.01, a2p = -0.40, a3 = 1.46), folds = 1, repetitions = 1)
   umcaHeightFromDiameterPreferred$sharmaPartonPhysio = fit_gsl_nls("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a4 * elevation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^(b4 + b4p * isPlantation), umca2016physio, start = list(a1 = 13, a4 = -0.01, b1 = 0.08, b2 = -0.05, b3 = 0.0, b4 = 1.2, b4p = -0.23), folds = 1, repetitions = 1)
   umcaHeightFromDiameterPreferred$sharmaZhang = fit_gsl_nls("Sharma-Zhang", TotalHt ~ 1.37 + a1*standBasalAreaPerHectare^b1*(1 - exp(b2*tph^b3*DBH))^(b4 + b4p * isPlantation), umca2016, start = list(a1 = 13, b1 = 0.1, b2 = -0.06, b3 = 0.125, b4 = 1.1, b4p = -0.2), folds = 1, repetitions = 1)
   umcaHeightFromDiameterPreferred$sibbesen = fit_gsl_nls("Sibbesen", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*DBH^(b1*DBH^(b2 + b2p * isPlantation)), umca2016, start = list(a1 = 0.30, a1p = 0.13, b1 = 1.96, b2 = -0.165, b2p = -0.034), folds = 1, repetitions = 1)
@@ -603,6 +625,7 @@ if (umcaOptions$fitHeight & umcaOptions$fitDbh)
   umcaDiameterFromHeightPreferred = list(gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = umca2016, constraint = umca2016gamConstraint, folds = 1, repetitions = 1))
   umcaDiameterFromHeightPreferred$gamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, slope, sin(3.14159/180 * aspect), relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 57, pc = gamConstraint), data = umca2016physio, constraint = umca2016gamConstraint, folds = 1, repetitions = 1)
   umcaDiameterFromHeightPreferred$linear = fit_lm("linear", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)), umca2016, folds = 1, repetitions = 1)
+  umcaDiameterFromHeightPreferred$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 0.43, b1 = 2.45, b2 = -0.15), folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/UMCA preferred models.Rdata", umcaHeightFromDiameterPreferred, umcaDiameterFromHeightPreferred)
 }

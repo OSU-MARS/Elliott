@@ -11,14 +11,14 @@ psme2016defaultWeight = psme2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*Tr
                                             heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 psme2016defaultWeightPhysio = psme2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-psmeOptions = tibble(fitHeightPrimary = TRUE,
-                     fitHeightNlrobAndFixedWeight = fitHeightPrimary,
+psmeOptions = tibble(fitHeightPrimary = FALSE,
+                     fitHeightNlrobAndFixedWeight = FALSE,
                      fitHeightGnls = FALSE,
-                     fitHeightMixed = fitHeightPrimary,
+                     fitHeightMixed = FALSE,
                      fitDbhPrimary = TRUE,
-                     fitDbhGslNlsAndGams = fitDbhPrimary,
-                     fitDbhNlrobAndFixedWeight = fitDbhPrimary,
-                     fitDbhMixed = fitDbhPrimary,
+                     fitDbhGslNlsAndGams = FALSE,
+                     fitDbhNlrobAndFixedWeight = FALSE,
+                     fitDbhMixed = FALSE,
                      fitAbatRelHtPhysioGam = TRUE,
                      fitPhysioGams = TRUE)
 
@@ -449,7 +449,7 @@ if (psmeOptions$fitDbhPrimary)
     psmeDiameterFromHeight$ruarkAbat = fit_gsl_nls("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.5, a2 = -0.03, b1 = 0.92, b1p = -0.2, b2 = 0, b2p = 0.013)) # a2p, a3p, b2 not significant, a2-a3 not mutually significant
     psmeDiameterFromHeight$ruarkAbatPhysio = fit_gsl_nls("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.5, a2 = -0.017, a3 = -0.004, a6 = -0.05, b1 = 0.93, b1p = -0.19, b2 = 0.002, b2p = 0.012)) # a1p, a2p, a3p not significant
     psmeDiameterFromHeight$ruarkAbatRelHt = fit_gsl_nls("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.5, a2 = -0.02, a9 = 0.2, b1 = 0.91, b1p = -0.16, b2 = 0, b2p = 0.009)) # a9p not significant
-    psmeDiameterFromHeight$ruarkAbatRelHtPhysio = fit_gsl_nls("Ruark ABA+T RelHt physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.4, a2 = -0.013, a3 = -0.0037, a6 = -0.05, a9 = 0.1, b1 = 0.94, b1p = -0.16, b2 = 0.001, b2p = 0.01), significant = FALSE) # a1p, a2p, a3p, a9 not significant
+    psmeDiameterFromHeight$ruarkAbatRelHtPhysio = fit_gsl_nls("Ruark ABA+T RelHt physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.4, a2 = -0.013, a3 = -0.0037, a6 = -0.05, a9 = 0.1, b1 = 0.94, b1p = -0.16, b2 = 0.001, b2p = 0.01)) # a1p, a2p, a3p, a9 not significant
     psmeDiameterFromHeight$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.5, a6 = -0.05, b1 = 0.84, b1p = -0.11, b2 = 0.005, b2p = 0.008)) # a1p, a4, a5, a7, a8 not significant
     psmeDiameterFromHeight$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.2, a9 = 0.37, b1 = 0.85, b1p = -0.11, b2 = 0.003, b2p = 0.007)) # a9p not significant
     psmeDiameterFromHeight$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a6 * cos(3.14159/180 * aspect) + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.2, a6 = -0.06, a9 = 0.35, b1 = 0.86, b1p = -0.11, b2 = 0.0033, b2p = 0.007))
@@ -459,7 +459,7 @@ if (psmeOptions$fitDbhPrimary)
     psmeDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 4.4, a1p = -1.6, a2 = -0.03, a3 = -0.006, b1 = 0.61, b2 = 0.071, b2p = 0.021)) # a3p not significant
     psmeDiameterFromHeight$sibbesenReplaceAbatPhysio = fit_gsl_nls("Sibbesen replace ABA+T physio", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.2, a1p = -0.6, a2 = -0.016, a3 = -0.016, a6 = -0.057, b1 = 0.66, b2 = 0.077))  # a2p, a3p not significant
     psmeDiameterFromHeight$sibbesenReplaceAbatRelHt = fit_gsl_nls("Sibbesen replace ABA+T RelHt", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.9, a1p = -1.0, a2 = -0.01, a3 = -0.006, a9 = 0.15, b1 = 0.61, b2 = 0.071, b2p = 0.021), significant = FALSE) # a9, a9p not significant
-    psmeDiameterFromHeight$sibbesenReplaceAbatRelHtPhysio = fit_gsl_nls("Sibbesen replace ABA+T RelHt physio", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.1, a1p = -0.5, a2 = -0.01, a3 = -0.005, a6 = -0.06, a9 = 0.1, b1 = 0.65, b2 = 0.07), significant = FALSE) # a2p, a3p, a9 not significant
+    psmeDiameterFromHeight$sibbesenReplaceAbatRelHtPhysio = fit_gsl_nls("Sibbesen replace ABA+T RelHt physio", DBH ~ (a1 + a1p * isPlantation + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.1, a1p = -0.5, a2 = -0.01, a3 = -0.005, a6 = -0.06, a9 = 0.1, b1 = 0.65, b2 = 0.07)) # a2p, a3p, a9 not significant
     psmeDiameterFromHeight$sibbesenReplacePhysio = fit_gsl_nls("Sibbesen replace physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.0, a1p = -0.3, a6 = -0.06, b1 = 0.60, b2 = 0.09))  # a4, a5, a7, a8, b2p not significant
     psmeDiameterFromHeight$sibbesenReplaceRelHt = fit_gsl_nls("Sibbesen replace RelHt", DBH ~ (a1 + a1p * isPlantation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.2, a1p = -0.65, a9 = 0.43, b1 = 0.62, b2 = 0.07, b2p = 0.04))
     psmeDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a1p * isPlantation + a6 * cos(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), psme2016physio, start = list(a1 = 3.0, a1p = -0.5, a6 = -0.05, a9 = 0.4, b1 = 0.62, b2 = 0.07))
@@ -470,6 +470,8 @@ if (psmeOptions$fitDbhPrimary)
     psmeDiameterFromHeight$gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 10, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, nthreads = 2)
     psmeDiameterFromHeight$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 28, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, nthreads = 2)
     psmeDiameterFromHeight$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 13, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, nthreads = 2)
+    #lapply(psmeDiameterFromHeight$sibbesenReplaceAbatRelHtPhysio$fit, confint2, level = 0.99)
+    #lapply(psmeDiameterFromHeight$sibbesenReplaceAbat$fit, get_model_coefficients)
   }
   
   if (psmeOptions$fitPhysioGams)
@@ -780,7 +782,6 @@ if (psmeOptions$fitDbhMixed)
   save(file = "trees/height-diameter/data/PSME DBH mixed.Rdata", psmeDiameterFromHeightMixed)
 }
 
-
 if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitHeightNlrobAndFixedWeight & 
     psmeOptions$fitDbhPrimary & psmeOptions$fitDbhMixed & psmeOptions$fitDbhNlrobAndFixedWeight)
 {
@@ -828,6 +829,26 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitH
 
   check_plot_results(psmeResults)
   save(file = "trees/height-diameter/data/PSME results.Rdata", psmeCoefficients, psmeResults)
+} else if (psmeOptions$fitHeightPrimary & psmeOptions$fitDbhPrimary)
+{
+  if (exists("psmeHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/PSME TotalHt primary.rdata") }
+  if (exists("psmeDiameterFromHeight") == FALSE) { load("trees/height-diameter/data/PSME DBH primary.rdata") }
+  
+  psmeCoefficients = bind_rows(bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_coefficients))) %>%
+                                 mutate(responseVariable = "height"),
+                               bind_rows(bind_rows(lapply(psmeDiameterFromHeight, get_list_coefficients))) %>%
+                                 mutate(responseVariable = "DBH")) %>%
+    mutate(species = "PSME")
+  psmeResults = bind_rows(bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_stats))) %>%
+                            #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_stats))) %>%
+                            mutate(responseVariable = "height"),
+                          bind_rows(bind_rows(lapply(psmeDiameterFromHeight, get_list_stats)),
+                                    create_model_stats(name = "Schnute inverse", fitting = "gsl_nls", fitSet = "primary")) %>%
+                            mutate(responseVariable = "DBH")) %>%
+    mutate(species = "PSME")
+  
+  check_plot_results(psmeResults)
+  save(file = "trees/height-diameter/data/PSME results.Rdata", psmeCoefficients, psmeResults)
 }
 
 
@@ -836,6 +857,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & ps
 {
   psmeHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, folds = 1, repetitions = 1))
   psmeHeightFromDiameterPreferred$prodan = fit_gsl_nls("Prodan", TotalHt ~ 1.37 + DBH^2 / (a1*DBH^2 + (a2 + a2p * isPlantation)*DBH + a3 + a3p* isPlantation), psme2016, start = list(a1 = 0.012, a2 = 0.41, a2p = 0.47, a3 = 17.9, a3p = -14.6), folds = 1, repetitions = 1)
+  psmeHeightFromDiameterPreferred$ratkowsky = fit_gsl_nls("Ratkowsky", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)/(DBH + b2 + b2p * isPlantation)), psme2016, start = list(a1 = 90.0, a1p = -25.8, b1 = -55.2, b1p = 14.5, b2 = 10.0, b2p = -1.52), folds = 1, repetitions = 1)
   psmeHeightFromDiameterPreferred$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b3 + b3p * isPlantation)*DBH))^(b4 + b4p * isPlantation), psme2016physio, start = list(a1 = 52.6, a1p = -0.10, a4 = 0.00004, a5 = 0, a6 = 0.0090, a7 = 0.0032, a8 = 0.0040, b1 = 0.53, b2 = -0.025, b2p = -0.0090, b3 = 0.036, b3p = -0.19, b4 = 1.57, b4p = -0.51), folds = 1, repetitions = 1)
   psmeHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh = fit_gsl_nls("Sharma-Parton BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a4 * elevation + a5 * slope + a6 * sin(3.14159/180 * aspect) + a7 * cos(3.14159/180 * aspect) + a8 * topographicShelterIndex + (a10 + a10p * isPlantation) * relativeDiameter)*topHeight^b1 * (1 - exp((b2 + b2p * isPlantation)*(tph/(standBasalAreaPerHectare + basalAreaLarger))^(b3 + b3p * isPlantation)*DBH))^(b4 + b4p * isPlantation), psme2016physio, start = list(a1 = 22, a1p = -7.6, a4 = -0.0020, a5 = -0.03, a6 = 0.14, a7 = 0.14, a8 = 0.06, a10 = -0.35, a10p = 0.79, b1 = 0.28, b2 = -0.021, b2p = -0.026, b3 = 0.02, b3p = -0.17, b4 = 1.53, b4p = -0.40), folds = 1, repetitions = 1)
   psmeHeightFromDiameterPreferred$sharmaPartonBalRelDbh = fit_gsl_nls("Sharma-Parton BA+L RelDbh", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + (a10 + a10p * isPlantation) * relativeDiameter)*topHeight^(b1 + b1p * isPlantation) * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3 * DBH))^(b4 + b4p * isPlantation), psme2016, start = list(a1 = 4.2, a1p = 14.5, a10 = 0.16, a10p = 0.27, b1 = 0.63, b1p = -0.43, b2 = -0.025, b3 = -0.09, b4 = 1.73, b4p = -0.66), folds = 1, repetitions = 1)
@@ -848,6 +870,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & ps
   psmeDiameterFromHeightPreferred$gamAbatPhysioRelHt = fit_gam("REML GAM ABA+T RelHt physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 496, pc = gamConstraint), data = psme2016physio, constraint = psme2016gamConstraint, folds = 1, repetitions = 1, nthreads = 4)
   psmeDiameterFromHeightPreferred$michaelisMentenReplace = fit_gsl_nls("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016, start = list(a1 = 190, a1p = -118, a2 = 67.3, a2p = -38.3, b1 = 0.78, b1p = -0.08), folds = 1, repetitions = 1)
   psmeDiameterFromHeightPreferred$ruark = fit_gsl_nls("Ruark", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.67, b1 = 0.813, b1p = -0.126, b2 = 0.0067, b2p = 0.0096), folds = 1, repetitions = 1)
+  psmeDiameterFromHeightPreferred$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.89, a1p = -0.922, b1 = 0.519, b2 = 0.111, b2p = 0.017), folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/PSME preferred models.Rdata", psmeHeightFromDiameterPreferred, psmeDiameterFromHeightPreferred)
 }

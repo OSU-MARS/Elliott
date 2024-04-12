@@ -46,51 +46,52 @@ append_model_results = function(loadedResults, modelList, responseVariable, fitS
 
 check_plot_results = function(results)
 {
+  numberOfBins = 30 # specify default to suppress messages about binwidth
   ggplot(results) +
-    geom_histogram(aes(x = bias, fill = responseVariable)) +
+    geom_histogram(aes(x = bias, fill = responseVariable), bins = numberOfBins) +
     labs(x = "bias, m or cm") +
   ggplot(results) +
-    geom_histogram(aes(x = mab, fill = responseVariable)) +
+    geom_histogram(aes(x = mab, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAB, m or cm") +
   ggplot(results) +
-    geom_histogram(aes(x = mapb, fill = responseVariable)) +
+    geom_histogram(aes(x = mapb, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAB, %") +
   ggplot(results) +
-    geom_histogram(aes(x = mae, fill = responseVariable)) +
+    geom_histogram(aes(x = mae, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAE, m or cm") +
   ggplot(results) +
-    geom_histogram(aes(x = mape, fill = responseVariable)) +
+    geom_histogram(aes(x = mape, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAE, %") +
   ggplot(results) +
-    geom_histogram(aes(x = nse, fill = responseVariable)) +
+    geom_histogram(aes(x = nse, fill = responseVariable), bins = numberOfBins) +
     labs(x = "model efficiency") +
     scale_x_continuous(trans = scales::pseudo_log_trans()) +
   ggplot(results) +
-    geom_histogram(aes(x = rmse, fill = responseVariable)) +
+    geom_histogram(aes(x = rmse, fill = responseVariable), bins = numberOfBins) +
     labs(x = "RMSE, m or cm") +
   ggplot(results) +
-    geom_histogram(aes(x = rmspe, fill = responseVariable)) +
+    geom_histogram(aes(x = rmspe, fill = responseVariable), bins = numberOfBins) +
     labs(x = "RMSE, %") +
   ggplot(results) +
-    geom_histogram(aes(x = aic, fill = responseVariable)) +
+    geom_histogram(aes(x = aic, fill = responseVariable), bins = numberOfBins) +
     labs(x = "AIC") +
   ggplot(results) +
-    geom_histogram(aes(x = aict, fill = responseVariable)) +
+    geom_histogram(aes(x = aict, fill = responseVariable), bins = numberOfBins) +
     labs(x = "AIC, ~t") +
   ggplot(results) +
-    geom_histogram(aes(x = bic, fill = responseVariable)) +
+    geom_histogram(aes(x = bic, fill = responseVariable), bins = numberOfBins) +
     labs(x = "BIC") +
   ggplot(results) +
-    geom_histogram(aes(x = bict, fill = responseVariable)) +
+    geom_histogram(aes(x = bict, fill = responseVariable), bins = numberOfBins) +
     labs(x = "BIC, ~t") +
   ggplot(results) +
-    geom_histogram(aes(x = meanAbsolutePlantationEffect, fill = responseVariable)) +
+    geom_histogram(aes(x = meanAbsolutePlantationEffect, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAPE, m or cm") +
   ggplot(results) +
-    geom_histogram(aes(x = meanAbsolutePercentPlantationEffect, fill = responseVariable)) +
+    geom_histogram(aes(x = meanAbsolutePercentPlantationEffect, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAPE, %") +
   ggplot(results) +
-    geom_histogram(aes(x = fitTimeInS, fill = responseVariable)) +
+    geom_histogram(aes(x = fitTimeInS, fill = responseVariable), bins = numberOfBins) +
     labs(x = "fit time, s") +
     scale_x_log10() +
   guide_area() +
@@ -139,7 +140,7 @@ create_model_stats = function(name, fittingMethod, fitSet = NA_character_, fixed
                 nse = NA_real_, nseNaturalRegen = NA_real_, nsePlantation = NA_real_,
                 rmse = NA_real_, rmseNaturalRegen = NA_real_, rmsePlantation = NA_real_,
                 rmspe = NA_real_, rmspeNaturalRegen = NA_real_, rmspePlantation = NA_real_,
-                power = NA_real_, powerPlantation = NA_real_, adaptiveWeightFraction = NA_real_))
+                effectiveDegreesOfFreedom = NA_real_, adaptiveWeightFraction = NA_real_))
 }
 
 # wrap calls to fitting functions for consistency of arguments and use of get_*_error()
@@ -738,6 +739,7 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   dbhModelStats$bias = sum(validationData$TreeCount * validationResiduals) / validationTreeCountTotal
   dbhModelStats$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nObservations)
   dbhModelStats$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nObservations)
+  dbhModelStats$effectiveDegreesOfFreedom = effectiveDegreesOfFreedom
   dbhModelStats$mae = sum(validationData$TreeCount * abs(validationResiduals)) / validationTreeCountTotal
   dbhModelStats$mab = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTree)) / sum(dbhByHeightClass$n)
   dbhModelStats$mapb = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTreePct)) / sum(dbhByHeightClass$n)
@@ -874,6 +876,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   heightModelStats$bias = sum(validationData$TreeCount * validationResiduals) / validationTreeCountTotal
   heightModelStats$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nObservations)
   heightModelStats$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nObservations)
+  heightModelStats$effectiveDegreesOfFreedom = effectiveDegreesOfFreedom
   heightModelStats$mab = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTree)) / sum(heightByDbhClass$n)
   heightModelStats$mapb = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTreePct)) / sum(heightByDbhClass$n)
   heightModelStats$mae = sum(validationData$TreeCount * abs(validationResiduals)) / validationTreeCountTotal
@@ -920,14 +923,24 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   return(heightModelStats)
 }
 
-get_preferred_model_linetype_legend = function()
+get_preferred_model_linetype_legend = function(noPreviousModel = FALSE)
 {
-  return(ggplot() +
-           geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = color, linetype = linetype), tibble(x = 0, xend = 1, y = 0, yend = 0, color = c(FALSE, TRUE, "reference curve"), linetype = c(FALSE, TRUE, "reference curve")), alpha = 0, show.legend = TRUE) +
-           guides(color = guide_legend(order = 1), linetype = guide_legend(order = 1, override.aes = list(alpha = 1))) +
-           labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
-           scale_color_manual(breaks = c(FALSE, TRUE, "reference curve"), labels = c("natural regeneration", "plantation", "reference curve"), values = c("grey25", "grey25", "grey70")) +
-           theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
+  if (noPreviousModel)
+  {
+    return(ggplot() +
+             geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = color, linetype = linetype), tibble(x = 0, xend = 1, y = 0, yend = 0, color = c(FALSE, TRUE), linetype = c(FALSE, TRUE)), alpha = 0, show.legend = TRUE) +
+             guides(color = guide_legend(order = 1), linetype = guide_legend(order = 1, override.aes = list(alpha = 1))) +
+             labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
+             scale_color_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c("grey25", "grey25")) +
+             theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
+  } else {
+    return(ggplot() +
+             geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = color, linetype = linetype), tibble(x = 0, xend = 1, y = 0, yend = 0, color = c(FALSE, TRUE, "previous model"), linetype = c(FALSE, TRUE, "previous model")), alpha = 0, show.legend = TRUE) +
+             guides(color = guide_legend(order = 1), linetype = guide_legend(order = 1, override.aes = list(alpha = 1))) +
+             labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
+             scale_color_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("grey25", "grey25", "grey70")) +
+             theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
+  }
 }
 
 get_list_coefficients = function(modelCrossValidationListOrStatsTibble, fitSet = "primary", fixedWeight = NA_real_)
@@ -1120,17 +1133,28 @@ get_species_limits = function(trees)
                   heightDiameterRatioMin = 2))
 }
 
-impute_basal_area = function(Species, heightInM, isPlantation)
+impute_basal_area = function(Species, heightInM, isPlantation, relativeHeight)
 {
-  # preferred fits from ends of PSME.R, ALRU2.R, TSHE.R, ...
-  basalAreaInM2 = case_match(Species,
-                             "DF" ~ 0.5138900 * (exp(0.0008023 * (heightInM - 1.37)^(1.7625191 - 0.0677262 * isPlantation)) - 1),
-                             "RA" ~ 6.033354e+02 * (exp(8.625243e-07 * (heightInM - 1.37)^(1.865767e+00 - 1.471688e-01 * isPlantation)) - 1),
-                             "WH" ~ 0.0002814 * (heightInM - 1.37)^1.9664137,
-                             "BM" ~ 2.230479e+02 * (exp(1.331652e-06 * (heightInM - 1.37)^(2.212715e+00 - 9.147243e-01 * isPlantation)) - 1),
-                             "OM" ~ (0.0006551 - 0.0003407 * isPlantation) * (heightInM - 1.37)^1.8674774,
-                             "RC" ~ 0.0003335 * (heightInM - 1.37)^(2.1341090 - 0.0438769 * isPlantation),
-                             .default = 6.313626e-04 * (heightInM - 1.37)^(-8.764352e-05 + 1.556025e-01 * isPlantation))
+  # basal area from DBH regression
+  basalAreaInM2 = pi * (0.5 * 0.01 * case_match(Species,
+                                                "DF" ~ 2.456280 * (heightInM - 1.37)^(0.841377 - 0.113712 * isPlantation) * exp((0.006112 + 0.008377 * isPlantation) * (heightInM - 1.37)), # Ruark
+                                                "RA" ~ (-47.74911 - 6.68146 * relativeHeight) * (exp(-0.01769 * (heightInM - 1.37)^(1.56793 - 0.22331 * isPlantation)) - 1), # Chapman-Richards replace RelHt
+                                                "WH" ~ 1.744 * (heightInM - 1.37), # linear
+                                                "BM" ~ 1.11975 * (heightInM - 1.37)^(1.54279 - 0.32788 * isPlantation) * exp((-0.03715 + 0.03744 * isPlantation) * (heightInM - 1.37)), # Ruark
+                                                "OM" ~ (2.5977 - 0.7427 * isPlantation) * (heightInM - 1.37), # linear
+                                                "RC" ~ (370.69 + 123.14 * pmin(relativeHeight, 1.5)) * (exp(0.00654768 * (heightInM - 1.37)^0.91823077) - 1), # Chapman-Richards replace RelHt
+                                                .default = (2.9783 - 0.3520 * isPlantation) * (heightInM - 1.37)^((0.3719 - 0.1174 * isPlantation) * (heightInM - 1.37)^(0.2500 + 0.1522 * isPlantation))))^2 # Sibbesen replace
+  
+  # direct basal area from power regression
+  # Fits from ends of PSME.R, ALRU2.R, TSHE.R, ...
+  #basalAreaInM2 = case_match(Species,
+  #                           "DF" ~ 0.5138900 * (exp(0.0008023 * (heightInM - 1.37)^(1.7625191 - 0.0677262 * isPlantation)) - 1),
+  #                           "RA" ~ 6.033354e+02 * (exp(8.625243e-07 * (heightInM - 1.37)^(1.865767e+00 - 1.471688e-01 * isPlantation)) - 1),
+  #                           "WH" ~ 0.0002814 * (heightInM - 1.37)^1.9664137,
+  #                           "BM" ~ 2.230479e+02 * (exp(1.331652e-06 * (heightInM - 1.37)^(2.212715e+00 - 9.147243e-01 * isPlantation)) - 1),
+  #                           "OM" ~ (0.0006551 - 0.0003407 * isPlantation) * (heightInM - 1.37)^1.8674774,
+  #                           "RC" ~ 0.0003335 * (heightInM - 1.37)^(2.1341090 - 0.0438769 * isPlantation),
+  #                           .default = 6.313626e-04 * (heightInM - 1.37)^(-8.764352e-05 + 1.556025e-01 * isPlantation))
   basalAreaInM2 = if_else(basalAreaInM2 < 0.25 * pi * (0.01 * 2.54)^2, 0.25 * pi * (0.01 * 2.54)^2, basalAreaInM2) # clamp regressions to minimum cruised basal area: blocks implied negative DBHes
   return(basalAreaInM2)
 }
@@ -1416,15 +1440,12 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          basalArea = 0.25 * pi * (0.01*DBH)^2, # m² 
          breastHeight = 1.37, # m, used for offset in lm() height regressions
          heightDiameterRatio = TotalHt / (0.01 * DBH), # (DBH conversion from cm to m)
-         imputedBasalArea = if_else(is.na(TotalHt) == FALSE, impute_basal_area(Species, TotalHt, isPlantation), basalArea), # m², imputed whenever height is available to impute
          imputedHeight = if_else(is.na(TotalHt) == FALSE, TotalHt, if_else(is.na(DBH) == FALSE, impute_height(Species, DBH, isPlantation), NA_real_)), # where possible, perform basic height imputation
-         treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea), # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
-         treeBasalAreaPerHectareApprox = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", if_else(is.na(basalArea) == FALSE, imputedBasalArea / basalArea, 1), imputedBasalArea)) %>% # m²/ha, stack basal area regression on height regression when possible; BAF has to be used with prism trees but imputed basal area is used where possible to introduce estimation error
+         treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea)) %>% # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
   group_by(StandID) %>%
   arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>% # put largest diameter live trees first in each stand for calculating BAL (numbers sort before NA)
   mutate(plotsInStand = length(unique(PlotID)), # nested fixed radius and BAF plots share same plot ID
          standBasalAreaPerHectare = sum(isLive * treeBasalAreaPerHectare) / plotsInStand, # m²/ha
-         standBasalAreaApprox = sum(isLive * treeBasalAreaPerHectareApprox) / plotsInStand, # m²/ha
          basalAreaLarger = (cumsum(isLive * treeBasalAreaPerHectare) - treeBasalAreaPerHectare[1]) / plotsInStand, # m²/ha
          measurePlotsInStand = length(unique(PlotID * (PlotType == "IP"))) - any(PlotType %in% c("IB", "CO", "CB")), # if any IB, CO, or CB plots are present they'll introduce zero as a unique value which has to be subtracted from the plot count
          measureTreeTphContribution = if_else((TreeCount == 0) | is.na(DBH), NA_real_, SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)), # trees per hectare, with trees not on measure plots NAed out
@@ -1452,6 +1473,9 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
   arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>%
   mutate(topHeight = sum(topHeightMask * topHeightTph * topHeight, na.rm = TRUE) / sum(topHeightMask * topHeightTph, na.rm = TRUE),
          relativeHeight = TotalHt / topHeight,
+         imputedBasalArea = if_else(is.na(TotalHt) == FALSE, impute_basal_area(Species, TotalHt, isPlantation, relativeHeight), basalArea), # m², imputed whenever height is available to impute
+         treeBasalAreaPerHectareApprox = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", if_else(is.na(basalArea) == FALSE, imputedBasalArea / basalArea, 1), imputedBasalArea), # m²/ha, stack basal area regression on height regression when possible; BAF has to be used with prism trees but imputed basal area is used where possible to introduce estimation error
+         standBasalAreaApprox = sum(isLive * treeBasalAreaPerHectareApprox) / plotsInStand, # m²/ha
          tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
          tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>%
   ungroup()
@@ -1563,7 +1587,7 @@ if (htDiaOptions$includeInvestigatory)
   predictorCorrelation = trees2016 %>% filter(isLiveUnbroken) %>% 
     mutate(heightDiameterRatio = TotalHt / (0.01 * DBH), sinAspect = sin(pi/180 * aspect), cosAspect = cos(pi/180 * aspect)) %>% 
     group_by(speciesGroup) %>%
-    group_modify(~as_tibble(cor(as.matrix(.x %>% mutate(standAge = standAge2020 - 4) %>% select(DBH, TotalHt, heightDiameterRatio, standAge, standBasalAreaPerHectare, basalAreaLarger, standBasalAreaApprox, tallerApproxBasalArea, elevation, slope, sinAspect, cosAspect, topographicShelterIndex, topHeight, relativeHeight, qmd, relativeDiameter) %>% drop_na())), rownames = "predictor1")) %>%
+    group_modify(~as_tibble(cor(as.matrix(.x %>% mutate(standAge = standAge2016) %>% select(DBH, TotalHt, heightDiameterRatio, standAge, standBasalAreaPerHectare, basalAreaLarger, standBasalAreaApprox, tallerApproxBasalArea, elevation, slope, sinAspect, cosAspect, topographicShelterIndex, topHeight, relativeHeight, qmd, relativeDiameter) %>% drop_na())), rownames = "predictor1")) %>%
     pivot_longer(-c(speciesGroup, predictor1), names_to = "predictor2", values_to = "correlation") %>%
     mutate(predictor1 = factor(predictor1, labels = predictorLabels, levels = predictorLevels),
            predictor2 = factor(predictor2, labels = predictorLabels, levels = predictorLevels))
@@ -1574,8 +1598,20 @@ if (htDiaOptions$includeInvestigatory)
     scale_fill_scico(palette = "vik", limits = c(-1, 1)) +
     scale_y_discrete(limits = rev) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"))
-  print(predictorCorrelation %>% filter(predictor1 %in% c("DBH", "height", "height:diameter"), predictor2 %in% c("DBH", "height", "height:diameter")) %>%
+  print(predictorCorrelation %>% filter(predictor1 %in% c("DBH", "height", "height:diameter", "BA", "ABA"), predictor2 %in% c("DBH", "height", "height:diameter")) %>%
     pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
+  print(predictorCorrelation %>% filter(predictor1 %in% c("DBH"), predictor2 %in% c("BA", "ABA")) %>%
+          pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
+  
+  # breakout basal area correlations
+  trees2016 %>% filter(is.na(DBH) == FALSE) %>% group_by(isPlantation) %>% summarize(dbhBaCorrelation = cor(DBH, standBasalAreaPerHectare, method = "pearson"))
+  trees2016 %>% filter(is.na(DBH) == FALSE) %>% group_by(isPlantation) %>% summarize(baAbaCorrelation = cor(standBasalAreaPerHectare, standBasalAreaApprox, method = "pearson"))
+  summary(lm(standBasalAreaPerHectare ~ standBasalAreaApprox, trees2016))
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 125, yend = 125), color = "grey70", linetype = "longdash", linewidth = 0.3) +
+    geom_point(aes(x = standBasalAreaPerHectare, y = standBasalAreaApprox), trees2016 %>% group_by(StandID) %>% summarize(standBasalAreaPerHectare = standBasalAreaPerHectare[1], standBasalAreaApprox = standBasalAreaApprox[1]), alpha = 0.1, shape = 16) +
+    coord_equal() +
+    labs(x = bquote("stand basal area, m"^2*" ha"^-1), y = bquote("approximate basal area, m"^2*" ha"^-1))
   
   # number of multitree height-diameter measurements by species
   trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>% group_by(speciesGroup) %>%
@@ -1995,7 +2031,6 @@ if (htDiaOptions$includeInvestigatory)
     summarize(areaInventoried = sum(standArea), treeCountInventoried = sum(standArea * tph)) %>%
     mutate(totalArea = 33397.1, totalTrees = treeCountInventoried * totalArea / areaInventoried)
 }
-
 
 ## Douglas-fir site index regression: not enough data for other species
 if (htDiaOptions$includeInvestigatory)
