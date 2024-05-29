@@ -4,6 +4,7 @@
 library(dplyr)
 library(forcats)
 library(furrr)
+library(ggnewscale)
 library(ggplot2)
 library(gslnls)
 library(magrittr)
@@ -35,7 +36,8 @@ htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
                       includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
-plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+#plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
 
 append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
 {
@@ -95,7 +97,7 @@ check_plot_results = function(results)
     labs(x = "fit time, s") +
     scale_x_log10() +
   guide_area() +
-    theme(legend.justification = c(1, 0), legend.position = c(0.9, 0.1)) +
+    theme(legend.justification = c(1, 0), legend.position.inside = c(0.9, 0.1)) +
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout(guides = "collect") &
     labs(y = "model fits", fill = NULL) &
@@ -122,7 +124,7 @@ confint_nlrob = function(regression, level = 0.99, df = df.residual(regression),
   return(confidenceInterval)
 }
 
-create_model_stats = function(name, fittingMethod, fitSet = NA_character_, fixedWeight = NA_real_)
+create_model_stats = function(name, fittingMethod = "unknown", fitSet = NA_character_, fixedWeight = NA_real_)
 {
   if (is.null(name) | is.na(fittingMethod))
   {
@@ -667,9 +669,10 @@ get_cross_validation_return_value = function(splitsAndFits, returnModel)
                   fold = as.numeric(str_replace(splitsAndFits$id2, "Fold", ""))))
 }
 
+# TODO: consolidate with get_prediction_stats() after further testing
 get_dbh_stats = function(name, model, trainingData, validationData, validationWeights = validationData$heightWeight, significant = TRUE, tDegreesOfFreedom = 8)
 {
-  dbhModelStats = create_model_stats(NULL, name = name, fittingMethod = class(model)[1]) %>% 
+  dbhModelStats = create_model_stats(name = name, fittingMethod = class(model)[1]) %>% 
     mutate(name = name, 
            coefficients = get_model_coefficients(model), 
            isConverged = is_model_converged(model),
@@ -729,7 +732,7 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   #                 = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(regression$m$resid()^2)))) if no weights are zero
   standardDeviation = sqrt(1/residualDegreesOfFreedom * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
   logLikelihoodGaussian = sum(validationData$TreeCount * dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
-  logLikelihoodT = sum(validationData$TreeCount * (dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation)))
+  logLikelihoodT = sum(validationData$TreeCount * dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
 
   heightDiameterRatio = validationData$TotalHt / (0.01 * predictedDbh)
   speciesLimits = get_species_limits(validationData)
@@ -763,11 +766,11 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   naturalRegenTreeCountTotal = sum(naturalRegenTreeCount)
   dbhModelStats$biasNaturalRegen = sum(naturalRegenTreeCount * residualsNaturalRegen) / naturalRegenTreeCountTotal
   dbhModelStats$maeNaturalRegen = sum(naturalRegenTreeCount * abs(residualsNaturalRegen)) / naturalRegenTreeCountTotal
-  dbhModelStats$mapeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / predictedDbhNaturalRegen)) / naturalRegenTreeCountTotal
+  dbhModelStats$mapeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / dbhNaturalRegen)) / naturalRegenTreeCountTotal
   dbhModelStats$nseNaturalRegen = 1 - sum(naturalRegenTreeCount * residualsNaturalRegen^2) / sum(naturalRegenTreeCount * (dbhNaturalRegen - sum(naturalRegenTreeCount * dbhNaturalRegen) / naturalRegenTreeCountTotal)^2)
   dbhModelStats$paeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / dbhNaturalRegen)) / naturalRegenTreeCountTotal
   dbhModelStats$rmseNaturalRegen = sqrt(sum(naturalRegenTreeCount * residualsNaturalRegen^2) / naturalRegenTreeCountTotal)
-  dbhModelStats$rmspeNaturalRegen = 100 * sqrt(sum(naturalRegenTreeCount * (residualsNaturalRegen / predictedDbhNaturalRegen)^2) / naturalRegenTreeCountTotal)
+  dbhModelStats$rmspeNaturalRegen = 100 * sqrt(sum(naturalRegenTreeCount * (residualsNaturalRegen / dbhNaturalRegen)^2) / naturalRegenTreeCountTotal)
   
   plantationIndices = which(validationData$isPlantation)
   dbhPlantation = validationData$DBH[plantationIndices]
@@ -777,12 +780,11 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   plantationTreeCountTotal = sum(plantationTreeCount)
   dbhModelStats$biasPlantation = sum(plantationTreeCount * residualsPlantation) / plantationTreeCountTotal
   dbhModelStats$maePlantation = sum(plantationTreeCount * abs(residualsPlantation)) / plantationTreeCountTotal
-  dbhModelStats$mapePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / predictedDbhPlantation)) / plantationTreeCountTotal
+  dbhModelStats$mapePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / dbhPlantation)) / plantationTreeCountTotal
   dbhModelStats$nsePlantation = 1 - sum(plantationTreeCount * residualsPlantation^2) / sum(plantationTreeCount * (dbhPlantation - sum(plantationTreeCount * dbhPlantation) / plantationTreeCountTotal)^2)
   dbhModelStats$paePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / dbhPlantation)) / plantationTreeCountTotal
-  dbhModelStats$pearsonPlantation = cor(predictedDbhPlantation, dbhPlantation)
   dbhModelStats$rmsePlantation = sqrt(sum(plantationTreeCount * residualsPlantation^2) / plantationTreeCountTotal)
-  dbhModelStats$rmspePlantation = 100 * sqrt(sum(plantationTreeCount * (residualsPlantation / predictedDbhPlantation)^2) / plantationTreeCountTotal)
+  dbhModelStats$rmspePlantation = 100 * sqrt(sum(plantationTreeCount * (residualsPlantation / dbhPlantation)^2) / plantationTreeCountTotal)
   
   return(dbhModelStats)
 }
@@ -803,6 +805,7 @@ get_fit_return_value = function(model, modelStats, returnModel)
   }
 }
 
+# TODO: consolidate with get_prediction_stats() after further testing
 get_height_stats = function(name, model, trainingData, validationData, validationWeights = validationData$dbhWeight, significant = TRUE, tDegreesOfFreedom = 8)
 {
   heightModelStats = create_model_stats(name = name, fittingMethod = class(model)[1]) %>% 
@@ -887,7 +890,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   heightModelStats$nObservations = nObservations
   heightModelStats$nTaperImplausible = sum((heightDiameterRatio < speciesLimits$heightDiameterRatioMin) | (heightDiameterRatio > speciesLimits$heightDiameterRatioMax), na.rm = TRUE)
   heightModelStats$nValidation = validationTreeCountTotal
-  heightModelStats$nse = 1 - sum(validationData$TreeCount * validationResiduals^2) / sum((validationData$TreeCount * validationData$TotalHt - sum(validationData$TreeCount * validationData$TotalHt) / validationTreeCountTotal)^2)
+  heightModelStats$nse = 1 - sum(validationData$TreeCount * validationResiduals^2) / sum(validationData$TreeCount * (validationData$TotalHt - sum(validationData$TreeCount * validationData$TotalHt) / validationTreeCountTotal)^2)
   heightModelStats$rmse = sqrt(sum(validationData$TreeCount * validationResiduals^2) / validationTreeCountTotal)
   heightModelStats$rmspe = 100 * sqrt(sum(validationData$TreeCount * (validationResiduals / validationData$TotalHt)^2) / validationTreeCountTotal)
   heightModelStats$significant = significant
@@ -901,7 +904,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   heightModelStats$biasNaturalRegen = sum(naturalRegenTreeCount * residualsNaturalRegen) / naturalRegenTreeCountTotal
   heightModelStats$maeNaturalRegen = sum(naturalRegenTreeCount * abs(residualsNaturalRegen)) /naturalRegenTreeCountTotal
   heightModelStats$mapeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / heightNaturalRegen)) / naturalRegenTreeCountTotal
-  heightModelStats$nseNaturalRegen = 1 - sum(naturalRegenTreeCount * residualsNaturalRegen^2) / sum((heightNaturalRegen - sum(naturalRegenTreeCount * heightNaturalRegen) / naturalRegenTreeCountTotal)^2)
+  heightModelStats$nseNaturalRegen = 1 - sum(naturalRegenTreeCount * residualsNaturalRegen^2) / sum(naturalRegenTreeCount * (heightNaturalRegen - sum(naturalRegenTreeCount * heightNaturalRegen) / naturalRegenTreeCountTotal)^2)
   heightModelStats$paeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / heightNaturalRegen)) / naturalRegenTreeCountTotal
   heightModelStats$rmseNaturalRegen = sqrt(sum(naturalRegenTreeCount * residualsNaturalRegen^2) / naturalRegenTreeCountTotal)
   heightModelStats$rmspeNaturalRegen = 100 * sqrt(sum(naturalRegenTreeCount * (residualsNaturalRegen / heightNaturalRegen)^2) / naturalRegenTreeCountTotal)
@@ -915,7 +918,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   heightModelStats$biasPlantation = sum(plantationTreeCount * residualsPlantation) / plantationTreeCountTotal
   heightModelStats$maePlantation = sum(plantationTreeCount * abs(residualsPlantation)) / plantationTreeCountTotal
   heightModelStats$mapePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / heightPlantation)) / plantationTreeCountTotal
-  heightModelStats$nsePlantation = 1 - sum(plantationTreeCount * residualsPlantation^2) / sum((plantationTreeCount * heightPlantation - sum(plantationTreeCount * heightPlantation) / plantationTreeCountTotal)^2)
+  heightModelStats$nsePlantation = 1 - sum(plantationTreeCount * residualsPlantation^2) / sum(plantationTreeCount * (heightPlantation - sum(plantationTreeCount * heightPlantation) / plantationTreeCountTotal)^2)
   heightModelStats$paePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / heightPlantation) / plantationTreeCountTotal)
   heightModelStats$rmsePlantation = sqrt(sum(plantationTreeCount * residualsPlantation^2) / plantationTreeCountTotal)
   heightModelStats$rmspePlantation = 100 * sqrt(sum(plantationTreeCount * (residualsPlantation / heightPlantation)^2) / plantationTreeCountTotal)
@@ -929,17 +932,17 @@ get_preferred_model_linetype_legend = function(noPreviousModel = FALSE)
   {
     return(ggplot() +
              geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = color, linetype = linetype), tibble(x = 0, xend = 1, y = 0, yend = 0, color = c(FALSE, TRUE), linetype = c(FALSE, TRUE)), alpha = 0, show.legend = TRUE) +
-             guides(color = guide_legend(order = 1), linetype = guide_legend(order = 1, override.aes = list(alpha = 1))) +
+             guides(color = guide_legend(order = 1, position = "inside"), linetype = guide_legend(order = 1, position = "inside", override.aes = list(alpha = 1))) +
              labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
              scale_color_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c("grey25", "grey25")) +
-             theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
+             theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position.inside = c(0.5, 0.5), panel.grid = element_blank()))
   } else {
     return(ggplot() +
              geom_segment(aes(x = x, xend = xend, y = y, yend = yend, color = color, linetype = linetype), tibble(x = 0, xend = 1, y = 0, yend = 0, color = c(FALSE, TRUE, "previous model"), linetype = c(FALSE, TRUE, "previous model")), alpha = 0, show.legend = TRUE) +
-             guides(color = guide_legend(order = 1), linetype = guide_legend(order = 1, override.aes = list(alpha = 1))) +
+             guides(color = guide_legend(order = 1, position = "inside"), linetype = guide_legend(order = 1, position = "inside", override.aes = list(alpha = 1))) +
              labs(x = NULL, y = NULL, color = NULL, linetype = NULL) +
              scale_color_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("grey25", "grey25", "grey70")) +
-             theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position = c(0.5, 0.5), panel.grid = element_blank()))
+             theme(axis.line = element_blank(), axis.text = element_blank(), axis.ticks = element_blank(), legend.direction = "horizontal", legend.position.inside = c(0.5, 0.5), panel.grid = element_blank()))
   }
 }
 
@@ -1094,13 +1097,129 @@ get_model_coefficients = function(model)
   return(coefficients)
 }
 
-get_model_stats = function(modelOrStats)
+get_prediction_stats = function(name, responseVariable, trainingData, predicted, effectiveDegreesOfFreedom, validationData, significant = TRUE, tDegreesOfFreedom = 8)
 {
-  modelStats = modelOrStats
-  if (is.null(modelOrStats$stats) == FALSE)
+  modelStats = create_model_stats(name = name)
+  if (responseVariable == "DBH")
   {
-    modelStats = modelOrStats$stats
+    measured = validationData$DBH
+    validationWeights = validationData$heightWeight
+    
+    validationResiduals = predicted - measured
+    dbhByHeightClass = validationData %>% mutate(residuals = validationResiduals) %>%
+      group_by(heightClass) %>%
+      summarize(n = sum(TreeCount),
+                nNaturalRegen = sum(TreeCount * (isPlantation == FALSE)),
+                nPlantation = sum(TreeCount * isPlantation),
+                meanBiasPerTree = sum(TreeCount * residuals) / n,
+                meanBiasPerTreePct = 100 * sum(TreeCount * residuals / DBH) / n,
+                meanDbh = sum(TreeCount * DBH) / n,
+                meanNaturalRegenDbh = if_else(nNaturalRegen > 0, sum(TreeCount * DBH * (isPlantation == FALSE)) / nNaturalRegen, NA_real_),
+                meanPlantationDbh = if_else(nPlantation > 0, sum(TreeCount * DBH * isPlantation) / nPlantation, NA_real_),
+                minPlantationNaturalRegenN = min(nPlantation, nNaturalRegen),
+                plantationEffect = meanPlantationDbh - meanNaturalRegenDbh,
+                plantationEffectPct = 100 * plantationEffect / meanDbh,
+                .groups = "drop") %>%
+      filter(n > 0)
+    heightDiameterRatio = validationData$TotalHt / (0.01 * predicted)
+  } else if (responseVariable == "height") {
+    measured = validationData$TotalHt
+    validationWeights = validationData$dbhWeight
+    
+    validationResiduals = predicted - measured
+    heightByDbhClass = validationData %>% mutate(residuals = validationResiduals) %>%
+      group_by(dbhClass) %>%
+      summarize(n = sum(TreeCount),
+                nNaturalRegen = sum(TreeCount * (isPlantation == FALSE)),
+                nPlantation = sum(TreeCount * isPlantation),
+                meanBiasPerTree = sum(TreeCount * residuals) / n,
+                meanBiasPerTreePct = 100 * sum(TreeCount * residuals / TotalHt) / n,
+                meanHeight = sum(TreeCount * TotalHt) / n,
+                meanNaturalRegenHeight = if_else(nNaturalRegen > 0, sum(TreeCount * TotalHt * (isPlantation == FALSE)) / nNaturalRegen, NA_real_),
+                meanPlantationHeight = if_else(nPlantation > 0, sum(TreeCount * TotalHt * isPlantation) / nPlantation, NA_real_),
+                minPlantationNaturalRegenN = min(nPlantation, nNaturalRegen),
+                plantationEffect = meanPlantationHeight - meanNaturalRegenHeight,
+                plantationEffectPct = 100 * plantationEffect / meanHeight,
+                .groups = "drop") %>%
+      filter(n > 0)
+    heightDiameterRatio = predicted / (0.01 * validationData$DBH)
+  } else {
+    stop(paste0("Unhandled response variable ", responseVariable, "."))
   }
+  
+  nObservations = sum(trainingData$TreeCount)
+  residualDegreesOfFreedom = nObservations - effectiveDegreesOfFreedom
+  
+  # logLik.lm() (https://github.com/wch/r-source/blob/trunk/src/library/stats/R/logLik.R)
+  #  log likelihood = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(w*res^2))))
+  # logLik.nls() (https://github.com/wch/r-source/blob/trunk/src/library/stats/R/nls.R)
+  #  log likelihood = -N/2 * (log(2 * pi) + 1 - log(N) - sum(log(w + zw))/N + log(sum(regression$m$resid()^2)))
+  #                 = 1/2 * (sum(log(w)) - N * (log(2 * pi) + 1 - log(N) + log(sum(regression$m$resid()^2)))) if no weights are zero
+  standardDeviation = sqrt(1/residualDegreesOfFreedom * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
+  logLikelihoodGaussian = sum(validationData$TreeCount * dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
+  logLikelihoodT = sum(validationData$TreeCount * dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
+
+  speciesLimits = get_species_limits(validationData)
+  validationTreeCountTotal = sum(validationData$TreeCount)
+  modelStats$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # calculate AIC and BIC manually because nlrob objects implement weighting differently from nls and gslnls
+  modelStats$aict = -2*logLikelihoodT + 2 * effectiveDegreesOfFreedom
+  modelStats$bias = sum(validationData$TreeCount * validationResiduals) / validationTreeCountTotal
+  modelStats$bic = -2*logLikelihoodGaussian + effectiveDegreesOfFreedom * log(nObservations)
+  modelStats$bict = -2*logLikelihoodT + effectiveDegreesOfFreedom * log(nObservations)
+  modelStats$effectiveDegreesOfFreedom = effectiveDegreesOfFreedom
+  if (responseVariable == "DBH")
+  {
+    modelStats$mab = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTree)) / sum(dbhByHeightClass$n)
+    modelStats$mae = sum(validationData$TreeCount * abs(validationResiduals)) / validationTreeCountTotal
+    modelStats$mapb = sum(dbhByHeightClass$n * abs(dbhByHeightClass$meanBiasPerTreePct)) / sum(dbhByHeightClass$n)
+    modelStats$mape = 100 * sum(validationData$TreeCount * abs(validationResiduals / measured)) / validationTreeCountTotal
+    modelStats$meanAbsolutePlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffect), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
+    modelStats$meanAbsolutePercentPlantationEffect = sum(dbhByHeightClass$minPlantationNaturalRegenN * abs(dbhByHeightClass$plantationEffectPct), na.rm = TRUE) / sum(dbhByHeightClass$minPlantationNaturalRegenN * (is.na(dbhByHeightClass$plantationEffect) == FALSE), na.rm = TRUE)
+  } else {
+    modelStats$mab = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTree)) / sum(heightByDbhClass$n)
+    modelStats$mae = sum(validationData$TreeCount * abs(validationResiduals)) / validationTreeCountTotal
+    modelStats$mapb = sum(heightByDbhClass$n * abs(heightByDbhClass$meanBiasPerTreePct)) / sum(heightByDbhClass$n)
+    modelStats$mape = 100 * sum(validationData$TreeCount * abs(validationResiduals / validationData$TotalHt)) / validationTreeCountTotal
+    modelStats$meanAbsolutePlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffect), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
+    modelStats$meanAbsolutePercentPlantationEffect = sum(heightByDbhClass$minPlantationNaturalRegenN * abs(heightByDbhClass$plantationEffectPct), na.rm = TRUE) / sum(heightByDbhClass$minPlantationNaturalRegenN * (is.na(heightByDbhClass$plantationEffect) == FALSE), na.rm = TRUE)
+  }
+  modelStats$nNonPhysical = sum(is.na(predicted) | (predicted < speciesLimits$dbhMin) | (predicted > speciesLimits$dbhMax))
+  modelStats$nObservations = nObservations
+  modelStats$nTaperImplausible = sum((heightDiameterRatio < speciesLimits$heightDiameterRatioMin) | (heightDiameterRatio > speciesLimits$heightDiameterRatioMax), na.rm = TRUE)
+  modelStats$nValidation = validationTreeCountTotal
+  modelStats$nse = 1 - sum(validationData$TreeCount * validationResiduals^2) / sum(validationData$TreeCount * (measured - sum(validationData$TreeCount * measured) / validationTreeCountTotal)^2)
+  modelStats$rmse = sqrt(sum(validationData$TreeCount * validationResiduals^2) / validationTreeCountTotal)
+  modelStats$rmspe = 100 * sqrt(sum(validationData$TreeCount * (validationResiduals / measured)^2) / validationTreeCountTotal)
+  modelStats$significant = significant
+  
+  naturalRegenIndices = which(validationData$isPlantation == FALSE)
+  measuredNaturalRegen = measured[naturalRegenIndices]
+  predictedNaturalRegen = predicted[naturalRegenIndices]
+  residualsNaturalRegen = predictedNaturalRegen - measuredNaturalRegen
+  naturalRegenTreeCount = validationData$TreeCount[naturalRegenIndices]
+  naturalRegenTreeCountTotal = sum(naturalRegenTreeCount)
+  modelStats$biasNaturalRegen = sum(naturalRegenTreeCount * residualsNaturalRegen) / naturalRegenTreeCountTotal
+  modelStats$maeNaturalRegen = sum(naturalRegenTreeCount * abs(residualsNaturalRegen)) / naturalRegenTreeCountTotal
+  modelStats$mapeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / measuredNaturalRegen)) / naturalRegenTreeCountTotal
+  modelStats$nseNaturalRegen = 1 - sum(naturalRegenTreeCount * residualsNaturalRegen^2) / sum(naturalRegenTreeCount * (measuredNaturalRegen - sum(naturalRegenTreeCount * measuredNaturalRegen) / naturalRegenTreeCountTotal)^2)
+  modelStats$paeNaturalRegen = 100 * sum(naturalRegenTreeCount * abs(residualsNaturalRegen / measuredNaturalRegen)) / naturalRegenTreeCountTotal
+  modelStats$rmseNaturalRegen = sqrt(sum(naturalRegenTreeCount * residualsNaturalRegen^2) / naturalRegenTreeCountTotal)
+  modelStats$rmspeNaturalRegen = 100 * sqrt(sum(naturalRegenTreeCount * (residualsNaturalRegen / measuredNaturalRegen)^2) / naturalRegenTreeCountTotal)
+  
+  plantationIndices = which(validationData$isPlantation)
+  measuredPlantation = measured[plantationIndices]
+  predictedPlantation = predicted[plantationIndices]
+  residualsPlantation = predictedPlantation - measuredPlantation
+  plantationTreeCount = validationData$TreeCount[plantationIndices]
+  plantationTreeCountTotal = sum(plantationTreeCount)
+  modelStats$biasPlantation = sum(plantationTreeCount * residualsPlantation) / plantationTreeCountTotal
+  modelStats$maePlantation = sum(plantationTreeCount * abs(residualsPlantation)) / plantationTreeCountTotal
+  modelStats$mapePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / measuredPlantation)) / plantationTreeCountTotal
+  modelStats$nsePlantation = 1 - sum(plantationTreeCount * residualsPlantation^2) / sum(plantationTreeCount * (measuredPlantation - sum(plantationTreeCount * measuredPlantation) / plantationTreeCountTotal)^2)
+  modelStats$paePlantation = 100 * sum(plantationTreeCount * abs(residualsPlantation / measuredPlantation)) / plantationTreeCountTotal
+  modelStats$rmsePlantation = sqrt(sum(plantationTreeCount * residualsPlantation^2) / plantationTreeCountTotal)
+  modelStats$rmspePlantation = 100 * sqrt(sum(plantationTreeCount * (residualsPlantation / measuredPlantation)^2) / plantationTreeCountTotal)
+  
   return(modelStats)
 }
 
@@ -1131,6 +1250,16 @@ get_species_limits = function(trees)
                                                      speciesGroup == "RC" ~ 5 + 1000 * DBH^-0.59,
                                                      speciesGroup == "other" ~ 10 + 1000 * DBH^-0.61),
                   heightDiameterRatioMin = 2))
+}
+
+get_stats = function(modelOrStats)
+{
+  modelStats = modelOrStats
+  if (is.null(modelOrStats$stats) == FALSE)
+  {
+    modelStats = modelOrStats$stats
+  }
+  return(modelStats)
 }
 
 impute_basal_area = function(Species, heightInM, isPlantation, relativeHeight)
@@ -1186,23 +1315,41 @@ is_model_converged = function(model)
   return(isConverged)
 }
 
-plot_auc_bank = function(aucs, fillLabel = "median\nAUC", omitMab = FALSE, xLimits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))
+plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))
 {
   if (omitMab)
   {
     aucBank = ggplot(aucs) +
         geom_raster(aes(x = species, y = name, fill = aucMae)) +
-        labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, fill = fillLabel) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+        labs(fill = fillLabel) +
+        new_scale_fill() +
+        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant)))) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
+        labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, fill = NULL) +
+        #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, fill = NULL) +
         scale_y_discrete(limits = rev)
     letterOffset = 1
   } else {
     aucBank = ggplot(aucs) +
         geom_raster(aes(x = species, y = name, fill = aucMab)) +
-        labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, fill = fillLabel) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+        labs(fill = fillLabel) +
+        new_scale_fill() +
+        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant)))) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+        labs(title = bquote(.(plotLetters[1])~"MAB"), x = NULL, y = NULL, fill = NULL) +
+        #labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, fill = NULL) +
         scale_y_discrete(limits = rev) +
       ggplot(aucs) +
         geom_raster(aes(x = species, y = name, fill = aucMae)) +
-        labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, fill = fillLabel) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+        labs(fill = fillLabel) +
+        new_scale_fill() +
+        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant)))) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+        labs(title = bquote(.(plotLetters[2])~"MAE"), x = NULL, y = NULL, fill = NULL) +
+        #labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, fill = NULL) +
         scale_y_discrete(labels = NULL, limits = rev)
     letterOffset = 2
   }
@@ -1210,27 +1357,44 @@ plot_auc_bank = function(aucs, fillLabel = "median\nAUC", omitMab = FALSE, xLimi
   aucBank = aucBank +
     ggplot(aucs) +
       geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-      labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+      labs(fill = fillLabel) +
+      new_scale_fill() +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant)))) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[letterOffset + 1])~"RMSE"), x = NULL, y = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
     ggplot(aucs) +
       geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-      labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"AIC"), x = NULL, y = NULL, fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+      labs(fill = fillLabel) +
+      new_scale_fill() +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant)))) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[letterOffset + 2])~"ΔAICn"), x = NULL, y = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"ΔAICn"), x = NULL, y = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
     ggplot(aucs) +
       geom_raster(aes(x = species, y = name, fill = aucNse)) +
-      labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+      labs(fill = fillLabel) +
+      new_scale_fill() +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant)))) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[letterOffset + 3])~"model efficiency"), x = NULL, y = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
     plot_annotation(theme = theme(plot.margin =  margin())) +
     plot_layout(nrow = 1, guides = "collect") &
-      scale_fill_scico(palette = "bam", limits = c(0, 1), na.value = rgb(0.9642, 0.9444, 0.9435)) &
       scale_x_discrete(limits = xLimits) &
       #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.spacing.y = unit(0.3, "line"), panel.grid = element_blank())
+      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.spacing.y = unit(0.4, "line"), panel.grid = element_blank())
   
   return(aucBank)
 }
 
-plot_exploratory = function(liveUnbrokenTrees, plotLetters = plotLetters, speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE)
+plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE)
 {
   dbhQuantiles = liveUnbrokenTrees %>% mutate(diameterClass = 2.5 * (ceiling(DBH / 2.5) - 0.5)) %>% group_by(diameterClass) %>%
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), height = quantile(TotalHt, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(TotalHt, na.rm = TRUE), .groups = "drop") %>%
@@ -1239,8 +1403,8 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = plotLetters, specie
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), dbh = quantile(DBH, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(DBH, na.rm = TRUE), .groups = "drop") %>%
     pivot_wider(names_from = quantiles, values_from = dbh)
 
-  distributionLegendPosition = c(1, distributionLegendPositionY)
-  treeLegendPosition = c(1, 0.04)
+  distributionLegendPosition = "inside"
+  treeLegendPosition = "inside"
   if (omitLegends)
   {
     distributionLegendPosition = "none"
@@ -1264,12 +1428,13 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = plotLetters, specie
     geom_path(aes(x = mean, y = heightClass, color = "mean DBH", linetype = "mean DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
     #geom_path(aes(x = median, y = heightClass, color = "median DBH", linetype = "median DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
     coord_cartesian(xlim = c(0, 250), ylim = c(0, 80)) +
-    labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(bold(.(plotLetters[1]))~.(speciesLabel))) +
+    labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(.(titleLetters[1])~.(speciesLabel))) +
+    #labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(bold(.(titleLetters[1]))~.(speciesLabel))) +
     guides(color = guide_legend(order = 1), fill = guide_colorbar(order = 2), linetype = guide_legend(order = 1)) +
     scale_color_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("green2", "green2", "burlywood2", "burlywood2")) +
     scale_fill_viridis_c(breaks = c(1, 3, 10, 33, 100, 330), limits = c(1, maxTreesMeasured), trans = "log10") +
     scale_linetype_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("solid", "longdash", "solid", "longdash")) +
-    theme(legend.key.height = unit(0.95, "line"), legend.justification = c(1, 0), legend.position = treeLegendPosition, legend.title = element_text(size = 9.5), legend.spacing.y = unit(0.25, "line"))
+    theme(legend.key.height = unit(0.95, "line"), legend.justification = c(1, 0), legend.position = treeLegendPosition, legend.position.inside = c(1, 0.04), legend.title = element_text(size = 9.5), legend.spacing.y = unit(0.25, "line"))
   if (omitQuantiles)
   {
     return(exploratoryPlots)
@@ -1295,7 +1460,8 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = plotLetters, specie
       scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
       scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
       scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-      labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[2]))~.(speciesLabel))) +
+      labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[2] != "") { bquote(.(titleLetters[2])~.(speciesLabel)) } else { NULL }) +
+      #labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[2] != "") { bquote(bold(.(titleLetters[2]))~.(speciesLabel)) } else { NULL }) +
       theme(legend.position = "none") +
     ggplot(heightQuantiles) +
       geom_ribbon(aes(x = heightClass, ymin = 100 * (q025 - mean) / mean^dbhPower, ymax = 100 * (q975 - mean) / mean^dbhPower, alpha = "95% probability"), fill = "burlywood4") +
@@ -1317,8 +1483,9 @@ plot_exploratory = function(liveUnbrokenTrees, plotLetters = plotLetters, specie
       scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
       scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
       scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-      labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = bquote(bold(.(plotLetters[3]))~.(speciesLabel))) +
-      theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition) +
+      labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[3] != "") { bquote(.(titleLetters[3])~.(speciesLabel)) } else { NULL }) +
+      #labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[3] != "") { bquote(bold(.(titleLetters[3]))~.(speciesLabel)) } else { NULL }) +
+      theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition, legend.position.inside = c(1, distributionLegendPositionY)) +
     plot_layout(nrow = 1, ncol = 3, widths = c(260, 200, 200))
   return(exploratoryPlots)
 }
@@ -1344,7 +1511,7 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
       coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
       labs(x = NULL, y = "sample quantile", color = NULL) +
       scale_color_manual(values = heightColors) +
-      theme(legend.key.height = unit(0.8, "line"), legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
+      theme(legend.key.height = unit(0.8, "line"), legend.justification = c(1, 0), legend.position.inside = c(1, 0.03)) +
     ggplot() +
       geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4) +
       geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4) +
@@ -1358,7 +1525,7 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
       coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
       labs(x = NULL, y = NULL, color = NULL) +
       scale_color_manual(values = dbhColors) +
-      theme(legend.key.height = unit(0.8, "line"),legend.justification = c(1, 0), legend.position = c(1, 0.03)) +
+      theme(legend.key.height = unit(0.8, "line"),legend.justification = c(1, 0), legend.position.inside = c(1, 0.03)) +
     ggplot() +
       geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
       geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
@@ -1558,7 +1725,7 @@ if (htDiaOptions$includeInvestigatory)
     coord_cartesian(ylim = c(0, 2500)) +
     labs(x = "relative height", y = "trees measured", fill = NULL) +
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
-    theme(legend.justification = c(1, 1), legend.position = c(1, 1)) +
+    theme(legend.justification = c(1, 1), legend.position.inside = c(1, 1)) +
   ggplot() +
     geom_segment(aes(x = 5.4, y = 0, xend = 5.4, yend = 3000), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_histogram(aes(x = relativeDiameter, fill = speciesGroup), trees2016, binwidth = 0.05, na.rm = TRUE) +
@@ -1603,9 +1770,16 @@ if (htDiaOptions$includeInvestigatory)
   print(predictorCorrelation %>% filter(predictor1 %in% c("DBH"), predictor2 %in% c("BA", "ABA")) %>%
           pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
   
-  # breakout basal area correlations
-  trees2016 %>% filter(is.na(DBH) == FALSE) %>% group_by(isPlantation) %>% summarize(dbhBaCorrelation = cor(DBH, standBasalAreaPerHectare, method = "pearson"))
-  trees2016 %>% filter(is.na(DBH) == FALSE) %>% group_by(isPlantation) %>% summarize(baAbaCorrelation = cor(standBasalAreaPerHectare, standBasalAreaApprox, method = "pearson"))
+  # breakout BA, BAL, ABA, and AAT correlations
+  trees2016 %>% filter(is.na(TotalHt) == FALSE, isLiveUnbroken) %>% group_by(isPlantation, speciesGroup) %>% summarize(dbhHeightCorrelation = cor(DBH, TotalHt, method = "pearson")) %>% arrange(isPlantation, desc(dbhHeightCorrelation))
+  trees2016 %>% filter(is.na(DBH) == FALSE, isLiveUnbroken) %>% group_by(isPlantation, speciesGroup) %>% summarize(baAbaCorrelation = cor(standBasalAreaPerHectare, standBasalAreaApprox, method = "pearson")) %>% arrange(isPlantation, desc(baAbaCorrelation))
+  
+  trees2016 %>% filter(is.na(TotalHt) == FALSE, isLiveUnbroken) %>% group_by(isPlantation, speciesGroup) %>% summarize(baHeightCorrelation = cor(standBasalAreaPerHectare, TotalHt, method = "pearson")) %>% arrange(isPlantation, desc(baHeightCorrelation))
+  trees2016 %>% filter(is.na(TotalHt) == FALSE, isLiveUnbroken) %>% group_by(isPlantation, speciesGroup) %>% summarize(balHtCorrelation = cor(basalAreaLarger, TotalHt, method = "pearson")) %>% arrange(isPlantation, desc(balHtCorrelation))
+  
+  trees2016 %>% filter(is.na(DBH) == FALSE, isLiveUnbroken) %>% group_by(isPlantation, speciesGroup) %>% summarize(abaDbhCorrelation = cor(standBasalAreaApprox, DBH, method = "pearson")) %>% arrange(isPlantation, desc(abaDbhCorrelation))
+  trees2016 %>% filter(is.na(DBH) == FALSE, isLiveUnbroken) %>% group_by(isPlantation, speciesGroup) %>% summarize(aatDbhCorrelation = cor(tallerApproxBasalArea, DBH, method = "pearson")) %>% arrange(isPlantation, desc(aatDbhCorrelation))
+  
   summary(lm(standBasalAreaPerHectare ~ standBasalAreaApprox, trees2016))
   ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 125, yend = 125), color = "grey70", linetype = "longdash", linewidth = 0.3) +
@@ -2010,7 +2184,7 @@ if (htDiaOptions$includeInvestigatory)
     labs(x = "area inventoried, ha", y = "stand type classification (hierarchical cluster ID)", fill = NULL, title = "a) age and area") +
     scale_fill_manual(breaks = c("natural regeneration", "plantation"), values = c("grey10", "grey35")) +
     scale_x_continuous(expand = c(0.012, 0)) +
-    theme(legend.justification = c(1, 0), legend.position = c(1, 0.02)) +
+    theme(legend.justification = c(1, 0), legend.position.inside = c(1, 0.02)) +
   ggplot() +
     geom_bar(aes(y = clusterID, fill = fct_rev(speciesGroup), weight = basalArea), speciesBasalAreaByCluster %>% select(-meanAge2016, -meanTopHeight, -starts_with("age"), -starts_with("topHeight")) %>%
                pivot_longer(cols = -c("clusterID", "meanTotalBasalArea", "plantationArea", "totalArea"), names_to = "speciesGroup", values_to = "basalArea") %>%
@@ -2031,6 +2205,7 @@ if (htDiaOptions$includeInvestigatory)
     summarize(areaInventoried = sum(standArea), treeCountInventoried = sum(standArea * tph)) %>%
     mutate(totalArea = 33397.1, totalTrees = treeCountInventoried * totalArea / areaInventoried)
 }
+
 
 ## Douglas-fir site index regression: not enough data for other species
 if (htDiaOptions$includeInvestigatory)
@@ -2064,7 +2239,7 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022), color = planted), alpha = 0.3) +
     labs(x = "measured 50-year site index, feet", y = "nonlinear model prediction, feet", color = "stand age") +
     scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
-    theme(legend.justification = c(1, 0), legend.position = c(0.98, 0.02))
+    theme(legend.justification = c(1, 0), legend.position.inside = c(0.98, 0.02))
   
   ggplot(psmeStands2022) +
     geom_point(aes(x = Cruised_Si, y = -residuals(psmeSiteIndexModelLinear), color = planted), alpha = 0.3, shape = 16) +
@@ -2074,7 +2249,7 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022) - Cruised_Si, color = planted), alpha = 0.3, shape = 16) +
     labs(x = "measured 50-year site index, feet", y = "nonlinear model error, feet", color = "stand age") +
     scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
-    theme(legend.justification = c(1, 1), legend.position = c(0.98, 0.98))
+    theme(legend.justification = c(1, 1), legend.position.inside = c(0.98, 0.98))
   
   ggplot(psmeStands2022) + geom_point(aes(x = Elev_Mean, y = Cruised_Si), alpha = 0.3, shape = 16) +
   ggplot(psmeStands2022) + geom_point(aes(x = SlopeMeanPercent, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
@@ -2105,7 +2280,7 @@ if (htDiaOptions$includeInvestigatory)
     labs(x = "percentage of live stems measured", y = "height, m", alpha = NULL, fill = NULL) +
     scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
     scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
-    theme(legend.justification = c(1, 1), legend.position = c(1, 1), legend.spacing.y = unit(0.3, "line"))
+    theme(legend.justification = c(1, 1), legend.position.inside = c(1, 1), legend.spacing.y = unit(0.3, "line"))
 }
 
   
@@ -2117,7 +2292,7 @@ if (htDiaOptions$includeInvestigatory)
     labs(x = "stand age in 2020, years", y = "50-year site index measured in 2015-2016, feet", color = NULL) +
     guides(color = guide_legend(override.aes = list(alpha = 0.8))) +
     scale_color_manual(breaks = c("Douglas-fir", "hemlock", "hardwood", "other"), values = c("green4", "blue2", "gold1", "purple1")) +
-    theme(legend.justification = c(1, 0), legend.position = c(0.98, 0.02))
+    theme(legend.justification = c(1, 0), legend.position.inside = c(0.98, 0.02))
   
   ggplot() +
     geom_hline(yintercept = 75, color = "grey70", linetype = "longdash") +

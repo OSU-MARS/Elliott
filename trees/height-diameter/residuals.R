@@ -118,7 +118,8 @@ ggplot() +
   geom_path(aes(x = DBH, y = estHeightVar[,1], color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 220), ylim = c(0, 125)) +
   facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
-  labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(bold(.(plotLetters[1]))~"height prediction")) +
+  labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(.(plotLetters[1])~"height prediction")) +
+  #labs(x = "DBH, cm", y = bquote(widehat(var)["height"]*", m²"), alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(bold(.(plotLetters[1]))~"height prediction")) +
   scale_x_continuous(breaks = seq(0, 300, by = 100)) +
 ggplot() +
   geom_errorbar(aes(xmin = varianceQ025, xmax = varianceQ975, y = heightClass, alpha = n), empiricalDbhVariance, color = "grey50", linewidth = 0.3, na.rm = TRUE, orientation = "y") +
@@ -127,7 +128,8 @@ ggplot() +
   geom_path(aes(x = estDbhVar[,1], y = TotalHt, color = speciesGroup, group = paste(speciesGroup, isPlantation), linetype = isPlantation), modeledVariance, na.rm = TRUE) +
   coord_cartesian(xlim = c(0, 1550), ylim = c(0, 83)) +
   facet_wrap(vars(speciesGroup), labeller = labeller(speciesGroup = c("Psme" = "Douglas-fir", "Alru" = "red alder", "Tshe" = "western hemlock", "Acma" = "bigleaf maple", "Umca" = "Oregon myrtle", "Thpl" = "western redcedar", "other" = "other species"))) +
-  labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(bold(.(plotLetters[2]))~"DBH prediction")) +
+  labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(.(plotLetters[2])~"DBH prediction")) +
+  #labs(x = bquote(widehat(var)["DBH"]*", cm²"), y = "height, m", alpha = "variance\nestimate", color = "variance\nmodel", fill = "variance\nmodel", linetype = NULL, shape = NULL, size = NULL, title = bquote(bold(.(plotLetters[2]))~"DBH prediction")) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(guides = "collect") &
   guides(alpha = guide_legend(order = 3, reverse = TRUE), color = guide_legend(order = 1), fill = guide_legend(order = 1), linetype = guide_legend(order = 2), shape = guide_legend(order = 2), size = guide_legend(order = 2)) &

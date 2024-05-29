@@ -9,18 +9,18 @@
 other2016 = trees2016 %>% filter((Species %in% c("DF", "RA", "WH", "BM", "OM", "RC")) == FALSE, isLiveUnbroken, is.na(TotalHt) == FALSE) %>%
   mutate(dbhWeight = pmin(TreeCount/(0.81*DBH^0.94), 5*TreeCount),
          heightWeight = pmin(TreeCount/(0.98*(TotalHt - 1.37)^1.90), 5*TreeCount))
-other2016physio = other2016 %>% filter(is.na(elevation) == FALSE)
+other2016physio = other2016 %>% filter(is.na(elevation) == FALSE) # one tree without physiographic variables
 other2016gamConstraint = c(DBH = -1.4359/0.8154, TotalHt = 1.37, standBasalAreaPerHectare = median(other2016$standBasalAreaPerHectare), basalAreaLarger = median(other2016$basalAreaLarger), standBasalAreaApprox = median(other2016$standBasalAreaApprox), tallerApproxBasalArea = median(other2016$tallerApproxBasalArea), elevation = median(other2016physio$elevation), slope = median(other2016physio$slope), aspect = median(other2016physio$aspect), topographicShelterIndex = median(other2016physio$topographicShelterIndex), relativeHeight = median(other2016$relativeHeight), relativeDiameter = median(other2016$relativeDiameter)) # point constraint for mgcv::s()
 
 other2016defaultWeight = other2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*TreeCount),
                                               heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 other2016defaultWeightPhysio = other2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-otherOptions = tibble(fitHeight = FALSE, 
+otherOptions = tibble(fitHeight = TRUE, 
                       fitHeightNlrob = FALSE,
                       fitHeightGnls = FALSE,
                       fitHeightMixed = FALSE,
-                      fitDbh = TRUE,
+                      fitDbh = FALSE,
                       fitDbhNlrob = FALSE,
                       fitDbhMixed = FALSE)
 
@@ -635,15 +635,15 @@ if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh &
                                   mutate(responseVariable = "DBH")) %>%
     mutate(species = "other")
   otherResults = bind_rows(bind_rows(bind_rows(lapply(otherHeightFromDiameter, get_list_stats)),
-                                     #bind_rows(lapply(otherHeightFromDiameterGnls, get_model_stats)),
-                                     #get_model_stats(name = "Sharma-Zhang BA+L GNLS", fitting = "gnls"),
+                                     #bind_rows(lapply(otherHeightFromDiameterGnls, get_stats)),
+                                     #create_model_stats(name = "Sharma-Zhang BA+L GNLS", fitting = "gnls"),
                                      bind_rows(lapply(otherHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
                                      bind_rows(lapply(otherHeightFromDiameterMixed, get_list_stats, fitSet = "mixed")),
                                      bind_rows(lapply(otherHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
                              mutate(responseVariable = "height"),
                            bind_rows(bind_rows(lapply(otherDiameterFromHeight, get_list_stats)),
                                      create_model_stats(name = "Schnute inverse", fitSet = "primary", fittingMethod = "gsl_nls"),
-                                     #bind_rows(lapply(otherDiameterFromHeightGnls, get_model_stats)),
+                                     #bind_rows(lapply(otherDiameterFromHeightGnls, get_stats)),
                                      #create_model_stats(name = "Schnute GNLS", fittingMethod = "gnls"),
                                      bind_rows(lapply(otherDiameterFromHeightGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
                                      bind_rows(lapply(otherDiameterFromHeightMixed, get_list_stats, fitSet = "mixed")),
@@ -673,7 +673,6 @@ if (otherOptions$fitHeight & otherOptions$fitHeightMixed & otherOptions$fitDbh &
   check_plot_results(otherResults)
   save(file = "trees/height-diameter/data/other results.Rdata", otherCoefficients, otherResults)
 }
-
 
 
 ## preferred forms identified (results.R, Figure 9)
@@ -719,4 +718,58 @@ if (htDiaOptions$includeInvestigatory)
     #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
     labs(x = "minority species height, m", y = "basal area, m²", color = NULL) +
     theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))
+}
+
+
+## GAM smooth effects
+if (htDiaOptions$includeInvestigatory)
+{
+  otherHeightGam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 7, pc = gamConstraint) + 
+                                                 #s(standBasalAreaPerHectare, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint) + # not significant
+                                                 s(basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 6, pc = gamConstraint) + 
+                                                 s(elevation, bs = "ts", k = 4, pc = gamConstraint) + 
+                                                 #s(slope, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                                                 #s(aspect, bs = "ts", k = 3, pc = gamConstraint) + # not significant 
+                                                 s(topographicShelterIndex, bs = "ts", k = 4, pc = gamConstraint),
+                                                 #s(relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 4, pc = gamConstraint), # not signficant 
+                           data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(otherHeightGam)
+  summary(otherHeightGam)
+  par(mfrow = c(2, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
+  plot.gam(otherHeightGam, scale = 0)
+  
+  otherDbhGam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint) +
+                                          #s(standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint) + # not significant
+                                          s(tallerApproxBasalArea, bs = "ts", by = as.factor(isPlantation), k = 4, pc = gamConstraint),
+                                          #s(elevation, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                                          #s(slope, bs = "ts", k = 4, pc = gamConstraint), # not significant
+                                          #s(aspect, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                                          #s(topographicShelterIndex, bs = "ts", k = 3, pc = gamConstraint), # not significant
+                                          #s(relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint), # not significant
+                        data = other2016physio, constraint = other2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(otherDbhGam)
+  summary(otherDbhGam)
+  par(mfrow = c(1, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
+  plot.gam(otherDbhGam, scale = 0)
+}
+
+
+## random forest regression
+if (htDiaOptions$includeInvestigatory)
+{
+  otherHeightForest = train(TotalHt ~ DBH + standBasalAreaPerHectare + basalAreaLarger + elevation + slope + aspect + topographicShelterIndex + relativeDiameter, data = other2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                           importance = "impurity_corrected",
+                           tuneGrid = expand.grid(mtry = c(6, 8),
+                                                  splitrule = "variance",
+                                                  min.node.size = c(1, 2)))
+  otherHeightForest
+  varImp(otherHeightForest)
+  
+  otherDbhForest = train(DBH ~ TotalHt + standBasalAreaApprox + tallerApproxBasalArea + elevation + slope + aspect + topographicShelterIndex + relativeHeight, data = other2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                        importance = "impurity_corrected",
+                        tuneGrid = expand.grid(mtry = c(7, 8),
+                                               splitrule = "variance",
+                                               min.node.size = c(1, 2)))
+  otherDbhForest
+  varImp(otherDbhForest)
 }

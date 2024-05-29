@@ -12,7 +12,7 @@
 alru2016 = trees2016 %>% filter(Species == "RA", isLiveUnbroken, is.na(TotalHt) == FALSE) %>% # live red alders measured for height
   mutate(dbhWeight = pmin(TreeCount/(1.15*DBH^(0.86 - 0.045*isPlantation)), 5*TreeCount),
          heightWeight = pmin(TreeCount/(16.5*(TotalHt - 1.37)^(0.80 - 0.23*isPlantation)), 5*TreeCount))
-alru2016physio = alru2016 %>% filter(is.na(elevation) == FALSE)
+alru2016physio = alru2016 %>% filter(is.na(elevation) == FALSE) # 12 trees without physiographic variables
 alru2016gamConstraint = c(DBH = -1.5179/0.7812, TotalHt = 1.37, standBasalAreaPerHectare = median(alru2016$standBasalAreaPerHectare), basalAreaLarger = median(alru2016$basalAreaLarger), standBasalAreaApprox = median(alru2016$standBasalAreaApprox), tallerApproxBasalArea = median(alru2016$tallerApproxBasalArea), elevation = median(alru2016physio$elevation), slope = median(alru2016physio$slope), aspect = median(alru2016physio$aspect), topographicShelterIndex = median(alru2016physio$topographicShelterIndex), relativeHeight = median(alru2016$relativeHeight), relativeDiameter = median(alru2016$relativeDiameter)) # point constraint for mgcv::s()
 
 alru2016defaultWeight = alru2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*TreeCount),
@@ -386,7 +386,7 @@ if (alruOptions$fitDbh)
   alruDiameterFromHeightNlrob$ruarkAbat = fit_nlrob("Ruark ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016, start = list(a1 = 1.1, a2 = -0.008, b1 = 1.5, b1p = -0.28, b2 = -0.049, b2p = 0.025), control = nls.control(tol = 1E-4)) # job step factor
   alruDiameterFromHeightNlrob$ruarkAbatPhysio = fit_nlrob("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016physio, start = list(a1 = 0.9, a2 = -0.008, a5 = 0.55, b1 = 1.5, b1p = -0.29, b2 = -0.04, b2p = 0.026))
   alruDiameterFromHeightNlrob$ruarkAbatPhysioRelHt = fit_nlrob("Ruark ABA+T RelHt physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016physio, start = list(a1 = 0.8, a2 = -0.004, a5 = 0.5, a9 = 0, b1 = 1.5, b1p = -0.27, b2 = -0.04, b2p = 0.022), control = nls.control(tol = 1E-4), significant = FALSE) # job step factor
-  alruDiameterFromHeightNlrob$ruarkAbatRelHt = fit_nlrob("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016, start = list(a1 = 0.9, a2 = -0.003, a9 = 0, b1 = 1.6, b1p = -0.25, b2 = -0.043, b2p = 0.021), significant = FALSE)
+  alruDiameterFromHeightNlrob$ruarkAbatRelHt = fit_nlrob("Ruark ABA+T RelHt", DBH ~ (a1 + a2 * tallerApproxBasalArea + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016, start = list(a1 = 0.9, a2 = -0.003, a9 = 0, b1 = 1.6, b1p = -0.25, b2 = -0.043, b2p = 0.021), control = nls.control(tol = 1E-4), significant = FALSE) # job step factor
   alruDiameterFromHeightNlrob$ruarkPhysio = fit_nlrob("Ruark physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016physio, start = list(a1 = 0.85, a5 = 0.55, b1 = 1.45, b1p = -0.27, b2 = -0.038, b2p = 0.0022))
   alruDiameterFromHeightNlrob$ruarkRelHt = fit_nlrob("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016, start = list(a1 = 0.9, a9 = 0.07, b1 = 1.5, b1p = -0.24, b2 = -0.04, b2p = 0.02), significant = FALSE)
   alruDiameterFromHeightNlrob$ruarkRelHtPhysio = fit_nlrob("Ruark RelHt physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), alru2016physio, start = list(a1 = 0.7, a5 = 0.5, a9 = 0.1, b1 = 1.55, b1p = -0.26, b2 = -0.04, b2p = 0.021), significant = FALSE) # a9 not significant
@@ -718,7 +718,7 @@ if (alruOptions$fitHeight & alruOptions$fitHeightMixed & alruOptions$fitDbh & al
                                     bind_rows(lapply(alruHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
                                     bind_rows(lapply(alruHeightFromDiameterMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(alruHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
-                                    #bind_rows(lapply(alruHeightFromDiameterGnls, get_model_stats))) %>%
+                                    #bind_rows(lapply(alruHeightFromDiameterGnls, get_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(alruDiameterFromHeight, get_list_stats)),
                                     bind_rows(lapply(alruDiameterFromHeightGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
@@ -744,7 +744,7 @@ if (alruOptions$fitHeight & alruOptions$fitHeightMixed & alruOptions$fitDbh & al
     mutate(species = "ALRU2")
   alruResults = bind_rows(bind_rows(bind_rows(lapply(alruHeightFromDiameter, get_list_stats)),
                                     bind_rows(lapply(alruHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
-                            #bind_rows(lapply(alruHeightFromDiameterGnls, get_model_stats))) %>%
+                            #bind_rows(lapply(alruHeightFromDiameterGnls, get_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(alruDiameterFromHeight, get_list_stats)),
                                     bind_rows(lapply(alruDiameterFromHeightNlrob, get_list_stats, fitSet = "nlrob"))) %>%
@@ -762,10 +762,12 @@ if (alruOptions$fitHeight & alruOptions$fitDbh)
 {
   alruHeightFromDiameterPreferred = list(chapmanRichards = fit_gsl_nls("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * (1 - exp(b1*DBH))^(b2 + b2p * isPlantation), alru2016, start = list(a1 = 26.4, a1p = 2.74, b1 = -0.041, b2 = 1.11, b2p = 0.027), folds = 1, repetitions = 1))
   alruHeightFromDiameterPreferred$gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = alru2016, constraint = alru2016gamConstraint, folds = 1, repetitions = 1)
+  alruHeightFromDiameterPreferred$hossfeld = fit_gsl_nls("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + b1*DBH^(b2 + b2p * isPlantation)), alru2016, start = list(a1 = 27, a1p = 7, b1 = 60, b2 = -1.4, b2p = 0.12), folds = 1, repetitions = 1)
   alruHeightFromDiameterPreferred$richardsW = fit_gsl_nls("unified Richards", TotalHt ~ 1.37 + (Ha + Hap*isPlantation) * (1 + ((1.37/(Ha + Hap*isPlantation))^(1 - d) - 1) * exp((-kU * DBH)/d^(d/(1 - d))))^(1/(1 - d)), alru2016, start = list(Ha = 22.3, Hap = 0.972, d = 1.196, kU = 0.0361), folds = 1, repetitions = 1)
   #alruHeightFromDiameterPreferred$sharmaPartonBal = fit_gsl_nls("Sharma-Parton BA+L", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, alru2016, start = list(a1 = 12, a1p = 2.7, b1 = 0.16, b2 = -0.063, b3 = -0.07, b4 = 1.2), folds = 1, repetitions = 1)
-  #alruHeightFromDiameterPreferred$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a5 * slope + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, alru2016physio, start = list(a1 = 18.1, a1p = 2.80, a5 = 0, a8 = 0.002, b1 = 0.097, b2 = -0.065, b3 = -0.131, b4 = 1.18))
-  alruHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh = fit_gsl_nls("Sharma-Parton BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a5 * slope + a8 * topographicShelterIndex + (a10 + a10p * isPlantation) * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, alru2016physio, start = list(a1 = 17, a1p = 2.8, a5 = -0.14, a8 = 0.1, a10 = 0, a10p = 0, b1 = 0.14, b2 = -0.065, b3 = -0.06, b4 = 1.25), folds = 1, repetitions = 1)
+  #alruHeightFromDiameterPreferred$sharmaPartonBalPhysio = fit_gsl_nls("Sharma-Parton BA+L physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a5 * slope + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, alru2016physio, start = list(a1 = 18.1, a1p = 2.80, a5 = 0, a8 = 0.002, b1 = 0.097, b2 = -0.065, b3 = -0.131, b4 = 1.18), folds = 1, repetitions = 1)
+  alruHeightFromDiameterPreferred$sharmaPartonPhysio = fit_gsl_nls("Sharma-Parton physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a5 * slope + a8 * topographicShelterIndex)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare))^b3*DBH))^b4, alru2016physio, start = list(a1 = 15.2, a1p = 2.54, a5 = -0.13, a8 = 0.10, b1 = 0.17, b2 = -0.068, b3 = -0.07, b4 = 1.26), folds = 1, repetitions = 1)
+  #alruHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh = fit_gsl_nls("Sharma-Parton BA+L RelDbh physio", TotalHt ~ 1.37 + (a1 + a1p * isPlantation + a5 * slope + a8 * topographicShelterIndex + (a10 + a10p * isPlantation) * relativeDiameter)*topHeight^b1 * (1 - exp(b2*(tph/(standBasalAreaPerHectare + basalAreaLarger))^b3*DBH))^b4, alru2016physio, start = list(a1 = 17, a1p = 2.8, a5 = -0.14, a8 = 0.1, a10 = 0, a10p = 0, b1 = 0.14, b2 = -0.065, b3 = -0.06, b4 = 1.25), folds = 1, repetitions = 1)
   alruHeightFromDiameterPreferred$ratkowsky = fit_gsl_nls("Ratkowsky", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*exp((b1 + b1p * isPlantation)/(DBH + b2 + b2p * isPlantation)), alru2016, start = list(a1 = 33.6, a1p = 7.31, b1 = -22.3, b1p = -4.77, b2 = 5.31, b2p = 1.37), folds = 1, repetitions = 1)
   alruHeightFromDiameterPreferred$weibull = fit_gsl_nls("Weibull", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp(b1*DBH^(b2 + b2p * isPlantation))), alru2016, start = list(a1 = 24.3, a1p = -5.66, b1 = -0.0269, b2 = 1.16, b2p = -0.083), folds = 1, repetitions = 1)
   #AIC(alruHeightFromDiameterPreferred$chapmanRichards, alruHeightFromDiameterPreferred$richardsW, alruHeightFromDiameterPreferred$weibull)
@@ -820,4 +822,61 @@ if (htDiaOptions$includeInvestigatory)
     #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
     labs(x = "red alder height, m", y = "basal area, m²", color = NULL) +
     theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))
+}
+
+
+## GAM smooth effects
+if (htDiaOptions$includeInvestigatory)
+{
+  alruHeightGam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint) + 
+                            s(standBasalAreaPerHectare, bs = "ts", by = as.factor(isPlantation), k = 5, pc = gamConstraint) + 
+                            s(basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 6, pc = gamConstraint) + 
+                            #s(elevation, bs = "ts", k = 4, pc = gamConstraint) + # not significant
+                            s(slope, bs = "ts", k = 5, pc = gamConstraint) + 
+                            #s(aspect, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                            s(topographicShelterIndex, bs = "ts", k = 7, pc = gamConstraint) + 
+                            s(relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 5, pc = gamConstraint), 
+                          data = alru2016physio, constraint = alru2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(alruHeightGam)
+  summary(alruHeightGam)
+  par(mfrow = c(3, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
+  plot.gam(alruHeightGam, scale = 0)
+  
+  alruDbhGam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint) +
+                         #s(standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint) + # not significant
+                         s(tallerApproxBasalArea, bs = "ts", by = as.factor(isPlantation), k = 5, pc = gamConstraint) +
+                         #s(elevation, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                         s(slope, bs = "ts", k = 5, pc = gamConstraint) +
+                         s(aspect, bs = "ts", k = 3, pc = gamConstraint) +
+                         s(topographicShelterIndex, bs = "ts", k = 7, pc = gamConstraint) +
+                         s(relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 6, pc = gamConstraint), 
+                       data = alru2016physio, constraint = alru2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(alruDbhGam)
+  summary(alruDbhGam)
+  plot.gam(alruDbhGam, scale = 0)
+}
+
+
+## random forest regression
+if (htDiaOptions$includeInvestigatory)
+{
+  startTime = Sys.time()
+  alruHeightForest = train(TotalHt ~ DBH + standBasalAreaPerHectare + basalAreaLarger + elevation + slope + aspect + topographicShelterIndex + relativeDiameter, data = alru2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                           importance = "impurity_corrected",
+                           tuneGrid = expand.grid(mtry = c(6, 7, 8),
+                                                  splitrule = "variance",
+                                                  min.node.size = c(3, 4, 5)))
+  Sys.time() - startTime
+  alruHeightForest
+  varImp(alruHeightForest)
+  
+  startTime = Sys.time()
+  alruDbhForest = train(DBH ~ TotalHt + standBasalAreaApprox + tallerApproxBasalArea + elevation + slope + aspect + topographicShelterIndex + relativeHeight, data = alru2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                        importance = "impurity_corrected",
+                        tuneGrid = expand.grid(mtry = c(6, 7, 8),
+                                               splitrule = "variance",
+                                               min.node.size = c(1, 2, 3)))
+  Sys.time() - startTime
+  alruDbhForest
+  varImp(alruDbhForest)
 }

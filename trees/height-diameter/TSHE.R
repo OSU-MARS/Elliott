@@ -4,17 +4,17 @@
 tshe2016 = trees2016 %>% filter(Species == "WH", isLiveUnbroken, is.na(TotalHt) == FALSE) %>% # live western hemlocks measured for height
   mutate(dbhWeight = pmin(TreeCount/(1.11*DBH^0.84), 5*TreeCount),
          heightWeight = pmin(TreeCount/(1.00*(TotalHt - 1.37)^1.52), 5*TreeCount))
-tshe2016physio = tshe2016 %>% filter(is.na(elevation) == FALSE)
+tshe2016physio = tshe2016 %>% filter(is.na(elevation) == FALSE) # 12 trees without physiographic variables
 tshe2016gamConstraint = c(DBH = -1.2994/0.6005, TotalHt = 1.37, standBasalAreaPerHectare = median(tshe2016$standBasalAreaPerHectare), basalAreaLarger = median(tshe2016$basalAreaLarger), standBasalAreaApprox = median(tshe2016$standBasalAreaApprox), tallerApproxBasalArea = median(tshe2016$tallerApproxBasalArea), elevation = median(tshe2016physio$elevation), slope = median(tshe2016physio$slope), aspect = median(tshe2016physio$aspect), topographicShelterIndex = median(tshe2016physio$topographicShelterIndex), relativeHeight = median(tshe2016$relativeHeight), relativeDiameter = median(tshe2016$relativeDiameter)) # point constraint for mgcv::s()
 
 tshe2016defaultWeight = tshe2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*TreeCount),
                                             heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 tshe2016defaultWeightPhysio = tshe2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-tsheOptions = tibble(fitHeight = FALSE, 
+tsheOptions = tibble(fitHeight = TRUE, 
                      fitHeightGnls = FALSE,
                      fitHeightMixed = FALSE,
-                     fitDbh = TRUE,
+                     fitDbh = FALSE,
                      fitDbhMixed = FALSE)
 
 if (tsheOptions$fitHeight)
@@ -577,7 +577,7 @@ if (tsheOptions$fitHeight & tsheOptions$fitHeightMixed & tsheOptions$fitDbh & ts
                                     bind_rows(lapply(tsheHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
                                     bind_rows(lapply(tsheHeightFromDiameterMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(tsheHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
-                                    #bind_rows(lapply(tsheHeightFromDiameterGnls, get_model_stats))) %>%
+                                    #bind_rows(lapply(tsheHeightFromDiameterGnls, get_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(tsheDiameterFromHeight, get_list_stats)),
                                     create_model_stats(name = "Schnute inverse", fitSet = "primary", fittingMethod = "gsl_nls"),
@@ -601,7 +601,8 @@ if (tsheOptions$fitHeight & tsheOptions$fitHeightMixed & tsheOptions$fitDbh & ts
     mutate(species = "TSHE")
   tsheResults = bind_rows(bind_rows(bind_rows(lapply(tsheHeightFromDiameter, get_list_stats))) %>%
                             mutate(responseVariable = "height"),
-                          bind_rows(bind_rows(lapply(tsheDiameterFromHeight, get_list_stats))) %>%
+                          bind_rows(bind_rows(lapply(tsheDiameterFromHeight, get_list_stats)),
+                                    create_model_stats(name = "Schnute inverse", fitting = "gsl_nls", fitSet = "primary")) %>%
                             mutate(responseVariable = "DBH")) %>%
     mutate(species = "TSHE")
   
@@ -614,8 +615,9 @@ if (tsheOptions$fitHeight & tsheOptions$fitHeightMixed & tsheOptions$fitDbh & ts
 ## preferred forms identified (results.R, Figure 9)
 if (tsheOptions$fitHeight & tsheOptions$fitDbh)
 {
-  tsheHeightFromDiameterPreferred = list(chapmanRichardsBal = fit_gsl_nls("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, tshe2016, start = list(a1 = 44, a2 = -0.14, a2p = 0.95, a3 = 0.21, a3p = -0.14, b1 = -0.019, b2 = 1.25), folds = 1, repetitions = 1))
-  #tsheHeightFromDiameterPreferred$chapmanRichardsBalPhysio = fit_gsl_nls("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + a4 * elevation + a5 * slope) * (1 - exp(b1*DBH))^b2, tshe2016physio, start = list(a1 = 51, a2 = -0.15, a2p = 0.9, a3 = 0.21, a3p = -0.14, a4 = -0.014, a5 = -0.12, b1 = -0.021, b2 = 1.27), folds = 1, repetitions = 1))
+  tsheHeightFromDiameterPreferred = list(chapmanRichards = fit_gsl_nls("Chapman-Richards", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) * (1 - exp((b1 + b1p*isPlantation)*DBH))^(b2 + b2p * isPlantation), tshe2016, start = list(a1 = 58, a1p = -17, b1 = -0.02, b1p = -0.018, b2 = 1.2, b2p = 0.17), folds = 1, repetitions = 1))
+  #tsheHeightFromDiameterPreferred$chapmanRichardsBal = fit_gsl_nls("Chapman-Richards BA+L", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH))^b2, tshe2016, start = list(a1 = 44, a2 = -0.14, a2p = 0.95, a3 = 0.21, a3p = -0.14, b1 = -0.019, b2 = 1.25), folds = 1, repetitions = 1))
+  tsheHeightFromDiameterPreferred$chapmanRichardsBalPhysio = fit_gsl_nls("Chapman-Richards BA+L physio", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare + a4 * elevation + a5 * slope) * (1 - exp(b1*DBH))^b2, tshe2016physio, start = list(a1 = 51, a2 = -0.15, a2p = 0.9, a3 = 0.21, a3p = -0.14, a4 = -0.014, a5 = -0.12, b1 = -0.021, b2 = 1.27), folds = 1, repetitions = 1)
   tsheHeightFromDiameterPreferred$gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
   #tsheHeightFromDiameterPreferred$gamBalRelDbh = fit_gam("REML GAM BA+L RelDbh", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 28, pc = gamConstraint), data = tshe2016, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
   tsheHeightFromDiameterPreferred$hossfeld = fit_gsl_nls("Hossfeld IV", TotalHt ~ 1.37 + (a1 + a1p * isPlantation) / (1 + (b1 + b1p * isPlantation) * DBH^(b2 + b2p * isPlantation)), tshe2016, start = list(a1 = 69.3, a1p = -11.6, b1 = 196, b1p = -73., b2 = -1.30, b2p = 0.047), folds = 1, repetitions = 1)
@@ -657,4 +659,61 @@ if (htDiaOptions$includeInvestigatory)
     #geom_path(aes(x = imputedHeight, y = 10*(1 - exp(-0.1*(imputedHeight - 1.37)))^1.2, color = "Chapman-Richards")) +
     labs(x = "western hemlock height, m", y = "basal area, m²", color = NULL) +
     theme(legend.justification = c(0, 1), legend.position = c(0.03, 0.99))
+}
+
+
+## GAM smooth effects
+if (htDiaOptions$includeInvestigatory)
+{
+  tsheHeightGam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 10, pc = gamConstraint) + 
+                            s(standBasalAreaPerHectare, bs = "ts", by = as.factor(isPlantation), k = 6, pc = gamConstraint) + 
+                            s(basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint) + 
+                            s(elevation, bs = "ts", k = 4, pc = gamConstraint) + 
+                            s(slope, bs = "ts", k = 4, pc = gamConstraint) + 
+                            #s(aspect, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                            #s(topographicShelterIndex, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                            s(relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 5, pc = gamConstraint), 
+                          data = tshe2016physio, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(tsheHeightGam)
+  summary(tsheHeightGam)
+  par(mfrow = c(3, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
+  plot.gam(tsheHeightGam, scale = 0)
+  
+  tsheDbhGam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 10, pc = gamConstraint) +
+                         s(standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 6, pc = gamConstraint) +
+                         s(tallerApproxBasalArea, bs = "ts", by = as.factor(isPlantation), k = 4, pc = gamConstraint) +
+                         s(elevation, bs = "ts", k = 4, pc = gamConstraint) +
+                         #s(slope, bs = "ts", k = 3, pc = gamConstraint) + # not significant
+                         #s(aspect, bs = "ts", k = 4, pc = gamConstraint) + # not significant
+                         s(topographicShelterIndex, bs = "ts", k = 4, pc = gamConstraint) +
+                         s(relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 4, pc = gamConstraint), 
+                       data = tshe2016physio, constraint = tshe2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(tsheDbhGam)
+  summary(tsheDbhGam)
+  plot.gam(tsheDbhGam, scale = 0)
+}
+
+
+## random forest regression
+if (htDiaOptions$includeInvestigatory)
+{
+  startTime = Sys.time()
+  tsheHeightForest = train(TotalHt ~ DBH + standBasalAreaPerHectare + basalAreaLarger + elevation + slope + aspect + topographicShelterIndex + relativeDiameter, data = tshe2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                           importance = "impurity_corrected",
+                           tuneGrid = expand.grid(mtry = c(4, 5, 6),
+                                                  splitrule = "variance",
+                                                  min.node.size = c(1, 2, 3)))
+  Sys.time() - startTime
+  tsheHeightForest
+  varImp(tsheHeightForest)
+  
+  startTime = Sys.time()
+  tsheDbhForest = train(DBH ~ TotalHt + standBasalAreaApprox + tallerApproxBasalArea + elevation + slope + aspect + topographicShelterIndex + relativeHeight, data = tshe2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                        importance = "impurity_corrected",
+                        tuneGrid = expand.grid(mtry = c(7, 8),
+                                               splitrule = "variance",
+                                               min.node.size = c(4, 5, 6)))
+  Sys.time() - startTime
+  tsheDbhForest
+  varImp(tsheDbhForest)
 }

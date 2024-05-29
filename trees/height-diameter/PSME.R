@@ -4,19 +4,19 @@
 psme2016 = trees2016 %>% filter(Species == "DF", isLiveUnbroken, is.na(TotalHt) == FALSE) %>% # live Douglas-firs measured for height
   mutate(dbhWeight = pmin(TreeCount/(1.62*DBH^(0.73 - 0.041*isPlantation)), 5*TreeCount), # residuals.R::varianceForHeight$psme
          heightWeight = pmin(TreeCount/((5.661 - 5.655*isPlantation)*(TotalHt - 1.37)^(1.09 + 1.79*isPlantation)), 5*TreeCount)) # residuals.R:varianceForDbh$psme
-psme2016physio = psme2016 %>% filter(is.na(elevation) == FALSE)
+psme2016physio = psme2016 %>% filter(is.na(elevation) == FALSE) # 50 trees without physiographic variables
 psme2016gamConstraint = c(DBH = -1.2240/0.6566, TotalHt = 1.37, standBasalAreaPerHectare = median(psme2016$standBasalAreaPerHectare), basalAreaLarger = median(psme2016$basalAreaLarger), standBasalAreaApprox = median(psme2016$standBasalAreaApprox), tallerApproxBasalArea = median(psme2016$tallerApproxBasalArea), elevation = median(psme2016physio$elevation), slope = median(psme2016physio$slope), aspect = median(psme2016physio$aspect), topographicShelterIndex = median(psme2016physio$topographicShelterIndex), relativeHeight = median(psme2016$relativeHeight), relativeDiameter = median(psme2016$relativeDiameter)) # point constraint for mgcv::s() where response variable is ignored, zero crossing of height from DBH from fit_lm(TotalHt ~ DBH, data = psme2016 %>% filter(DBH < 6))
 
 psme2016defaultWeight = psme2016 %>% mutate(dbhWeight = pmin(TreeCount/DBH, 5*TreeCount),
                                             heightWeight = pmin(TreeCount/TotalHt, 5*TreeCount))
 psme2016defaultWeightPhysio = psme2016defaultWeight %>% filter(is.na(elevation) == FALSE)
 
-psmeOptions = tibble(fitHeightPrimary = FALSE,
+psmeOptions = tibble(fitHeightPrimary = TRUE,
                      fitHeightNlrobAndFixedWeight = FALSE,
                      fitHeightGnls = FALSE,
                      fitHeightMixed = FALSE,
-                     fitDbhPrimary = TRUE,
-                     fitDbhGslNlsAndGams = FALSE,
+                     fitDbhPrimary = FALSE,
+                     fitDbhGslNlsAndGams = TRUE,
                      fitDbhNlrobAndFixedWeight = FALSE,
                      fitDbhMixed = FALSE,
                      fitAbatRelHtPhysioGam = TRUE,
@@ -812,7 +812,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitH
                                     bind_rows(lapply(psmeHeightFromDiameterGslNlsDefault, get_list_stats, fitSet = "gsl_nls", fixedWeight = -1)),
                                     bind_rows(lapply(psmeHeightFromDiameterMixed, get_list_stats, fitSet = "mixed")),
                                     bind_rows(lapply(psmeHeightFromDiameterNlrob, get_list_stats, fitSet = "nlrob"))) %>%
-                                    #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_stats))) %>%
+                                    #bind_rows(lapply(psmeHeightFromDiameterGnls, get_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(psmeDiameterFromHeight, get_list_stats)),
                                     create_model_stats(name = "Schnute inverse", fitting = "gsl_nls", fitSet = "primary"),
@@ -840,7 +840,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitH
                                  mutate(responseVariable = "DBH")) %>%
     mutate(species = "PSME")
   psmeResults = bind_rows(bind_rows(bind_rows(lapply(psmeHeightFromDiameter, get_list_stats))) %>%
-                            #bind_rows(lapply(psmeHeightFromDiameterGnls, get_model_stats))) %>%
+                            #bind_rows(lapply(psmeHeightFromDiameterGnls, get_stats))) %>%
                             mutate(responseVariable = "height"),
                           bind_rows(bind_rows(lapply(psmeDiameterFromHeight, get_list_stats)),
                                     create_model_stats(name = "Schnute inverse", fitting = "gsl_nls", fitSet = "primary")) %>%
@@ -910,6 +910,38 @@ if (htDiaOptions$includeInvestigatory)
 }
 
 
+## GAM smooth effects
+if (htDiaOptions$includeInvestigatory)
+{
+  psmeHeightGam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 11, pc = gamConstraint) + 
+                            s(standBasalAreaPerHectare, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint) + 
+                            s(basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint) + 
+                            s(elevation, bs = "ts", k = 6, pc = gamConstraint) + 
+                            s(slope, bs = "ts", k = 6, pc = gamConstraint) + 
+                            s(aspect, bs = "ts", k = 8, pc = gamConstraint) + 
+                            s(topographicShelterIndex, bs = "ts", k = 6, pc = gamConstraint) + 
+                            s(relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 6, pc = gamConstraint), 
+                          data = psme2016physio, constraint = psme2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(psmeHeightGam)
+  summary(psmeHeightGam) # all signficant
+  par(mfrow = c(3, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
+  plot.gam(psmeHeightGam, scale = 0)
+  
+  psmeDbhGam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 10, pc = gamConstraint) +
+                         s(standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 8, pc = gamConstraint) +
+                         s(tallerApproxBasalArea, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint) +
+                         s(elevation, bs = "ts", k = 9, pc = gamConstraint) +
+                         s(slope, bs = "ts", k = 11, pc = gamConstraint) +
+                         s(aspect, bs = "ts", k = 25, pc = gamConstraint) + # high complexity but only a few mm range, likely effectively noise
+                         s(topographicShelterIndex, bs = "ts", k = 15, pc = gamConstraint) +
+                         s(relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 14, pc = gamConstraint), 
+                       data = psme2016physio, constraint = psme2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(psmeDbhGam)
+  summary(psmeDbhGam) # all significant
+  plot.gam(psmeDbhGam, scale = 0) #, ylim = c(-15, 15))
+}
+
+
 ## basal area from height
 # essentially no difference between fit_gsl_nls() and fit_nlrob() fits
 # Chapman-Richards has the wrong curvature
@@ -969,4 +1001,29 @@ if (htDiaOptions$includeInvestigatory)
     coord_cartesian(xlim = c(0, 250), ylim = c(0, 85)) +
     labs(x = "plantation DBH, cm", y = "Douglas-fir plantation height, m")
   #ggsave("Presentation/Douglas-fir height-diameter natural-plantation.png", width = 12.5, height = 11, units = "cm")
+}
+
+
+## random forest regression
+if (htDiaOptions$includeInvestigatory)
+{
+  startTime = Sys.time()
+  psmeHeightForest = train(TotalHt ~ DBH + standBasalAreaPerHectare + basalAreaLarger + elevation + slope + aspect + topographicShelterIndex + relativeDiameter, data = psme2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                           importance = "impurity_corrected",
+                           tuneGrid = expand.grid(mtry = c(4, 5, 6),
+                                                  splitrule = "variance",
+                                                  min.node.size = c(2, 3, 4)))
+  Sys.time() - startTime
+  psmeHeightForest
+  varImp(psmeHeightForest)
+  
+  startTime = Sys.time()
+  psmeDbhForest = train(DBH ~ TotalHt + standBasalAreaApprox + tallerApproxBasalArea + elevation + slope + aspect + topographicShelterIndex + relativeHeight, data = psme2016physio, method = "ranger", trControl = repeatedCrossValidation, 
+                        importance = "impurity_corrected",
+                        tuneGrid = expand.grid(mtry = c(5, 6, 7),
+                                               splitrule = "variance",
+                                               min.node.size = c(4, 5, 6)))
+  Sys.time() - startTime
+  psmeDbhForest
+  varImp(psmeDbhForest)
 }
