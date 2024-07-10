@@ -188,7 +188,13 @@ heightDiameterModelRanking = heightDiameterModelAucs %>%
             significant = significant[1],
             speciesFraction = speciesFraction[1],
             .groups = "drop_last") %>%
-  mutate(aucBlended = 0.1 * aucMab + 0.3 * if_else(responseVariable == "height", aucMae, aucRmse) + 0.1 * if_else(responseVariable == "DBH", aucMae, aucRmse) + 0.4 * aucDeltaAicN + 0.1 * aucNse) %>%
+  group_by(responseVariable, species, isBaseForm) %>%
+  mutate(aucBlended = 0.1 * aucMab + 0.3 * if_else(responseVariable == "height", aucMae, aucRmse) + 0.1 * if_else(responseVariable == "DBH", aucMae, aucRmse) + 0.4 * aucDeltaAicN + 0.1 * aucNse,
+         aucDeltaAicNRank = min_rank(desc(round(aucDeltaAicN * significant, 3))), 
+         aucMabRank = min_rank(desc(round(aucMab * significant, 3))), 
+         aucMaeRank = min_rank(desc(round(aucMae * significant, 3))), 
+         aucNseRank = min_rank(desc(round(aucNse * significant, 3))), 
+         aucRmseRank = min_rank(desc(round(aucRmse * significant, 3)))) %>%
   ungroup()
 heightDiameterModelDisplaySort = heightDiameterModelRanking %>%
   group_by(responseVariable, name) %>%
@@ -526,15 +532,15 @@ plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel =
 plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxTreesMeasured = 170, titleLetters = c(plotLetters[2], "", "")) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
 #ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.tiff", height = 13, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.tif", height = 13, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 2: height-diameter AUCs
 heightFromDiameterModelComparison = heightDiameterModelRanking %>% filter(responseVariable == "height") %>%
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "height"))$name)))
 plot_auc_bank(heightFromDiameterModelComparison)
-#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.png", height = 16, width = 20, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.tiff", height = 16, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.png", height = 17, width = 20, units = "cm", dpi = 150)
+#ggsave("trees/height-diameter/figures/Figure 02 height accuracy AUC median.tif", height = 17, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 3: diameter AUCs
@@ -542,7 +548,7 @@ diameterFromHeightModelComparison = heightDiameterModelRanking %>% filter(respon
   mutate(name = factor(name, levels = rev((heightDiameterModelDisplaySort %>% filter(responseVariable == "DBH"))$name)))
 plot_auc_bank(diameterFromHeightModelComparison)
 #ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.png", height = 17.5, width = 20, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.tiff", height = 17.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 03 diameter accuracy AUC median.tif", height = 17.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 4: model efficiency
@@ -597,7 +603,7 @@ plot_layout(nrow = 2, ncol = 2, guides = "collect") &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), values = c(1.5, 1.9, 1.4), drop = FALSE) &
   theme(legend.key.size = unit(0.6, "line"), legend.position = "bottom", legend.text = element_text(margin = margin(l = 1, r = 6.5)))
 #ggsave("trees/height-diameter/figures/Figure 04 model efficiency.png", height = 10, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure 04 model efficiency.tiff", height = 10, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 04 model efficiency.tif", height = 10, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 5: fitting success, model significance, and predictor variable use
@@ -691,7 +697,7 @@ plot_layout(nrow = 2, ncol = 6, widths = c(1.7, 1.7, 2.2, 1.7, 2.7, 1.2), guides
   scale_size_area(max_size = 5.0) &
   theme(legend.position = "none")
 #ggsave("trees/height-diameter/figures/Figure 05 predictor variables.png", height = 10, width = 20, units = "cm", dpi = 150)
-#ggsave("trees/height-diameter/figures/Figure 05 predictor variables.tiff", height = 10, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 05 predictor variables.tif", height = 10, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 6: Douglas-fir and red alder preferred models
@@ -793,7 +799,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.png", height = 12, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.tiff", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.tif", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 7: western hemlock and bigleaf maple preferred models
@@ -886,7 +892,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.png", height = 12, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.tiff", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.tif", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 8: Oregon myrtle and western redcedar preferred models
@@ -983,7 +989,7 @@ plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.png", height = 12, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.tiff", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.tif", height = 12, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 9: preferred models for other species group
@@ -1038,7 +1044,7 @@ plot_layout(design = "12\n33", heights = c(1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
 #ggsave("trees/height-diameter/figures/Figure 09 other species curves.png", height = 17/3 + 0.5, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure 09 other species curves.tiff", height = 17/3 + 0.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 09 other species curves.tif", height = 17/3 + 0.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure 10: comparison of goodness of fit statistics between reference and revised models
@@ -1124,7 +1130,7 @@ plot_layout(nrow = 2, guides = "collect") &
   scale_size_manual(breaks = c("base form 1", "base form 2", "generalized height", "generalized DBH", "previous model"), values = c(1.9, 2.5, 2.2, 2.2, 1.7), drop = FALSE) &
   theme(plot.title.position = "plot")
 #ggsave("trees/height-diameter/figures/Figure 10 model accuracy.png", height = 9, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure 10 model accuracy.tiff", height = 9, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure 10 model accuracy.tif", height = 9, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure S1: comparison of accuracy metrics
@@ -1136,8 +1142,8 @@ accuracyCorrelation = bind_rows(as.data.frame(cor(primaryResults %>% filter(resp
                                                     select(mapb, mape, rmse, deltaAicN, nse), use = "pairwise.complete.obs")) %>%
                                   rownames_to_column("metricX") %>% gather("metricY", "correlation", -metricX) %>%
                                   mutate(responseVariable = "DBH")) %>%
-  mutate(metricX = factor(metricX, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB,\n%", "MAE,\n%", "RMSE", "ΔAICn", "model\nefficiency")),
-         metricY = factor(metricY, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB, %", "MAE, %", "RMSE", "ΔAICn", "model efficiency")))
+  mutate(metricX = factor(metricX, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB", "MAE", "RMSE", "ΔAICn", "model\nefficiency")),
+         metricY = factor(metricY, levels = c("mapb", "mape", "rmse", "deltaAicN", "nse"), labels = c("MAB", "MAE", "RMSE", "ΔAICn", "model efficiency")))
 
 ggplot(accuracyCorrelation %>% filter(responseVariable == "height")) + 
   coord_equal() +
@@ -1156,7 +1162,7 @@ ggplot(accuracyCorrelation %>% filter(responseVariable == "DBH")) +
   scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
   theme(legend.spacing.y = unit(0.5, "line"))
 #ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.png", height = 8.5, width = 20, units = "cm")
-#ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.tiff", height = 8.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.tif", height = 8.5, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 # Figure S2: height prediction accuracy
@@ -1226,13 +1232,13 @@ ggplot(heightFromDiameterResults) +
 plot_annotation(theme = theme(plot.margin = margin(0, 2, 0, 0, "pt"))) +
 plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   guides(color = guide_legend(byrow = TRUE, order = 1, ncol = 4), alpha = guide_legend(byrow = TRUE, order = 2, ncol = 1), shape = guide_legend(byrow = TRUE, order = 2, ncol = 2), size = guide_legend(byrow = TRUE, order = 2, ncol = 2)) &
+  scale_alpha_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(0.75, 0.75, 0.3)) &
   scale_color_manual(breaks = levels(heightFromDiameterResults$species), limits = levels(heightFromDiameterResults$species), values = speciesGroupColors) &
-  scale_alpha_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(0.75, 0.75, 0.6)) &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(18, 16, 3)) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(1.5, 1.9, 1.4)) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
 #ggsave("trees/height-diameter/figures/Figure S02 height accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
-#ggsave("trees/height-diameter/figures/Figure S02 height accuracy.tiff", height = 22, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure S02 height accuracy.tif", height = 22, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 # Figure S3: DBH prediction accuracy
@@ -1303,13 +1309,13 @@ ggplot(diameterFromHeightResults) +
 plot_annotation(theme = theme(plot.margin = margin(0, 2, 0, 0, "pt"))) +
 plot_layout(nrow = 1, ncol = 5, guides = "collect") &
   guides(color = guide_legend(byrow = TRUE, order = 1, ncol = 4), alpha = guide_legend(byrow = TRUE, order = 2, ncol = 1), shape = guide_legend(byrow = TRUE, order = 2, ncol = 2), size = guide_legend(byrow = TRUE, order = 2, ncol = 2)) &
+  scale_alpha_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(0.75, 0.75, 0.3)) &
   scale_color_manual(breaks = levels(heightFromDiameterResults$species), limits = levels(heightFromDiameterResults$species), values = speciesGroupColors) &
-  scale_alpha_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(0.75, 0.75, 0.6)) &
   scale_shape_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(16, 18, 3)) &
   scale_size_manual(breaks = c("reweighted", "fixed weights", "not significant"), labels = c("NLME/nlrob", "form significant", "not significant"), values = c(1.5, 1.9, 1.4)) &
   theme(legend.key.size = unit(0.2, "line"), legend.justification = "left", legend.position = "bottom")
 #ggsave("trees/height-diameter/figures/Figure S03 DBH accuracy.png", height = 16, width = 20, units = "cm", dpi = 300)
-#ggsave("trees/height-diameter/figures/Figure S03 DBH accuracy.tiff", height = 22, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
+#ggsave("trees/height-diameter/figures/Figure S03 DBH accuracy.tif", height = 22, width = 20, units = "cm", dpi = 300, compression = "lzw+p")
 
 
 ## Figure S4 in residuals.R

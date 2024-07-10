@@ -36,8 +36,8 @@ htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
                       includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
-#plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
-plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
+plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+#plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
 
 append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
 {
@@ -1319,74 +1319,83 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
 {
   if (omitMab)
   {
-    aucBank = ggplot(aucs) +
-        geom_raster(aes(x = species, y = name, fill = aucMae)) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+    aucBank = ggplot() +
+        geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
         labs(fill = fillLabel) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
         new_scale_fill() +
-        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant)))) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
-        labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, fill = NULL) +
-        #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, fill = NULL) +
+        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
+        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
+        labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+        #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         scale_y_discrete(limits = rev)
     letterOffset = 1
   } else {
-    aucBank = ggplot(aucs) +
-        geom_raster(aes(x = species, y = name, fill = aucMab)) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+    aucBank = ggplot() +
+        geom_raster(aes(x = species, y = name, fill = aucMab), aucs) +
         labs(fill = fillLabel) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
         new_scale_fill() +
-        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant)))) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-        labs(title = bquote(.(plotLetters[1])~"MAB"), x = NULL, y = NULL, fill = NULL) +
-        #labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, fill = NULL) +
+        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant))), aucs) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
+        labs(title = bquote(.(plotLetters[1])~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+        #labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         scale_y_discrete(limits = rev) +
-      ggplot(aucs) +
-        geom_raster(aes(x = species, y = name, fill = aucMae)) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+      ggplot() +
+        geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
         labs(fill = fillLabel) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
         new_scale_fill() +
-        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant)))) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-        labs(title = bquote(.(plotLetters[2])~"MAE"), x = NULL, y = NULL, fill = NULL) +
-        #labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, fill = NULL) +
+        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
+        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMaeRank <= 2, aucMaeRank <= 2)), fill = "transparent") +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+        labs(title = bquote(.(plotLetters[2])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+        #labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         scale_y_discrete(labels = NULL, limits = rev)
     letterOffset = 2
   }
 
   aucBank = aucBank +
-    ggplot(aucs) +
-      geom_raster(aes(x = species, y = name, fill = aucRmse)) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+    ggplot() +
+      geom_raster(aes(x = species, y = name, fill = aucRmse), aucs) +
       labs(fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
       new_scale_fill() +
-      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant)))) +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-      labs(title = bquote(.(plotLetters[letterOffset + 1])~"RMSE"), x = NULL, y = NULL, fill = NULL) +
-      #labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, fill = NULL) +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant))), aucs) +
+      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucRmseRank <= 2, aucRmseRank <= 2)), fill = "transparent") +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[letterOffset + 1])~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
-    ggplot(aucs) +
-      geom_raster(aes(x = species, y = name, fill = aucDeltaAicN)) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+    ggplot() +
+      geom_raster(aes(x = species, y = name, fill = aucDeltaAicN), aucs) +
       labs(fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
       new_scale_fill() +
-      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant)))) +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-      labs(title = bquote(.(plotLetters[letterOffset + 2])~"ΔAICn"), x = NULL, y = NULL, fill = NULL) +
-      #labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"ΔAICn"), x = NULL, y = NULL, fill = NULL) +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant))), aucs) +
+      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucDeltaAicNRank <= 2, aucDeltaAicNRank <= 2)), fill = "transparent") +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[letterOffset + 2])~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
-    ggplot(aucs) +
-      geom_raster(aes(x = species, y = name, fill = aucNse)) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1)) +
+    ggplot() +
+      geom_raster(aes(x = species, y = name, fill = aucNse), aucs) +
       labs(fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
       new_scale_fill() +
-      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant)))) +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit failed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-      labs(title = bquote(.(plotLetters[letterOffset + 3])~"model efficiency"), x = NULL, y = NULL, fill = NULL) +
-      #labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, fill = NULL) +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant))), aucs) +
+      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucNseRank <= 2, aucNseRank <= 2)), fill = "transparent") +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[letterOffset + 3])~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
     plot_annotation(theme = theme(plot.margin =  margin())) +
     plot_layout(nrow = 1, guides = "collect") &
+      guides(color = guide_legend(override.aes = list(linewidth = 0.5)), linewidth = "none") &
+      scale_color_manual(breaks = c(FALSE, TRUE), labels = c("preferred\ngeneralization", "preferred\nbase form"), values = c("dodgerblue", "blue2")) &
+      scale_linewidth_manual(breaks = c(FALSE, TRUE), values = c(0.3, 0.2)) &
       scale_x_discrete(limits = xLimits) &
       #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
       theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.spacing.y = unit(0.4, "line"), panel.grid = element_blank())
@@ -2336,4 +2345,26 @@ if (htDiaOptions$includeInvestigatory)
     select(stand, plot, tree, species, year, age, dbh, height, expansionFactor, condition)
   #treesOfAge %>% group_by(species) %>% summarize(n = n())
   #treesOfAge %>% group_by(stand) %>% summarize(uniqueTrees = n(), tph = sum(expansionFactor))
+}
+
+
+## general variable importance
+if (htDiaOptions$includeInvestigatory)
+{
+  library(VSURF)
+  heightMeasureTrees = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE, is.na(elevation) == FALSE)
+  heightVsurf = VSURF(TotalHt ~ ., heightMeasureTrees %>% select(TotalHt, Species, DBH, isPlantation, topHeight, qmd, relativeDiameter, standBasalAreaPerHectare, basalAreaLarger, standAge2016, elevation, slope, aspect, topographicShelterIndex), ncores = 8, parallel = TRUE, RFimplem = "ranger")
+  dbhVsurf = VSURF(DBH ~ ., heightMeasureTrees %>% select(DBH, Species, TotalHt, isPlantation, relativeHeight, topHeight, standBasalAreaApprox, tallerApproxBasalArea, standAge2016, elevation, slope, aspect, topographicShelterIndex), ncores = 8, parallel = TRUE, RFimplem = "ranger") # flaky, may not return anything
+  
+  predictorImportance = bind_rows(tibble(responseVariable = "height", predictor = as.character(attr(heightVsurf$terms, "predvars"))[heightVsurf$imp.mean.dec.ind + 2], importance = heightVsurf$imp.mean.dec) %>% # offset as.character() by two since first element is "list" and second is TotalHt
+                                    mutate(predictor = if_else(predictor == "standBasalAreaPerHectare", "standBasalArea", predictor)),
+                                  tibble(responseVariable = "DBH", predictor = as.character(attr(dbhVsurf$terms, "predvars"))[dbhVsurf$imp.mean.dec.ind + 2], importance = dbhVsurf$imp.mean.dec) %>%
+                                    mutate(predictor = if_else(predictor == "standBasalAreaApprox", "standBasalArea", predictor))) %>%
+    group_by(responseVariable) %>%
+    mutate(importance = importance / sum(importance))
+  ggplot() +
+    geom_col(aes(x = importance, y = fct_reorder(predictor, importance), fill = responseVariable), predictorImportance) +
+    facet_wrap(~fct_relevel(responseVariable, "height", "DBH")) +
+    guides(fill = "none") +
+    labs(x = "normalized variable importance", y = NULL)
 }
