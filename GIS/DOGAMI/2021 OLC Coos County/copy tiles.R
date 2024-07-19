@@ -6,7 +6,7 @@ sourcePath = "T:/Groups/ElliottStateResearchForest"
 destinationPath = "E:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 tileIndex = read_xlsx("GIS/DOGAMI/2021 OLC Coos County/Elliott tile index.xlsx")
 
-# copy .las tiles from network share to local drive with support for semi-manual concurrent compression
+## copy .las tiles from network share to local drive with support for semi-manual concurrent compression
 # Assumed directory structure:
 #   downloading - copy destination point
 #   Points - location fully downloaded .las files are staged to to avoid .las to .laz conversion running on partially downloaded files
@@ -86,3 +86,32 @@ for (tileName in tileIndex$Tile_ID)
 #  mutate(path = file.path(getwd(), "GIS/DOGAMI/2009 OLC South Coast/Pointz", paste0(name, ".laz")),
 #         destination = file.path("E:/Elliott/GIS/DOGAMI/2009 South Coast/pointsz/500+", paste0(name, ".laz")))
 #file.rename(tilesToMove$path, tilesToMove$destination)
+
+
+## separation of on forest and adjacent tiles
+library(dplyr)
+library(stringr)
+library(terra)
+tileIndex = as_tibble(vect(file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County/Elliott tile index.gpkg")))
+tileIndex %>% filter(bufferDistance == 400)
+sourcePaths = file.path("E:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles surrounding distance 1", paste0((tileIndex %>% filter(bufferDistance == 400))$Tile_ID, ".las"))
+file.rename(sourcePaths, str_replace(sourcePaths, "points RGB\\+NIR", "points surrounding"))
+
+
+## striping of tiles across JBOD drives
+library(dplyr)
+library(stringr)
+library(terra)
+tiles = as_tibble(vect(file.path(getwd(), "GIS/DOGAMI/2021 OLC Coos County/Elliott tile index.gpkg"), layer = "Elliott tile index")) %>% 
+  mutate(sourcePath = paste0("E:/Elliott/GIS/DOGAMI/2021 OLC Coos County/", if_else(bufferDistance <= 400, if_else(hasRgbNir == 1, "tiles RGB+NIR/", "tiles surrounding distance 1/"), "tiles surrounding distance 2+/"), Tile_ID, ".las"),
+         destinationPath = paste0(dirname(sourcePath), if_else((sequenceNumber %% 2) == 1, "/interleave 1/", "/interleave 2/"), Tile_ID, ".las"))
+print(tiles %>% select(sourcePath, destinationPath), width = Inf)
+
+#dir.create("G:/Elliott")
+#dir.create("G:/Elliott/GIS")
+#dir.create("G:/Elliott/GIS/DOGAMI")
+#dir.create("G:/Elliott/GIS/DOGAMI/2021 OLC Coos County")
+#dir.create("G:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles RGB+NIR")
+#dir.create("G:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles surrounding distance 1")
+file.rename(tiles$sourcePath, tiles$destinationPath)
+

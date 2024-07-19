@@ -1,28 +1,5 @@
 # assumes trees/area based/setup.R has been run
 
-## cross-validated matching
-# use vfold_cv() at stand level since group_vfold_cv() departs widely from balanced splits
-# splitsAndFits = vfold_cv(plotHeightsScaled, v = 2, repeats = 1) %>% mutate(fit = future_map(splits, fitFunction))
-splits = vfold_cv(stands2022 %>% filter(is.na(tph) == FALSE), v = 2, repeats = 2, strata = vegStrata) # cross validate only on cruised stands
-
-split = splits[1, ]
-trainingStands = analysis(split$splits[[1]])
-validationStands = assessment(split$splits[[1]])
-
-trainingPlotHeightsScaled = plotHeightsScaled %>% filter(stand %in% trainingStands$stand)
-validationCells = abaCells %>% filter(stand1 %in% validationStands$stand)
-validationCellsScaled = abaCellsScaled %>% filter(stand1 %in% validationStands$stand)
-
-startTime = Sys.time() # ~0.8 s for 2-fold cross validation
-abaCellPlots = get_aba_cell_plots(validationCells, validationCellsScaled, trainingPlotHeightsScaled, treeMatchBound = 8, lidarMetrics = c("pGround", "zQ10", "zQ20", "zQ30"))
-Sys.time() - startTime
-startTime = Sys.time() # ~8 s 2-fold
-abaCellTrees = get_tree_lists(abaCellPlots, plotTreeCounts, trees2021lidar)
-Sys.time() - startTime
-startTime = Sys.time() # ~0.7 s
-abaCellNorms = get_aba_cell_norms(abaCellTrees, stands2022, stands2021organon, trees2021lidarByHeightClass)
-Sys.time() - startTime
-
 get_aba_cell_norms = function(abaCellTreeLists, stands2022, stands2021organon, trees2021lidarByHeightClass)
 {
   #startTime = Sys.time()
@@ -71,41 +48,67 @@ get_aba_cell_norms = function(abaCellTreeLists, stands2022, stands2021organon, t
   return(list(standsAbaCruise = standsAbaCruise, standsAbaCruiseError = standsAbaCruiseError, trees2021lidarReference = trees2021lidarReference))
 }
 
+## cross-validated matching
+# use vfold_cv() at stand level since group_vfold_cv() departs widely from balanced splits
+# splitsAndFits = vfold_cv(plotHeightsScaled, v = 2, repeats = 1) %>% mutate(fit = future_map(splits, fitFunction))
+splits = vfold_cv(stands2022 %>% filter(is.na(tph) == FALSE), v = 2, repeats = 2, strata = vegStrata) # cross validate only on cruised stands
+
+split = splits[1, ]
+trainingStands = analysis(split$splits[[1]])
+validationStands = assessment(split$splits[[1]])
+
+trainingPlotHeightsScaled = plotHeightsScaled %>% filter(stand %in% trainingStands$stand)
+validationCells = abaCells %>% filter(stand1 %in% validationStands$stand)
+validationCellsScaled = abaCellsScaled %>% filter(stand1 %in% validationStands$stand)
+
+startTime = Sys.time() # ~0.8 s for 2-fold cross validation
+abaCellPlots = get_aba_cell_plots(validationCells, validationCellsScaled, trainingPlotHeightsScaled, treeMatchBound = 8, lidarMetrics = c("pGround", "zQ10", "zQ20", "zQ30"))
+Sys.time() - startTime
+startTime = Sys.time() # ~8 s 2-fold
+abaCellTrees = get_tree_lists(abaCellPlots, plotTreeCounts, trees2021lidar)
+Sys.time() - startTime
+startTime = Sys.time() # ~0.7 s
+abaCellNorms = get_aba_cell_norms(abaCellTrees, stands2022, stands2021organon, trees2021lidarByHeightClass)
+Sys.time() - startTime
+
+xBreaks = c(0, 0.3, 1, 3, 10, 30, 100) # c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)
+xMinorBreaks = c(0.1, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 2, 4, 5, 6, 7, 8, 9, 20, 40, 50, 60, 70, 80, 90) # c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90)
 ggplot() +
   geom_col(aes(x = tph, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$trees2021lidarReference %>% mutate(speciesGroup = if_else(isConifer, "conifer", "hardwood")), orientation = "y") +
-  #coord_cartesian(xlim = c(0, 75), ylim = c(0, 85)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 75), ylim = c(0, 85)) +
+  #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "mean trees per hectare", y = "tree height, m", fill = NULL, title = "a) LiDAR segmentation") +
-  scale_x_continuous(breaks = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100), minor_breaks = c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90), labels = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)) +
+  scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphAba, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferAba, tphHardwoodAba) %>% pivot_longer(cols = c("tphConiferAba", "tphHardwoodAba"), names_to = "speciesGroup", values_to = "tphAba") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferAba", "conifer", "hardwood")), orientation = "y") +
-  #coord_cartesian(xlim = c(0, 75), ylim = c(0, 85)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 75), ylim = c(0, 85)) +
+  #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "mean trees per hectare", y = "tree height, m", fill = NULL, title = "b) LiDAR plus missed trees") +
-  scale_x_continuous(breaks = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100), minor_breaks = c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90), labels = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)) +
+  scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphCruise, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferCruise, tphHardwoodCruise) %>% pivot_longer(cols = c("tphConiferCruise", "tphHardwoodCruise"), names_to = "speciesGroup", values_to = "tphCruise") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferCruise", "conifer", "hardwood")), orientation = "y") +
-  #coord_cartesian(xlim = c(0, 75), ylim = c(0, 85)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 75), ylim = c(0, 85)) +
+  #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "mean trees per hectare", y = "tree height, m", fill = NULL, title = "c) cruise estimate") +
-  scale_x_continuous(breaks = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100), minor_breaks = c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90), labels = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)) +
+  scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphMad, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferMad, tphHardwoodMad) %>% pivot_longer(cols = c("tphConiferMad", "tphHardwoodMad"), names_to = "speciesGroup", values_to = "tphMad") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferMad", "conifer", "hardwood")), orientation = "y") +
-  #coord_cartesian(xlim = c(0, 75), ylim = c(0, 85)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 75), ylim = c(0, 85)) +
+  #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "trees per hectare", y = "tree height, m", fill = NULL, title = "d) mean absolute difference") +
-  scale_x_continuous(breaks = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100), minor_breaks = c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90), labels = c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)) +
+  scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphMrd, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferMrd, tphHardwoodMrd) %>% pivot_longer(cols = c("tphConiferMrd", "tphHardwoodMrd"), names_to = "speciesGroup", values_to = "tphMrd") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferMrd", "conifer", "hardwood")), orientation = "y") +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 85)) +
-  #coord_trans(x = scales::transform_pseudo_log(sigma = 0.01), ylim = c(0, 85)) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 100)) +
+  #coord_trans(x = scales::transform_pseudo_log(sigma = 0.01), ylim = c(0, 100)) +
   labs(x = "mean relative difference", y = NULL, fill = NULL, title = "e) relative difference") +
   #scale_x_continuous(breaks = c(0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2), minor_breaks = c(0.03, 0.04, 0.06, 0.07, 0.08, 0.09, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9), labels = scales::label_percent()) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 1, guides = "collect") &
   scale_fill_manual(breaks = c("conifer", "hardwood"), values = c("forestgreen", "green2")) &
-  scale_y_continuous(breaks = seq(0, 90, by = 10), expand = expansion(mult = 0.02, add = 0))
-
+  scale_y_continuous(breaks = seq(0, 100, by = 10), expand = expansion(mult = 0.02, add = 0)) &
+  theme(axis.title = element_text(size = 8), plot.title = element_text(size = 8))
+#ggsave("trees/area based/figures/LiDAR+missed trees vs Organon grown ground cruise.png", height = 12, width = 26, units = "cm", dpi = 200)
 
 # 11.4 M treetops detected in matched cells: 40,515 ha in matchable cells, 40,532 ha total ABA grid area
 # Elliott (including Hakki Ridge): 33727 ha -> 9.5 M LiDAR treetops, 20.7 M imputed treetops
@@ -182,7 +185,7 @@ if (abaOptions$includeInvestigatory)
   
   plots2021 = left_join(trees2021organon, plots2016, by = c("plot")) %>%
     # TODO: adjust fixed radius tree count? 1/200 acre fixed radius plots = 217.6 ft² = 20.215702 m² => expansion to 19.7866 * TreeCount
-    select(-PointID, -Dia1, -Ht1, -BHAge, -CrownRatio, -DefectMeasured, -STAND, -elevation, -slope, -aspect, -topographicShelterIndex, -x, -y, -heightDiameterRatio, -imputedBasalArea, -treeBasalAreaPerHectare, -treeBasalAreaPerHectareApprox, -plotsInStand, -standBasalAreaApprox, -measurePlotsInStand, -meanTreesPerBafPlot) %>%
+    #select(-PointID, -Dia1, -Ht1, -BHAge, -CrownRatio, -DefectMeasured, -STAND, -elevation, -slope, -aspect, -topographicShelterIndex, -x, -y, -heightDiameterRatio, -imputedBasalArea, -treeBasalAreaPerHectare, -treeBasalAreaPerHectareApprox, -plotsInStand, -standBasalAreaApprox, -measurePlotsInStand, -meanTreesPerBafPlot) %>%
     rename(plot = PlotID) %>%
     arrange(plot, desc(imputedHeight)) %>% 
     group_by(plot) %>%
@@ -403,10 +406,38 @@ if (abaOptions$includeInvestigatory)
 }
 
 
-## Organon growth intervals
-#library(readr)
+## LiDAR content checks
 if (abaOptions$includeInvestigatory)
 {
+  library(lidR)
+  library(dplyr)
+  # Terra
+  fishCreek = readLAS("E:/Elliott/GIS/biodiversity plots/FishCreek_Aug2022.las") # all first returns, ±35° scan angle, source ID 0, all flags unused, unclassified
+  
+  # Remove-Points versus lidR filtering
+  s03480w06540lidR = readLAS("E:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles RGB+NIR/interleave 1/s03480w06540.las")
+  s03480w06540lidRf = filter_poi(s03480w06540lidR, (Classification != 7L) & (ReturnNumber != 18L) & (Withheld_flag == FALSE))
+  s03480w06540rp = readLAS("F:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles RGB+NIR/s03480w06540.las")
+
+  headerDiff = tibble(metadata = (s03480w06540lidRf@header$`File Signature` != s03480w06540rp@header$`File Signature`) + (s03480w06540lidRf@header$`File Source ID` != s03480w06540rp@header$`File Source ID`) + (s03480w06540lidRf@header$`Project ID - GUID` != s03480w06540rp@header$`Project ID - GUID`) + (s03480w06540lidRf@header$`Version Major` != s03480w06540rp@header$`Version Major`) + (s03480w06540lidRf@header$`Version Minor` != s03480w06540rp@header$`Version Minor`) + (s03480w06540lidRf@header$`System Identifier` != s03480w06540rp@header$`System Identifier`) + (s03480w06540lidRf@header$`Generating Software` != s03480w06540rp@header$`Generating Software`) + (s03480w06540lidRf@header$`File Creation Day of Year` != s03480w06540rp@header$`File Creation Day of Year`) + (s03480w06540lidRf@header$`File Creation Year` != s03480w06540rp@header$`File Creation Year`) + (s03480w06540lidRf@header$`Global Encoding`$`GPS Time Type` != s03480w06540rp@header$`Global Encoding`$`GPS Time Type`) + (s03480w06540lidRf@header$`Global Encoding`$`Waveform Data Packets Internal` != s03480w06540rp@header$`Global Encoding`$`Waveform Data Packets Internal`) + (s03480w06540lidRf@header$`Global Encoding`$`Waveform Data Packets External` != s03480w06540rp@header$`Global Encoding`$`Waveform Data Packets External`) + (s03480w06540lidRf@header$`Global Encoding`$`Synthetic Return Numbers` != s03480w06540rp@header$`Global Encoding`$`Synthetic Return Numbers`) + (s03480w06540lidRf@header$`Global Encoding`$WKT != s03480w06540rp@header$`Global Encoding`$WKT) + (s03480w06540rp@header$`Global Encoding`$`Aggregate Model` != s03480w06540rp@header$`Global Encoding`$`Aggregate Model`),
+                      structure = (s03480w06540lidRf@header$`Header Size` != s03480w06540rp@header$`Header Size`) + (s03480w06540lidRf@header$`Offset to point data` != s03480w06540rp@header$`Offset to point data`) + (s03480w06540lidRf@header$`Number of variable length records` != s03480w06540rp@header$`Number of variable length records`) + (s03480w06540lidRf@header$`Point Data Format ID` != s03480w06540rp@header$`Point Data Format ID`) + (s03480w06540lidRf@header$`Point Data Record Length` != s03480w06540rp@header$`Point Data Record Length`) + (s03480w06540lidRf@header$`Number of point records` != s03480w06540rp@header$`Number of point records`) + sum(s03480w06540lidRf@header$`Number of points by return` != s03480w06540rp@header$`Number of points by return`),
+                      position = (s03480w06540lidRf@header$`X scale factor` != s03480w06540rp@header$`X scale factor`) + (s03480w06540lidRf@header$`Y scale factor` != s03480w06540rp@header$`Y scale factor`) + (s03480w06540lidRf@header$`Z scale factor` != s03480w06540rp@header$`Z scale factor`) + (s03480w06540lidRf@header$`X offset` != s03480w06540rp@header$`X offset`) + (s03480w06540lidRf@header$`Y offset` != s03480w06540rp@header$`Y offset`) + (s03480w06540lidRf@header$`Z offset` != s03480w06540rp@header$`Z offset`) + (s03480w06540lidRf@header$`Max X` != s03480w06540rp@header$`Max X`) + (s03480w06540lidRf@header$`Min X` != s03480w06540rp@header$`Min X`) + (s03480w06540lidRf@header$`Max Y` != s03480w06540rp@header$`Max Y`) + (s03480w06540lidRf@header$`Min Y` != s03480w06540rp@header$`Min Y`) + (s03480w06540lidRf@header$`Max Z` != s03480w06540rp@header$`Max Z`) + (s03480w06540lidRf@header$`Min Z` != s03480w06540rp@header$`Min Z`) + (s03480w06540lidRf@header$`WKT OGC CS`$reserved != s03480w06540rp@header$`WKT OGC CS`$reserved) + (s03480w06540lidRf@header$`WKT OGC CS`$`user ID` != s03480w06540rp@header$`WKT OGC CS`$`user ID`) + (s03480w06540lidRf@header$`WKT OGC CS`$`record ID` != s03480w06540rp@header$`WKT OGC CS`$`record ID`) + (s03480w06540lidRf@header$`WKT OGC CS`$`length after header` != s03480w06540rp@header$`WKT OGC CS`$`length after header`) + (s03480w06540lidRf@header$`WKT OGC CS`$description != s03480w06540rp@header$`WKT OGC CS`$description),
+                      wkt = (s03480w06540lidRf@header$`WKT OGC CS`$`WKT OGC COORDINATE SYSTEM` != s03480w06540rp@header$`WKT OGC CS`$`WKT OGC COORDINATE SYSTEM`))
+  pointDiff = tibble(x = sum(s03480w06540lidRf$X != s03480w06540rp$X), y = sum(s03480w06540lidRf$Y != s03480w06540rp$Y), z = sum(s03480w06540lidRf$Z != s03480w06540rp$Z), intensity = sum(s03480w06540lidRf$Intensity != s03480w06540rp$Intensity),
+                     classification = sum(s03480w06540lidRf$Classification != s03480w06540rp$Classification), gpstime = sum(s03480w06540lidRf$gpstime != s03480w06540rp$gpstime), returnNumber = sum(s03480w06540lidRf$ReturnNumber != s03480w06540rp$ReturnNumber),
+                     numReturns = sum(s03480w06540lidRf$NumberOfReturns != s03480w06540rp$NumberOfReturns), scanDir = sum(s03480w06540lidRf$ScanDirectionFlag != s03480w06540rp$ScanDirectionFlag), edge = sum(s03480w06540lidRf$EdgeOfFlightline != s03480w06540rp$EdgeOfFlightline),
+                     key = sum(s03480w06540lidRf$Keypoint_flag != s03480w06540rp$Keypoint_flag), withheld = sum(s03480w06540lidRf$Withheld_flag != s03480w06540rp$Withheld_flag), overlap = sum(s03480w06540lidRf$Overlap_flag != s03480w06540rp$Overlap_flag),
+                     scanAngle = sum(s03480w06540lidRf$ScanAngle != s03480w06540rp$ScanAngle), userData = sum(s03480w06540lidRf$UserData != s03480w06540rp$UserData), pointSource = sum(s03480w06540lidRf$PointSourceID != s03480w06540rp$PointSourceID),
+                     r = sum(s03480w06540lidRf$R != s03480w06540rp$R), g = sum(s03480w06540lidRf$G != s03480w06540rp$G), b = sum(s03480w06540lidRf$B != s03480w06540rp$B), nir = sum(s03480w06540lidRf$NIR != s03480w06540rp$NIR))
+  headerDiff
+  print(pointDiff, width = Inf)
+  tibble(zMax = s03480w06540lidR@header$`Max Z`, zMin = s03480w06540lidR@header$`Min Z`, zLidRfMax = s03480w06540lidRf@header$`Max Z`, zLidRfMin = s03480w06540lidRf@header$`Min Z`, zMaxF = s03480w06540rp@header$`Max Z`, zMinF = s03480w06540rp@header$`Min Z`)
+}
+
+## Organon growth intervals
+if (abaOptions$includeInvestigatory)
+{
+  #library(readr)
   #organon2021csv = read_csv(file.path(getwd(), "trees/Organon/Elliott tree lists 2016-2116.csv"), col_types = cols(stand = "i", plot = "i", species = "c", tag = "i", year = "i", standAge = "i", .default = "d"))
   library(arrow)
   library(dplyr)
