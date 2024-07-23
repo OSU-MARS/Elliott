@@ -13,34 +13,65 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.bo
 classificationOptions = tibble(rebuildTrainingData = FALSE, includeExploratory = FALSE)
 
 ## assemble training data
-# Training data setup takes just over an hour for ~2000 polygons. Can't multithread as terra 1.7 lacks support.
+# Training data setup takes ~1.25 hours for ~2000 polygons. Can't multithread as terra 1.7 lacks support.
 if (classificationOptions$rebuildTrainingData)
 {
-  trainingPolygons = vect(file.path(getwd(), "GIS/Trees/segmentation/classification training polygons.gpkg"), layer = "training polygons + height") # manually designated ground truth polygons
+  trainingPolygons = vect(file.path(getwd(), "GIS/Trees/classification training polygons.gpkg"), layer = "training polygons + height") # manually designated ground truth polygons
   
   dataSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
-  dsm = rast(file.path(dataSourcePath, "DSM v3 beta", "dsm cmm3 chm aerialMean.vrt"))
+  dsm = rast(file.path(dataSourcePath, "DSM v3 beta", "dsm cmm3 chm aerialMean density.vrt"))
+  dsmSlopeAspect = rast(file.path(dataSourcePath, "DSM v3 beta", "slopeAspect", "slopeAspect.vrt"))
+  dtmSmoothedSlope = rast("GIS/DOGAMI/bare earth slope Gaussian 10 m EPSG6557.tif")
+  dtmSmoothedAspectCos = rast("GIS/DOGAMI/bare earth cos(aspect) Gaussian 10 m EPSG6557.tiff")
+  dtmSmoothedAspectSin = rast("GIS/DOGAMI/bare earth sin(aspect) Gaussian 10 m EPSG6557.tiff")
   orthoimage = rast(file.path(dataSourcePath, "orthoimage v3", "orthoimage all.vrt")) # red, green, blue, nearInfrared, intensityFirstReturn, intensitySecondReturn, firstReturns, secondReturns, scanAngleMeanAbsolute
-  orthoimageCellSize = max(res(orthoimage))
   imageCenters = vect("GIS/DOGAMI/2021 OLC Coos County/image positions.gpkg") # terra drops z coordinates but they're redundant with the elevation field
   gridMetrics = rast(file.path(dataSourcePath, "metrics", "grid metrics 10 m non-normalized v2.tif")) %>%
     rename(intensityFirstGridReturn = intensityFirstReturn)
 
+  #orthoimageCellSize = max(res(orthoimage))
+  dtmCellSize = max(res(dtmSmoothedSlope))
+  gridMetricsCellSize = max(res(gridMetrics))
+  
   dsmCrs = crs(dsm, describe = TRUE)
+  dsmSlopeAspectCrs = crs(dsmSlopeAspect, describe = TRUE)
+  dtmSlopeCrs = crs(dtmSmoothedSlope, describe = TRUE)
+  dtmAspectCosCrs = crs(dtmSmoothedAspectCos, describe = TRUE)
+  dtmAspectSinCrs = crs(dtmSmoothedAspectSin, describe = TRUE)
   orthoimageCrs = crs(orthoimage, describe = TRUE)
   gridMetricsCrs = crs(gridMetrics, describe = TRUE)
   imageCentersCrs = crs(imageCenters, describe = TRUE)
   # check CRSes for horizontal consistency
   if ((orthoimageCrs$authority != dsmCrs$authority) | (orthoimageCrs$code != dsmCrs$code) |
+      (orthoimageCrs$authority != dsmSlopeAspectCrs$authority) | (orthoimageCrs$code != dsmSlopeAspectCrs$code) |
+      (orthoimageCrs$authority != dtmSlopeCrs$authority) | (orthoimageCrs$code != dtmSlopeCrs$code) |
+      (orthoimageCrs$authority != dtmAspectCosCrs$authority) | (orthoimageCrs$code != dtmAspectCosCrs$code) |
+      (orthoimageCrs$authority != dtmAspectSinCrs$authority) | (orthoimageCrs$code != dtmAspectSinCrs$code) |
       (orthoimageCrs$authority != gridMetricsCrs$authority) | (gridMetricsCrs$code != dsmCrs$code) |
       (orthoimageCrs$authority != imageCentersCrs$authority) | (imageCentersCrs$code != dsmCrs$code))
   {
     stop(paste0("DSM, orthoimage, and grid metrics CRSes do not match for training polygon ", trainingPolygonIndex))
   }
-  # fix up vertical CRSes
-  if ((orthoimageCrs$authority == gridMetricsCrs$authority) & (orthoimageCrs$code == gridMetricsCrs$code))
+  # fix up vertical CRSes: terra doesn't know if vertical CRS is used or not so warns on horizontal-compound mismathc
+  if ((orthoimageCrs$authority == dsmCrs$authority) & (orthoimageCrs$code == dsmCrs$code))
   {
     crs(dsm) = crs(orthoimage) # give DSM the orthoimage's vertical CRS, TODO: remove once DSM fix propagates
+  }
+  if ((orthoimageCrs$authority == dsmSlopeAspectCrs$authority) & (orthoimageCrs$code == dsmSlopeAspectCrs$code))
+  {
+    crs(dsmSlopeAspect) = crs(orthoimage) # give DSM the orthoimage's vertical CRS, TODO: remove once DSM fix propagates
+  }
+  if ((orthoimageCrs$authority == dtmSlopeCrs$authority) & (orthoimageCrs$code == dtmSlopeCrs$code))
+  {
+    crs(dtmSmoothedSlope) = crs(orthoimage) # give slope the orthoimage's vertical CRS
+  }
+  if ((orthoimageCrs$authority == dtmAspectCosCrs$authority) & (orthoimageCrs$code == dtmAspectCosCrs$code))
+  {
+    crs(dtmSmoothedAspectCos) = crs(orthoimage) # give aspect the orthoimage's vertical CRS
+  }
+  if ((orthoimageCrs$authority == dtmAspectSinCrs$authority) & (orthoimageCrs$code == dtmAspectSinCrs$code))
+  {
+    crs(dtmSmoothedAspectSin) = crs(orthoimage) # give aspect the orthoimage's vertical CRS
   }
   if ((orthoimageCrs$authority == gridMetricsCrs$authority) & (orthoimageCrs$code == gridMetricsCrs$code))
   {
@@ -53,19 +84,9 @@ if (classificationOptions$rebuildTrainingData)
 
   polygonCreationStart = Sys.time()
   cat(paste0(nrow(trainingPolygons), " training polygons: 0... "))
-  trainingData = list()
+  trainingData = vector(mode = "list", length = nrow(trainingPolygons))
   for (trainingPolygonIndex in 1:nrow(trainingPolygons))
   {
-    if (trainingPolygonIndex %in% seq(316, 320)) # skip the few training polygons outside of the 400 m grid metrics buffer
-    {
-      # terra::intersect() is slow and there doesn't appear to be a way avoiding no intersection errors from crop()
-      next
-    }
-    if (trainingPolygonIndex %% 25 == 0)
-    {
-      cat(paste0(trainingPolygonIndex, "... "))
-    }
-    
     # extract training data for this polygon
     # Assumes
     # - training polygons are small so the error of using constant sun and view angles for all cells in the polygon is slight
@@ -76,19 +97,31 @@ if (classificationOptions$rebuildTrainingData)
     {
       next # skip two bare ground training polygons south of the grid metrics area
     }
-    polygonDsm = crop(dsm, trainingPolygon, touches = FALSE) # take only cells with centroids within the training polygon
-    polygonOrthoimage = crop(orthoimage, trainingPolygon, touches = FALSE)
-    polygonGridMetrics = resample(crop(gridMetrics, buffer(trainingPolygon, orthoimageCellSize)), polygonOrthoimage, method = "lanczos") # defaults to bilinear for rasters whose first layer is numeric
+    polygonOrthoimage = crop(orthoimage, trainingPolygon, touches = FALSE) # don't need to buffer as polygons are drawn on the orthoimage
+    polygonDsm = crop(dsm, trainingPolygon, touches = FALSE) # take only cells with centroids within the training polygon, don't need to buffer as DSM and orthoimage have the same resolution and are aligned
+    polygonDsmSlopeAspect = crop(dsmSlopeAspect, trainingPolygon, touches = FALSE)
+    
+    # buffer to capture adjacent cells for resampling support window: bilinear needs 2x2, cubic and cubic spline are likely 4x4 and lanczos 6x6 (https://github.com/rspatial/terra/issues/1568)
+    # resample() interpolates only over its y input, so outputs are matched to the orthoimage. If the buffering around the training 
+    # polygon is not wide enough then the resampling method may return NAs.
+    # Also, crop from input rasters as windowing may be unreliable (https://github.com/rspatial/terra/issues/1433).
+    polygonGridMetrics = resample(crop(gridMetrics, buffer(trainingPolygon, 5*gridMetricsCellSize), touches = TRUE), polygonOrthoimage, method = "cubic") # defaults to bilinear for rasters whose first layer is numeric
+    polygonPrevailingSlope = resample(crop(dtmSmoothedSlope, buffer(trainingPolygon, dtmCellSize), touches = TRUE), polygonOrthoimage, method = "bilinear")
+    polygonPrevailingAspectCos = resample(crop(dtmSmoothedAspectCos, buffer(trainingPolygon, dtmCellSize), touches = TRUE), polygonOrthoimage, method = "bilinear")
+    polygonPrevailingAspectSin = resample(crop(dtmSmoothedAspectSin, buffer(trainingPolygon, dtmCellSize), touches = TRUE), polygonOrthoimage, method = "bilinear")
     
     polygonCentroid = matrix(c(geom(centroids(trainingPolygon))[, c("x", "y")], z = mean(values(polygonDsm$dsm, na.rm = TRUE))), nrow = 1) # x, y, z
-    
+
     imageCenterIndex = knnx.index(imageCentersForKnn, polygonCentroid, k = 1)
     imagePositionDelta = imageCentersForKnn[imageCenterIndex, ] - polygonCentroid
     polygonViewAzimuth = -180/pi * (atan2(imagePositionDelta$y, imagePositionDelta$x) - pi/2) # -180/pi * (atan2(c(1, -1, -1, 1), c(1, 1, -1, -1)) - pi/2) to rotate to 0° being north and increasing clockwise 
     polygonViewAzimuth = if_else(polygonViewAzimuth > 0, polygonViewAzimuth, 360 + polygonViewAzimuth)
     polygonZenithAngle = 180/pi * atan2(sqrt(imagePositionDelta$x^2 + imagePositionDelta$y^2), imagePositionDelta$z)
     
-    trainingStatistics = as_tibble(c(polygonOrthoimage, polygonDsm, polygonGridMetrics)) %>% # stack rasters
+    trainingStatistics = as_tibble(c(polygonOrthoimage, polygonDsm, polygonDsmSlopeAspect, polygonGridMetrics, polygonPrevailingSlope, polygonPrevailingAspectCos, polygonPrevailingAspectSin)) %>% # stack rasters
+      rename(prevailingSlope = `bare earth slope Gaussian 10 m EPSG6557`,
+             prevailingAspectCos = `bare earth cos(aspect) Gaussian 10 m EPSG6557`,
+             prevailingAspectSin = `bare earth sin(aspect) Gaussian 10 m EPSG6557`) %>%
       mutate(polygon = trainingPolygonIndex,
              classification = trainingPolygon$classification,
              sunAzimuth = imageSunPositions$azimuth[imageCenterIndex],
@@ -97,37 +130,61 @@ if (classificationOptions$rebuildTrainingData)
              viewElevation = 90 - polygonZenithAngle)
     #polygonChm = resample(crop(chm, buffer(trainingPolygon, orthoimageCellSize)), polygonOrthoimage)
     trainingData[[trainingPolygonIndex]] = trainingStatistics
+    
+    if (trainingPolygonIndex %% 25 == 0)
+    {
+      cat(paste0(trainingPolygonIndex, "... "))
+    }
   }
   (Sys.time() - polygonCreationStart)
   
   trainingData = bind_rows(trainingData) %>%
-    filter(firstReturns > 0) %>% # drops image pixels with no RGB[+NIR] data
     rename(nir = nearInfrared) %>%
     mutate(classification = as.factor(classification),
            intensitySecondReturn = replace_na(intensitySecondReturn, 0)) %>% # allow cells without second returns to be classified
     relocate(polygon, classification)
   
-  # ranger requires complete cases but not all raster cells in all training polygons have all grid metrics or point hits
-  # While data is written here for all training cells containing LiDAR points, it's useful to check what filters are required below.
-  #print(trainingData %>% filter(is.na(dsm) == FALSE, is.na(zMean) == FALSE) %>% summarise(across(everything(), ~sum(is.na(.)))), width = Inf)
+  # while data is written here for all training cells, it's useful to check what filters are required below
+  #print(trainingData %>% filter(is.na(intensityFirstReturn) == FALSE, is.na(dsm) == FALSE, is.na(zMean) == FALSE) %>% summarise(across(everything(), ~sum(is.na(.)))), width = Inf)
   #sum(is.na(trainingData))
   saveRDS(trainingData, "trees/segmentation/classification training data.Rds")
 } else {
+  # ranger requires complete cases but not all raster cells in all training polygons have all grid metrics or point hits
+  # At 1931 polygons (262,761 cells): 4929 cells without LiDAR grid metrics, 609 without RGB+NIR+I1, 233 without scan angle, 174 without DSM
   trainingData = readRDS("trees/segmentation/classification training data.Rds") %>%
-    filter(is.na(dsm) == FALSE, is.na(zMean) == FALSE) # only complete cases for now: exclude polygons not covered by grid metrics
+    filter(is.na(intensityFirstReturn) == FALSE, is.na(dsm) == FALSE, is.na(zMean) == FALSE)
 }
 
 # remove unique polygon identifiers and add derived predictors
 trainingData = trainingData %>% 
+  filter(is.na(dsmSlope) == FALSE, is.na(cmmSlope3) == FALSE) %>%
   select(-polygon) %>%
-  mutate(sunRelativeAzimuth = sunAzimuth - viewAzimuth, # 0 = forward scatter, ±180 = backscatter, absolute value broken out separately to allow for asymmetric BRDF
-         sunRelativeAzimuth = if_else(sunRelativeAzimuth > 180, 360 - sunRelativeAzimuth, if_else(sunRelativeAzimuth < -180, 360 + sunRelativeAzimuth, sunRelativeAzimuth)), # clamp to [0, ±180] to constrain training complexity
-         sunRelativeAbsoluteAzimuth = abs(sunRelativeAzimuth),
-         sunRelativeAzimuthCosine = cos(pi/180 * sunRelativeAzimuth),
-         sunRelativeAzimuthSine = sin(pi/180 * sunRelativeAzimuth),
+  mutate(viewAzimuthSunRelative = sunAzimuth - viewAzimuth, # 0 = forward scatter, ±180 = backscatter, absolute value broken out separately to allow for asymmetric BRDF
+         viewAzimuthSunRelative = if_else(viewAzimuthSunRelative > 180, 360 - viewAzimuthSunRelative, if_else(viewAzimuthSunRelative < -180, 360 + viewAzimuthSunRelative, viewAzimuthSunRelative)), # clamp to [0, ±180] to constrain training complexity
+         viewAzimuthSunRelativeAbsolute = abs(viewAzimuthSunRelative),
+         viewAzimuthSunRelativeCosine = cos(pi/180 * viewAzimuthSunRelative),
+         viewAzimuthSunRelativeSine = sin(pi/180 * viewAzimuthSunRelative),
          scanAngleCosine = cos(pi/180 * scanAngleMeanAbsolute),
+         scanAngleMeanNormalized = scanAngleMeanAbsolute / scanAngleCosine,
          sunZenithAngleCosine = cos(pi/180 * (90 - sunElevation)),
          viewZenithAngleCosine = cos(pi/180 * (90 - viewElevation)),
+         dsmAspectSunRelative = sunAzimuth - dsmAspect,
+         dsmAspectSunRelative = if_else(dsmAspectSunRelative > 180, 360 - dsmAspectSunRelative, if_else(dsmAspectSunRelative < -180, 360 + dsmAspectSunRelative, dsmAspectSunRelative)),
+         dsmAspectSunRelativeAbsolute = abs(dsmAspectSunRelative),
+         dsmAspectSunRelativeCosine = cos(pi/180 * dsmAspectSunRelative),
+         dsmAspectSunRelativeSine = sin(pi/180 * dsmAspectSunRelative),
+         cmmAspectSunRelative = sunAzimuth - cmmAspect3,
+         cmmAspectSunRelative = if_else(cmmAspectSunRelative > 180, 360 - cmmAspectSunRelative, if_else(cmmAspectSunRelative < -180, 360 + cmmAspectSunRelative, cmmAspectSunRelative)),
+         cmmAspectSunRelativeAbsolute = abs(cmmAspectSunRelative),
+         cmmAspectSunRelativeCosine = cos(pi/180 * cmmAspectSunRelative),
+         cmmAspectSunRelativeSine = sin(pi/180 * cmmAspectSunRelative),
+         prevailingAspect = 180/pi * atan2(prevailingAspectSin, prevailingAspectCos), # arctangent does not require inversion or rotation as aspect is being reconstructed from sin(aspect) and cos(aspect)
+         prevailingAspect = if_else(prevailingAspect > 0, prevailingAspect, 360 + prevailingAspect),
+         prevailingAspectSunRelative = sunAzimuth - prevailingAspect, 
+         prevailingAspectSunRelative = if_else(prevailingAspectSunRelative > 180, 360 - prevailingAspectSunRelative, if_else(prevailingAspectSunRelative < -180, 360 + prevailingAspectSunRelative, prevailingAspectSunRelative)),
+         prevailingAspectSunRelativeAbsolute = abs(prevailingAspectSunRelative),
+         prevailingAspectSunRelativeCosine = cos(pi/180 * prevailingAspectSunRelative),
+         prevailingAspectSunRelativeSine = sin(pi/180 * prevailingAspectSunRelative),
          # vegetation indices
          ari = 1/green - 1/red, # WDRVI
          arvi2 = (nir - (red - 2 * (blue - red))) / (nir + (red - 2 * (blue - red))), # arvi(γ = 0) = ndvi, arvi(γ = 1) = bndvi
@@ -174,7 +231,8 @@ trainingData = trainingData %>%
          rdvi = (nir - red) / sqrt(nir + red),
          rgbv = (green^2 - red * as.numeric(blue)) / (green^2 + red * as.numeric(blue)), # convert explicitly to avoid integer overflow
          rndvi = (nir - red) / sqrt(nir + red), # sometimes mistaken for rdvi?
-         savi = 1.5 * (nir - red) / (nir + red + 0.5), # NDVI 100%, eviBackup, oSAVI 99% correlation
+         # TODO: estimate SAVI L ∈ [0, 1] = [all vegetation, no vegetation] from aerial and ground point counts?
+         savi = (1 + 0.5) * (nir - red) / (nir + red + 0.5), # with moderate vegetation cover default L = 0.5, NDVI 100%, eviBackup, oSAVI 99% correlation
          sipi = (nir - blue) / (nir + red),
          triangularVegIndex = 0.5 * (120 * (nir - green) - 200 * (red - green)), # RGBV 93%
          vari = (green - red) / (green + red - blue), # NaNs
@@ -211,25 +269,43 @@ trainingData = trainingData %>%
 
 if (classificationOptions$includeExploratory)
 {
-  library(VSURF)  # thresholding ~2 h trees + permutation + 10 h parallel + interpretation 10 h on 170k cell, 133 variables training set
-  classificationVsurf = VSURF(classification ~ ., trainingData, ncores = 12, parallel = TRUE, RFimplem = "ranger")
-  saveRDS(classificationVsurf, "trees/segmentation/classification vsurf 152.Rds")
+  # rows   predictors   VSURF  cores selected  accuracy   tune  trees  threads   mtry  min node size
+  # 170k   133                 15       
+  # 308k   157          2.6d   15    15        99.0%      2.3h  500    15        2     2
+  # 263k   172
+  library(VSURF)
+  vsurfStartTime = Sys.time()
+  classificationVsurf = VSURF(classification ~ ., trainingData, ncores = 15, parallel = TRUE, RFimplem = "ranger")
+  saveRDS(classificationVsurf, "trees/segmentation/classification vsurf 172.Rds")
   classificationVsurf$nums.varselect # threshold -> interpretation -> prediction
   classificationVsurf$mean.perf
   classificationVsurf$overall.time
   classificationVsurf$comput.times
 
   plot(classificationVsurf)
-  attributes(classificationVsurf$terms[classificationVsurf$varselect.interp])$term.labels
-  attributes(classificationVsurf$terms[classificationVsurf$varselect.pred])$term.labels
-
-  predictorImportance = tibble(responseVariable = "classification", predictor = as.character(attr(classificationVsurf$terms, "predvars"))[classificationVsurf$imp.mean.dec.ind + 2], importance = classificationVsurf$imp.mean.dec) %>% # offset as.character() by two since first element is "list" and second is classification
-    mutate(importance = importance / sum(importance))
+  (variablesTreshold = attributes(classificationVsurf$terms[classificationVsurf$varselect.thres])$term.labels)
+  (variablesInterpretation = attributes(classificationVsurf$terms[classificationVsurf$varselect.interp])$term.labels)
+  (variablesPrediction = attributes(classificationVsurf$terms[classificationVsurf$varselect.pred])$term.labels)
+  
+  predictorImportance = tibble(predictor = as.character(attr(classificationVsurf$terms, "predvars"))[classificationVsurf$imp.mean.dec.ind + 2], importance = classificationVsurf$imp.mean.dec) %>% # offset as.character() by two since first element is "list" and second is classification
+    mutate(importance = importance / sum(importance), selection = factor(if_else(predictor %in% variablesPrediction, "prediction", if_else(predictor %in% variablesInterpretation, "interpretation", if_else(predictor %in% variablesTreshold, "thresholding", "excluded"))), levels = c("prediction", "interpretation", "thresholding", "excluded")))
   ggplot() +
-    geom_col(aes(x = importance, y = fct_reorder(predictor, importance), fill = responseVariable), predictorImportance) +
-    guides(fill = "none") +
-    labs(x = "normalized variable importance", y = NULL)  
-  ggsave("trees/segmentation/classification vsurf 152 importance.png", width = 10, height = 40, units = "cm", dpi = 150)
+    geom_col(aes(x = importance, y = fct_reorder(predictor, importance), fill = selection), predictorImportance) +
+    labs(x = "normalized variable importance", y = NULL, fill = "VSURF") +
+    scale_fill_manual(values = c("forestgreen", "blue2", "darkviolet", "black"))
+  ggsave("trees/segmentation/classification vsurf 172 importance.png", width = 14, height = 44, units = "cm", dpi = 150)
+
+  library(tuneRanger)
+  library(mlr)
+  rangerTuneTask = makeClassifTask(data = as.data.frame(trainingData %>% select(all_of(predictorVariables))), target = "classification")
+  estimateStart = Sys.time()
+  estimateTimeTuneRanger(rangerTuneTask, num.trees = 500, num.threads = 15, iters = 70)
+  Sys.time() - estimateStart
+  tuneStart = Sys.time()
+  rangerTuning = tuneRanger(rangerTuneTask, measure = list(multiclass.brier), num.trees = 500, num.threads = 15, iters = 70)
+  Sys.time() - tuneStart
+  (rangerTuning)
+  
   # orthoimagery correlations
   #cor(as.matrix(trainingData %>% select(ndgr, ndvi, gndvi, bndvi, intensity, intensitySecondReturn)))
   # LiDAR correlations
@@ -256,36 +332,6 @@ if (classificationOptions$includeExploratory)
     arrange(desc(max), desc(mean)) %>%
     mutate(var = row_number()) %>%
     relocate(var)
-
-  # drop non-normalized heights with low importance relative to normalized ones
-  predictorVariables = c("classification", "ndgr", "ndvi", "gndvi", "bndvi", "intensity", "intensitySecondReturn") # κ ~0.898, 15 minutes to fit with 8-10-12 min node sizes, 8 minutes with 6-8-10
-  predictorVariables = c("classification", "ndgr", "ndvi", "gndvi", "bndvi", "intensity", "intensitySecondReturn", "pGround", "pSecondReturn", "pThirdReturn", "pZaboveThreshold", "zQ05normalized", "zQ10normalized", "zQ25normalized", "zQ75normalized", "intensityMean", "intensityStdDev", "zMean", "zSkew", "pZaboveZmean") # lanczos κ ~0.9998 + 13 minutes to fit, bilinear κ ~0.9998 + 14 minutes
-  predictorVariables = c("classification", "ndgr", "ndvi", "gndvi", "bndvi", "intensity", "intensitySecondReturn", "pGround", "pSecondReturn", "pThirdReturn", "pZaboveThreshold", "zQ05normalized", "zQ10normalized", "zQ25normalized", "zQ75normalized", "intensityMean", "intensityStdDev") # lanczos κ ~0.9995 + 14 minutes to fit
-  predictorVariables = c("classification", "ndgr", "ndvi", "gndvi", "bndvi", "intensity", "intensityFirstReturn", "intensitySecondReturn", "intensityQ10", "intensityPground", "pThirdReturn", "pZaboveThreshold", "zQ05normalized", "zQ10normalized", "zQ25normalized", "zQ75normalized") # lanczos κ ~0.9996 + 14 minutes to fit
-  
-  #predictorVariables = c("classification", "luminosity", "rNormalized", "greenness", "mgrv", "ndgr", "redBlueRatio") # luminosity + 5 normalized vegetation indices: κ ~0.872, 55 minutes to fit
-  #predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "msavi", "rgbv", "gemi", "mexg", "normalizedGreen", "gli", "evi") # κ ~0.905, 47 minutes to fit
-  #predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "ndgb", "ndgr", "wbi") # κ ~0.886, 58 minutes to fit
-  #predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "ndgb", "ndgr") # κ ~0.886, 60 minutes to fit
-  #predictorVariables = c("classification", "ndgr", "ndvi", "bndvi", "intensity", "intensitySecondReturn") # κ ~0.896, 13 minutes to fit
-  #predictorVariables = c("classification", "ndvi", "gndvi", "bndvi", "intensity", "intensitySecondReturn") # κ ~0.893, 7 minutes to fit
-  #predictorVariables = c("classification", "ndvi", "gndvi", "bndvi") # κ ~0.884, 42 minutes to fit
-  #predictorVariables = c("classification", "rNormalized", "gNormalized", "bNormalized", "nirNormalized") # κ ~0.885, 58 minutes to fit
-  #trainingData %<>% select(-zQ05, -zQ10, -zQ15, -zQ20, -zQ25, -zQ30, -zQ35, -zQ40, -zQ45, -zQ50, -zQ55, -zQ60, -zQ65, -zQ70, -zQ75, -zQ80, -zQ85, -zQ90, -zQ95, -zKurtosis, -zMax, -zMean, -zPcumulative10) # mean or max variable importance < ~0.68: κ ~0.9997 with 56 predictor variables
-  #trainingData %<>% select(-intensityMax, -intensitySkew, -pCumulativeZQ10, -pCumulativeZQ30, -pCumulativeZQ50, -pCumulativeZQ70, -pCumulativeZQ90, -pFifthReturn, -zGroundMean, -zPcumulative20, -zPcumulative30, -zNormalizedEntropy) # 44 predictor variables: κ ~0.9999
-  #trainingData %<>% select(-intensityKurtosis, -intensityStdDev, -pFourthReturn, -pZaboveZmean, -zPcumulative40, -zPcumulative50, -zPcumulative60, -zPcumulative70, -zPcumulative80, -zPcumulative90, -zQ05normalized, -zSkew) # 32 predictor variables (all with max variable importance < 0.90 dropped), no shadow κ = 1
-  #trainingData %<>% select(-intensityMean, -pFirstReturn, -pSecondReturn, -pThirdReturn, -zQ10normalized, -zQ75normalized, -zQ80normalized, -zQ85normalized, -zQ90normalized, -zQ95normalized, -zMaxNormalized, -zStdDev) # 20 variables: κ ~0.9998 but degraded predictive performance on actual landscape
-  #trainingData %<>% select(-zMeanNormalized, -zQ15normalized, -zQ25normalized, -zQ35normalized, -zQ45normalized, -zQ50normalized, -zQ55normalized, -zQ60normalized, -zQ65normalized, -zQ70normalized) # 10 variables: κ ~0.9993 but also poor predictive performance
-  #trainingData %<>% select(-zQ20normalized, -zQ30normalized, -zQ40normalized) # 7 variables (RDB+NIR, intensityPground, pGround, pZaboveThreshold): κ ~0.986, importance red = 100, green = 41, nir = 39, pGround = 5.8, intensityPground = 2.9, blue = 1.8, pZaboveThreshold = 0.0
-  #trainingData %<>% select(-pZaboveThreshold) # κ ~0.973, red = 100, nir = 34, green = 20, pGround = 6.8, intensityPground = 6.0, blue = 0.0
-  #trainingData %<>% select(-intensityPground, -pGround) # reduce to RGB+NIR control: κ ~0.8913
-  #trainingData %<>% select(classification, rNormalized, greenness, mgrv, ndgr, redBlueRatio, coloration, wbi, bNormalized, ndgb, savi, eviBackup, osavi, nirRedRatio, ndvi, tvi, mtvi2, msavi, normalizedNir, rgbv, triangularVegIndex, nirNormalized, gemi, mexg, nirGreenRatio, chlorophyllGreen, gndvi, normalizedBlue, vari, nirBlueRatio, bndvi, bai, normalizedGreen, gli, evi, chlorophyllVegetation) # 35 normalized vegetation indices: κ ~
-  #trainingData %<>% select(classification, luminosity, rNormalized, greenness, mgrv, ndgr, redBlueRatio, coloration, wbi, bNormalized, ndgb, savi, eviBackup, osavi, nirRedRatio, ndvi, tvi, mtvi2, msavi, normalizedNir, rgbv, triangularVegIndex, nirNormalized) # luminosity + 20 normalized vegetation indices: not run due to slow fitting
-  #trainingData %<>% select(classification, luminosity, rNormalized, greenness, mgrv, ndgr, redBlueRatio, coloration, wbi, bNormalized) # luminosity + 10 normalized vegetation indices: κ ~
-
-  #trainingData %<>% select(-intensityMax, -pCumulativeZQ10, -pCumulativeZQ30, -pCumulativeZQ50, -pCumulativeZQ90, -zGroundMean, -zNormalizedEntropy, -zPcumulative20) # additional drops: increase κ from ~0.9997 to ~0.9999
-  # without shadow class
-  #trainingData %<>% select(-nir, -pCumulativeZQ10, -zQ05, -zQ10, -zQ15, -zQ20, -zQ25, -zQ30, -zQ35, -zQ40, -zQ45, -zQ50, -zQ55, -zQ60, -zQ65, -zQ70, -zQ75, -zQ80, -zQ85, -zQ90, -zQ95, -zGroundMean, -zKurtosis, -zMax, -zMean, -zNormalizedEntropy, -zPcumulative10)
 }
 
 repeatedCrossValidation = trainControl(method = "repeatedcv", number = 2, repeats = 25, verboseIter = TRUE)
@@ -294,14 +340,16 @@ repeatedCrossValidation = trainControl(method = "repeatedcv", number = 2, repeat
 
 # random forest
 # 1936 polygons
-# cells   method              cross validation   node sizes   cores   fit time    accuracy    κ       grid metrics
-# 169k    ranger + vsurf 7    2x25               4            1       25 m        0.944       0.933   10 m from non-normalized clouds with heights relative to mean ground elevation added
-# 365 polygons: bare, conifer, hardwood, shadow
-# 103k    ranger              2x50               5            1       27 m        0.999       0.999   from normalized point clouds
-# 104k    ranger              2x50               5            1       41 m        0.999       0.999   from non-normalized clouds with heights relative to mean ground elevation added
-# 104k    ranger              2x50               5            1       37 m        0.999       0.999   ibid with low importance non-normalized z statistics dropped
-predictorVariables = c("classification", "zMaxNormalized", "zQ95normalized", "gli", "intensityMeanAboveMedianZ", "zQ75normalized", "intensitySkew", "intensityFirstGridReturn")
-#cor(as.matrix(trainingData %>% select(all_of(predictorVariables[2:length(predictorVariables)]))))
+# cells   method              cross validation   tune grid   cores   fit time    accuracy    κ       grid metrics
+# 273k    ranger + vsurf 15   2x10               3x3         16      1.3h        0.998       0.998   10 m from non-normalized clouds
+# VSURF selected predictors without sun or view angles
+# predictorVariables = c("classification", "zMaxNormalized", "zQ95normalized", "gli", "intensityMeanAboveMedianZ", "zQ75normalized", "intensitySkew", "intensityFirstGridReturn")
+# VSURF selected predictors with sun and view angles
+predictorVariables = c("classification", "zMaxNormalized", "zQ95normalized", "gli", "intensityMeanAboveMedianZ", "zQ75normalized", "intensitySkew", "intensityFirstGridReturn", "zQ80normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "viewZenithAngleCosine", "viewElevation", "viewAzimuthSunRelative")
+# VSURF selected predictors with sun, view, and prevailing slope angles + interpolation improvements
+predictorVariables = c("classification", "chm", "gNormalized", "gli", "zMaxNormalized", "viewZenithAngleCosine", "viewElevation", "zQ95normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "zQ85normalized", "viewAzimuth", "intensityMeanAboveMedianZ", "viewAzimuthSunRelativeSine", "viewAzimuthSunRelative", "sunAzimuth")
+#predictorCorrelations = cor(as.matrix(trainingData %>% select(all_of(predictorVariables[2:length(predictorVariables)]))))
+#ggcorrplot::ggcorrplot(predictorCorrelations)
 
 fitStart = Sys.time() # 4.3 h @ 138 variables, 169k rows, 2x10 cross validation
 randomForestFit = train(classification ~ ., data = trainingData %>% select(all_of(predictorVariables)), method = "ranger", trControl = repeatedCrossValidation, # importance = "impurity_corrected",
@@ -309,7 +357,7 @@ randomForestFit = train(classification ~ ., data = trainingData %>% select(all_o
                                                splitrule = 'gini',
                                                min.node.size = c(2, 4, 8, 16))) # @ 138->7
 (randomForestFitTime = Sys.time() - fitStart)
-save(randomForestFit, file = file.path(getwd(), "trees/segmentation/classificationRandomForestFit vsurf 138.7 10 m lanczos.Rdata"))
+save(randomForestFit, file = file.path(getwd(), "trees/segmentation/classificationRandomForestFit vsurf 138.7 10 m cubic.Rdata"))
 randomForestFit
 
 randomForestPrediction = tibble(actual = trainingData$classification, predicted = predict(randomForestFit)) %>%
@@ -474,6 +522,6 @@ orthoimageFilePaths = file.path(orthoimageSourcePath, list.files(orthoimageSourc
 vrt(orthoimageFilePaths, file.path(orthoimageSourcePath, "orthoimage.vrt"), overwrite = TRUE, set_names = TRUE)
 
 # create .vrt for hardwood-conifer classification after classificationJob.R has processed all tiles
-classificationSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/classification ortho6 + 10 m non-normalized 9 lanczos"
+classificationSourcePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/classification ortho6 + 10 m non-normalized 9 cubic"
 classificationFilePaths = file.path(classificationSourcePath, list.files(classificationSourcePath, "\\.tif$"))
 vrt(classificationFilePaths, file.path(classificationSourcePath, "classification.vrt"), overwrite = TRUE, set_names = TRUE)

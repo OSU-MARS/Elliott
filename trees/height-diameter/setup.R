@@ -1325,7 +1325,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
         scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
         geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
         labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
@@ -1338,7 +1338,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
         scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant))), aucs) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
         geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
         labs(title = bquote(.(plotLetters[1])~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         #labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
@@ -1350,7 +1350,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
         geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMaeRank <= 2, aucMaeRank <= 2)), fill = "transparent") +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
         labs(title = bquote(.(plotLetters[2])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         #labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         scale_y_discrete(labels = NULL, limits = rev)
@@ -1365,7 +1365,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
       new_scale_fill() +
       geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant))), aucs) +
       geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucRmseRank <= 2, aucRmseRank <= 2)), fill = "transparent") +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
       labs(title = bquote(.(plotLetters[letterOffset + 1])~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       #labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
@@ -1376,7 +1376,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
       new_scale_fill() +
       geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant))), aucs) +
       geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucDeltaAicNRank <= 2, aucDeltaAicNRank <= 2)), fill = "transparent") +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
       labs(title = bquote(.(plotLetters[letterOffset + 2])~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       #labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
@@ -1387,7 +1387,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
       new_scale_fill() +
       geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant))), aucs) +
       geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucNseRank <= 2, aucNseRank <= 2)), fill = "transparent") +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fit\nfailed"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
       labs(title = bquote(.(plotLetters[letterOffset + 3])~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       #labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
       scale_y_discrete(labels = NULL, limits = rev) +
