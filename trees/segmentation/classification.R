@@ -229,7 +229,7 @@ trainingData = trainingData %>%
          osavi = 1.16 * (nir - red) / (nir + red + 0.16),
          redBlueRatio = red / blue, # rNormalized, WBI, NDGR 98+% correlation, coloration, bNormalized 95%
          rdvi = (nir - red) / sqrt(nir + red),
-         rgbv = (green^2 - red * as.numeric(blue)) / (green^2 + red * as.numeric(blue)), # convert explicitly to avoid integer overflow
+         rgbv = (green^2 - red * as.numeric(blue)) / (green^2 + red * as.numeric(blue)), # 87% with gNormalized, convert explicitly to avoid integer overflow
          rndvi = (nir - red) / sqrt(nir + red), # sometimes mistaken for rdvi?
          # TODO: estimate SAVI L ∈ [0, 1] = [all vegetation, no vegetation] from aerial and ground point counts?
          savi = (1 + 0.5) * (nir - red) / (nir + red + 0.5), # with moderate vegetation cover default L = 0.5, NDVI 100%, eviBackup, oSAVI 99% correlation
@@ -244,6 +244,7 @@ trainingData = trainingData %>%
          gNormalized = green / luminosity,
          rNormalized = red / luminosity, # 99% correlation with redBlueRatio, -97% WBI, 94% luminosity
          # LiDAR statistics
+         aerialMeanNormalized = aerialMean - (dsm - chm), # DSM - CHM = DTM
          zNormalizedEntropy = replace_na(zNormalizedEntropy, 0), # might be better to replace NAs with 1?
          zMaxNormalized = zMax - zGroundMean,
          zMeanNormalized = zMean - zGroundMean,
@@ -266,17 +267,63 @@ trainingData = trainingData %>%
          zQ85normalized = zQ85 - zGroundMean,
          zQ90normalized = zQ90 - zGroundMean,
          zQ95normalized = zQ95 - zGroundMean)
+# drop elevations
+trainingData %<>% select(-aerialMean, -dsm, -cmm3, -zMax, -zMean, -zGroundMean, -zQ05, -zQ10, -zQ15, -zQ20, -zQ25, -zQ30, -zQ35, -zQ40, -zQ45, -zQ50, -zQ55, -zQ60, -zQ65, -zQ70, -zQ75, -zQ80, -zQ85, -zQ90, -zQ95)
+# drop non-BRDF angles
+trainingData %<>% select(-sunAzimuth, -viewAzimuth, -dsmAspect, -cmmAspect3, -prevailingAspect, -prevailingAspectCos, -prevailingAspectSin)
+# drop low importance variables
+#trainingData %<>% select(-sipi, -zStdDev, -zMeanNormalized, -zQ05normalized, -aerialMeanNormalized,
+#                         -vari, -ari, -gemi, -zQ15normalized, -zQ65normalized, -rNormalized, -mexg, -normalizedGreen, -zQ60normalized,
+#                         -pZaboveZmean, -intensityQ10, -arvi2, -zQ20normalized, -pFourthReturn, -rdvi, -rndvi, -evi,
+#                         -blue, -intensityQ90, , -intensityMean, -intensityStdDev,
+#                         -red, -nir, -msavi, -luminosity, -green, -luminosity709, -atsavi, -nirGreenRatio, -chlorophyllGreen, -gndvi,
+#                         -intensityQ20, -intensityMeanBelowMedianZ, -pSecondReturn, -pFifthReturn, -pFirstReturn, -intensityQ30, -intensityQ70, -intensityQ80, -intensityQ60, -intensityQ40, -intensityQ50,
+#                         -pZaboveThreshold, -zSkew, -zNormalizedEntropy,
+#                         -normalizedNir, -nirNormalized, -tvi, -nirRedRatio, -mtvi2, -ndvi, -gdvi2, -eviBackup, -msr, -gdvi, -savi, -ctvi, -osavi,
+#                         -nAerial, -nGround, -firstReturns, -secondReturns, -intensitySecondReturn, -scanAngleMeanNormalized)
+# drop BRDF trig
+trainingData %<>% select(-sunZenithAngleCosine,
+                         -cmmAspectSunRelativeCosine, -cmmAspectSunRelativeSine,
+                         -dsmAspectSunRelativeCosine, -dsmAspectSunRelativeSine, 
+                         -prevailingAspectSunRelativeCosine, -prevailingAspectSunRelativeSine,
+                         -scanAngleCosine,
+                         -viewAzimuthSunRelativeCosine, -viewAzimuthSunRelativeSine,
+                         -viewZenithAngleCosine)
+# drop BRDF signed but leave sun and view elevations
+#trainingData %<>% select(-cmmAspectSunRelative, -dsmAspectSunRelative, -prevailingAspectSunRelative, -viewAzimuthSunRelative)
+# drop BRDF absolute
+trainingData %<>% select(-cmmAspectSunRelativeAbsolute, -dsmAspectSunRelativeAbsolute, -prevailingAspectSunRelativeAbsolute, -viewAzimuthSunRelativeAbsolute, -scanAngleMeanAbsolute)
+# drop sun and view elevations
+#trainingData %<>% select(-sunElevation, -viewElevation)
+# gNormalized and gli are fairly similar; drop gli
+#trainingData %<>% select(-gli)
+# absolute view azimuth is preferred; drop signed azimuth
+#trainingData %<>% select(-viewAzimuthSunRelative)
+
+# recode from subclasses to classes
+#trainingData %<>% mutate(classification = fct_collapse(classification, `non-tree` = c("bare", "bare shadow"),
+#                                                                       conifer = c("conifer", "conifer shadow", "conifer deep shadow"),
+#                                                                       hardwood = c("hardwood", "hardwood shadow", "hardwood deep shadow"), 
+#                                                                       snag = c("brown tree", "grey tree")))
+unique(trainingData$classification)
+
 
 if (classificationOptions$includeExploratory)
 {
-  # rows   predictors   VSURF  cores selected  accuracy   tune  trees  threads   mtry  min node size
-  # 170k   133                 15       
-  # 308k   157          2.6d   15    15        99.0%      2.3h  500    15        2     2
-  # 263k   172
+  # rows   predictors         VSURF  cores selected  tune  trees  threads   mtry  min node size  sample fraction
+  # 308k   157                2.6d   15    15        2.3h  500    15        2     2
+  # 263k   172                1.3d   15    13        2.2h  500    15        2     2              0.881
+  # 263k   172 no trig        18h    15    4         1.8h  500    15        3     2              0.897
+  # 263k   172 no trig - 2    18h    15    4         1.8h  500    15        3     2              0.897
+  # 263k   172 trig           17h    15    4         1.8h  500    15        3     2              0.890
+  # 263k   172 handpick 6                            5.3h  500    15        5     2              0.894
+  # 263k   172->125 class     1.0d   15    17        3.9h  500    15        5     2              0.881
+  # 263k   172->125 subclass  1.9d   16    4         1.8h  500    16        3     2              0.883
   library(VSURF)
   vsurfStartTime = Sys.time()
-  classificationVsurf = VSURF(classification ~ ., trainingData, ncores = 15, parallel = TRUE, RFimplem = "ranger")
-  saveRDS(classificationVsurf, "trees/segmentation/classification vsurf 172.Rds")
+  classificationVsurf = VSURF(classification ~ ., trainingData, ncores = 16, parallel = TRUE, RFimplem = "ranger")
+  saveRDS(classificationVsurf, "trees/segmentation/classification vsurf 172.125 subclasses.Rds")
+  #classificationVsurf = readRDS("trees/segmentation/classification vsurf 172.125 subclasses.Rds")
   classificationVsurf$nums.varselect # threshold -> interpretation -> prediction
   classificationVsurf$mean.perf
   classificationVsurf$overall.time
@@ -293,28 +340,29 @@ if (classificationOptions$includeExploratory)
     geom_col(aes(x = importance, y = fct_reorder(predictor, importance), fill = selection), predictorImportance) +
     labs(x = "normalized variable importance", y = NULL, fill = "VSURF") +
     scale_fill_manual(values = c("forestgreen", "blue2", "darkviolet", "black"))
-  ggsave("trees/segmentation/classification vsurf 172 importance.png", width = 14, height = 44, units = "cm", dpi = 150)
+  ggsave("trees/segmentation/classification vsurf 172.125 subclass importance.png", width = 14, height = 0.33 * nrow(predictorImportance), units = "cm", dpi = 150)
 
+  
   library(tuneRanger)
   library(mlr)
+  predictorVariables = c("classification", variablesPrediction) # makeClassifTask() breaks if not written separately
   rangerTuneTask = makeClassifTask(data = as.data.frame(trainingData %>% select(all_of(predictorVariables))), target = "classification")
-  estimateStart = Sys.time()
-  estimateTimeTuneRanger(rangerTuneTask, num.trees = 500, num.threads = 15, iters = 70)
-  Sys.time() - estimateStart
+  #estimateStart = Sys.time()
+  #estimateTimeTuneRanger(rangerTuneTask, num.trees = 500, num.threads = 15, iters = 70)
+  #Sys.time() - estimateStart
   tuneStart = Sys.time()
-  rangerTuning = tuneRanger(rangerTuneTask, measure = list(multiclass.brier), num.trees = 500, num.threads = 15, iters = 70)
+  rangerTuning = tuneRanger(rangerTuneTask, measure = list(multiclass.brier), num.trees = 500, num.threads = 16, iters = 70)
   Sys.time() - tuneStart
   (rangerTuning)
   
-  # orthoimagery correlations
+  # predictor correlations
   #cor(as.matrix(trainingData %>% select(ndgr, ndvi, gndvi, bndvi, intensity, intensitySecondReturn)))
-  # LiDAR correlations
   #cor(as.matrix(trainingData %>% select(zQ05normalized, zQ10normalized, zQ25normalized, zQ75normalized, zQ90normalized)))
   #cor(as.matrix(trainingData %>% select(intensityPground, intensityQ10, intensity, intensityFirstReturn, intensitySecondReturn)))
   #cor(as.matrix(trainingData %>% select(pFirstReturn, pSecondReturn, pThirdReturn, pFourthReturn, pFifthReturn, pZaboveZmean, pZaboveThreshold)))
   #cor(as.matrix(trainingData %>% select(pGround, pSecondReturn, pThirdReturn, pZaboveThreshold, zQ05normalized, zQ10normalized, zQ25normalized, zQ75normalized, intensityMean, intensityStdDev, zMean, zSkew, pZaboveZmean)))
-  #predictorCorrelations = cor(as.matrix(trainingData %>% select(ndgr, ndvi, gndvi, bndvi, intensity, intensityFirstReturn, intensitySecondReturn, intensityQ10, intensityPground, pThirdReturn, pZaboveThreshold, zQ05normalized, zQ10normalized, zQ25normalized, zQ75normalized)))
-  #ggcorrplot::ggcorrplot(predictorCorrelations)
+  predictorCorrelations = cor(as.matrix(trainingData %>% select(all_of(predictorVariables), bNormalized, intensitySkew, prevailingSlope, zQ10normalized, prevailingAspectSunRelativeAbsolute) %>% select(-classification)))
+  ggcorrplot::ggcorrplot(predictorCorrelations)
   #cor(as.matrix(trainingData %>% select(-polygon, -classification)))[, "ndvi"]
   
   # imagery metric importance: { rNormalized, greenness, ndgr, mgrv, redBlueRatio, coloration, wbi, red, bNoramlized } 
@@ -334,33 +382,48 @@ if (classificationOptions$includeExploratory)
     relocate(var)
 }
 
-repeatedCrossValidation = trainControl(method = "repeatedcv", number = 2, repeats = 25, verboseIter = TRUE)
-#trainingDataSubset = sample_n(trainingData, 10000)
-#trainingDataSubset2 = trainingDataSubset %>% select(-zNormalizedEntropy, -pCumulativeZQ90, -pCumulativeZQ50, -pFifthReturn, -intensitySkew, -intensityStdDev, -pCumulativeZQ30, -pCumulativeZQ70, -zPcumulative10, -intensityMax, -zKurtosis, -pCumulativeZQ10, -intensityTotal)
-
 # random forest
 # 1936 polygons
-# cells   method              cross validation   tune grid   cores   fit time    accuracy    κ       grid metrics
-# 273k    ranger + vsurf 15   2x10               3x3         16      1.3h        0.998       0.998   10 m from non-normalized clouds
+# cells   method                             cross validation   tune grid   cores   fit time    accuracy    κ       grid metrics
+# 273k    ranger + vsurf 15                  2x10               3x3         16      1.3h        0.998       0.998   10 m cubic from non-normalized clouds
+# 273k    ranger + vsurf 4                   2x25               1x1         16      35m         0.993       0.991   10 m cubic from non-normalized clouds
+# 273k    ranger + vsurf 4 + sunE            2x25               1x1         16      28m         0.995       0.995   10 m cubic from non-normalized clouds
+# 273k    ranger + vsurf 4 + sunE + preval   2x25               1x1         16      1.0h        0.996       0.995   10 m cubic from non-normalized clouds
+# 273k    ranger + vsurf 4 + sunE + bNorm    2x25               1x1         16      55m         0.978       0.974   10 m cubic from non-normalized clouds
+# 273k    ranger + vsurf 4 + handpick 6      2x25               1x1         16      1.3h        0.982       0.979   10 m cubic from non-normalized clouds
 # VSURF selected predictors without sun or view angles
 # predictorVariables = c("classification", "zMaxNormalized", "zQ95normalized", "gli", "intensityMeanAboveMedianZ", "zQ75normalized", "intensitySkew", "intensityFirstGridReturn")
 # VSURF selected predictors with sun and view angles
-predictorVariables = c("classification", "zMaxNormalized", "zQ95normalized", "gli", "intensityMeanAboveMedianZ", "zQ75normalized", "intensitySkew", "intensityFirstGridReturn", "zQ80normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "viewZenithAngleCosine", "viewElevation", "viewAzimuthSunRelative")
+#predictorVariables = c("classification", "zMaxNormalized", "zQ95normalized", "gli", "intensityMeanAboveMedianZ", "zQ75normalized", "intensitySkew", "intensityFirstGridReturn", "zQ80normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "viewZenithAngleCosine", "viewElevation", "viewAzimuthSunRelative")
 # VSURF selected predictors with sun, view, and prevailing slope angles + interpolation improvements
-predictorVariables = c("classification", "chm", "gNormalized", "gli", "zMaxNormalized", "viewZenithAngleCosine", "viewElevation", "zQ95normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "zQ85normalized", "viewAzimuth", "intensityMeanAboveMedianZ", "viewAzimuthSunRelativeSine", "viewAzimuthSunRelative", "sunAzimuth")
+#predictorVariables = c("classification", "chm", "gNormalized", "gli", "zMaxNormalized", "viewZenithAngleCosine", "viewElevation", "zQ95normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "zQ85normalized", "viewAzimuth", "intensityMeanAboveMedianZ", "viewAzimuthSunRelativeSine", "viewAzimuthSunRelative", "sunAzimuth")
+#predictorVariables = c("classification", "chm", "gNormalized", "gli", "zMaxNormalized", "viewZenithAngleCosine", "viewElevation", "zQ95normalized", "viewAzimuthSunRelativeCosine", "viewAzimuthSunRelativeAbsolute", "zQ85normalized", "viewAzimuth", "intensityFirstGridReturn", "viewAzimuthSunRelativeSine", "viewAzimuthSunRelative")
+# VSURF selected predictors without BRDF trig
+#predictorVariables = c("classification", "gNormalized", "chm", "viewElevation", "viewAzimuthSunRelativeAbsolute")
+# VSURF selected predictors with BRDF trig
+#predictorVariables = c("classification", "chm", "gNormalized", "viewAzimuthSunRelativeCosine", "viewZenithAngleCosine")
+# four predictor BRDF extensions
+predictorVariables = c("classification", "gNormalized", "chm", "viewElevation", "viewAzimuthSunRelativeAbsolute", "sunElevation")
+predictorVariables = c("classification", "gNormalized", "chm", "viewElevation", "viewAzimuthSunRelativeAbsolute", "sunElevation", "prevailingSlope", "prevailingAspectSunRelative")
+#predictorVariables = c("classification", "gNormalized", "chm", "viewElevation", "viewAzimuthSunRelativeAbsolute", "sunElevation", "bNormalized", "intensitySkew", "prevailingSlope", "zQ10normalized", "prevailingAspectSunRelativeAbsolute")
 #predictorCorrelations = cor(as.matrix(trainingData %>% select(all_of(predictorVariables[2:length(predictorVariables)]))))
 #ggcorrplot::ggcorrplot(predictorCorrelations)
 
+repeatedCrossValidation = trainControl(method = "repeatedcv", number = 2, repeats = 25, verboseIter = TRUE)
+
 fitStart = Sys.time() # 4.3 h @ 138 variables, 169k rows, 2x10 cross validation
 randomForestFit = train(classification ~ ., data = trainingData %>% select(all_of(predictorVariables)), method = "ranger", trControl = repeatedCrossValidation, # importance = "impurity_corrected",
-                        tuneGrid = expand.grid(mtry = floor(sqrt(length(predictorVariables) - 1)),
+                        tuneGrid = expand.grid(mtry = 5,
                                                splitrule = 'gini',
-                                               min.node.size = c(2, 4, 8, 16))) # @ 138->7
+                                               min.node.size = 2), # @ 172->4
+                        sample.fraction = 0.894)
 (randomForestFitTime = Sys.time() - fitStart)
-save(randomForestFit, file = file.path(getwd(), "trees/segmentation/classificationRandomForestFit vsurf 138.7 10 m cubic.Rdata"))
+save(randomForestFit, file = file.path(getwd(), "trees/segmentation/classificationRandomForestFit vsurf 172.4 handpick 3 10 m cubic.Rdata"))
 randomForestFit
 
-randomForestPrediction = tibble(actual = trainingData$classification, predicted = predict(randomForestFit)) %>%
+
+# sanity check random forest recall
+randomForestPrediction = tibble(actual = trainingData$classification, predicted = predict(randomForestFit$finalModel, trainingData)) %>%
   mutate(actualClass = fct_collapse(actual, bare = c("bare", "bare shadow"),
                                             conifer = c("conifer", "conifer shadow", "conifer deep shadow"),
                                             hardwood = c("hardwood", "hardwood shadow", "hardwood deep shadow"),
@@ -369,6 +432,7 @@ randomForestPrediction = tibble(actual = trainingData$classification, predicted 
                                                   conifer = c("conifer", "conifer shadow", "conifer deep shadow"),
                                                   hardwood = c("hardwood", "hardwood shadow", "hardwood deep shadow"),
                                                   snag = c("brown tree", "grey tree")))
+randomForestConfusionMatrix = confusionMatrix(randomForestPrediction$predicted, randomForestPrediction$actual)
 randomForestConfusionMatrix = confusionMatrix(randomForestPrediction$predictedClass, randomForestPrediction$actualClass)
 randomForestConfusionMatrix$table
 randomForestConfusionMatrix$overall

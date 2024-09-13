@@ -195,46 +195,46 @@ if (segmentationOptions$includeInvestigatory)
       relocate(STD_ID, treeID, species, xCentroid, yCentroid, zmax, crownArea)
     
     return(tileTrees)
-}
+  }
   
   ## problems with lack of parallel support in terra
   #library(furrr)
   #options(future.debug = TRUE)
   #plan(multisession, workers = 8)
-  #segment_cloud = function(pointCloud, isNormalized = FALSE)
-  #{
-    chm = rasterize_canopy(pointCloud, res = 1, algorithm = p2r(subcircle = 0)) # compute the canopy height model using a pixel of 0.5 units, in this case feet
-    #plot(st_geometry(standBuffer30m))
-    #plot(chm,add=TRUE)
-    
-    if (isNormalized)
-    {
-      chmHeightQuantiles = quantile(values(chm), probs = c(0.1, 0.85, 0.95), na.rm = TRUE, names = FALSE) # point density dependent: 0.1, 0.65, 0.95? for 2009 flight?
-      names(chmHeightQuantiles) = c("minimumTreeHeight", "q85", "q95")
-      
-      get_window_size = function(z)
-      {
-        return(z * log((chmHeightQuantiles[3] - chmHeightQuantiles[2])) / 25 + (chmHeightQuantiles[3] - chmHeightQuantiles[2]) / 10)
-      }
-      localMaxima = locate_trees(chm, lmf(get_window_size, hmin = chmHeightQuantiles[1]), uniqueness = "incremental") # identifies the tree tops from the CHM using the local maximum filter with a window of 6 feet and height >8 ft
-      #localMaxima = locate_trees(chm,lmf(chmHeightQuantiles[3]/25,hmin=chmHeightQuantiles[1]),uniqueness = "incremental")
-    } else {
-      localMaxima = locate_trees(chm, lmf(get_window_size, hmin = chmHeightQuantiles[1]), uniqueness = "incremental")
-    }
-    #dim(localMaxima)
-    #plot(localMaxima, pch=20, add=TRUE)
-    
-    minimumTreeHeight = chmHeightQuantiles["minimumTreeHeight"] # ft
-    maxCrownDiameter = chmHeightQuantiles["q95"] / 8 # ft
-    segmentationAlgorithm = dalponte2016(chm, localMaxima, th_tree = minimumTreeHeight, max_cr = maxCrownDiameter)
-    #segmentationAlgorithm = watershed(chm, th_tree=15)
-    #segmentationAlgorithm = li2012(dt1=1, dt2=2, Zu=30, hmin=10, speed_up = 8)
-    #segmentationAlgorithm = silva2016(chm,localMaxima, max_cr_factor = 0.5, exclusion = 0.3, ID="treeID")
-    
-    # TODO: how to avoid  GDAL message: Setting GeoTIFF 1.1 requires libgeotiff >= 1.6?
-    pointCloud = segment_trees(pointCloud, algorithm = segmentationAlgorithm) # segment point cloud: identifies individual tree crowns
-    return(list(standPoints = pointCloud, chm = chm, minimumTreeHeight = minimumTreeHeight))
-  }
+  # segment_cloud = function(pointCloud, isNormalized = FALSE)
+  # {
+  #   chm = rasterize_canopy(pointCloud, res = 1, algorithm = p2r(subcircle = 0)) # compute the canopy height model using a pixel of 0.5 units, in this case feet
+  #   #plot(st_geometry(standBuffer30m))
+  #   #plot(chm,add=TRUE)
+  #   
+  #   if (isNormalized)
+  #   {
+  #     chmHeightQuantiles = quantile(values(chm), probs = c(0.1, 0.85, 0.95), na.rm = TRUE, names = FALSE) # point density dependent: 0.1, 0.65, 0.95? for 2009 flight?
+  #     names(chmHeightQuantiles) = c("minimumTreeHeight", "q85", "q95")
+  #     
+  #     get_window_size = function(z)
+  #     {
+  #       return(z * log((chmHeightQuantiles[3] - chmHeightQuantiles[2])) / 25 + (chmHeightQuantiles[3] - chmHeightQuantiles[2]) / 10)
+  #     }
+  #     localMaxima = locate_trees(chm, lmf(get_window_size, hmin = chmHeightQuantiles[1]), uniqueness = "incremental") # identifies the tree tops from the CHM using the local maximum filter with a window of 6 feet and height >8 ft
+  #     #localMaxima = locate_trees(chm,lmf(chmHeightQuantiles[3]/25,hmin=chmHeightQuantiles[1]),uniqueness = "incremental")
+  #   } else {
+  #     localMaxima = locate_trees(chm, lmf(get_window_size, hmin = chmHeightQuantiles[1]), uniqueness = "incremental")
+  #   }
+  #   #dim(localMaxima)
+  #   #plot(localMaxima, pch=20, add=TRUE)
+  #   
+  #   minimumTreeHeight = chmHeightQuantiles["minimumTreeHeight"] # ft
+  #   maxCrownDiameter = chmHeightQuantiles["q95"] / 8 # ft
+  #   segmentationAlgorithm = dalponte2016(chm, localMaxima, th_tree = minimumTreeHeight, max_cr = maxCrownDiameter)
+  #   #segmentationAlgorithm = watershed(chm, th_tree=15)
+  #   #segmentationAlgorithm = li2012(dt1=1, dt2=2, Zu=30, hmin=10, speed_up = 8)
+  #   #segmentationAlgorithm = silva2016(chm,localMaxima, max_cr_factor = 0.5, exclusion = 0.3, ID="treeID")
+  #   
+  #   # TODO: how to avoid  GDAL message: Setting GeoTIFF 1.1 requires libgeotiff >= 1.6?
+  #   pointCloud = segment_trees(pointCloud, algorithm = segmentationAlgorithm) # segment point cloud: identifies individual tree crowns
+  #   return(list(standPoints = pointCloud, chm = chm, minimumTreeHeight = minimumTreeHeight))
+  # }
   #
   #boundingBoxes = future_map(elliottLidarTiles$filename, function(tilePath)
   #{
