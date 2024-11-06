@@ -9,7 +9,6 @@ library(tidyr)
 library(tidyterra)
 
 jobStartTime = Sys.time()
-setwd(file.path(getwd(), "../../.."))
 
 # even chunk sizes for 510 total tiles across eight workers = ceiling(510/8) = 64
 chunkIndex = 1 # peak of 60 GB DDR per worker

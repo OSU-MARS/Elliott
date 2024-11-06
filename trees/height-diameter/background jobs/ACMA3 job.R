@@ -2,7 +2,6 @@
 #  height: ~12 minutes fixed effect (gsl_nls, nlrob, gsl_nls default weight), ~33 minutes mixed effect
 #  DBH: ~18 minutes fixed, ~TBD mixed effect
 jobStartTime = Sys.time()
-setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")

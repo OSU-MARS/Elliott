@@ -16,7 +16,6 @@
 # yes     no                                                 4.43 GB        5.74 GB
 # no      no      1.89 MB        1.28 MB                     2.79 MB        1.23 MB
 jobStartTime = Sys.time()
-setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")

@@ -29,7 +29,8 @@ treetopOptions = tibble(fitRandomForest = FALSE,
                         dsmCellSize = 1.5, # feet
                         tileSize = 3000, # ft
                         verticalExaggeration = 25, # DSM multiplier
-                        includeInvestigatory = FALSE)
+                        includeInvestigatory = FALSE,
+                        includeSetup = FALSE)
 
 localMaximaPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/DSM v3 beta/local maxima"
 acceptedTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops accepted"
@@ -95,31 +96,86 @@ fit_ranger = function(trainingMaxima, neighborhoodMaxima = trainingMaxima, mtry,
 get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassification = tileMaxima$treetop)
 {
   tileName = tileMaxima$tile[1]
+
+  ## unsupervised postprocessing of local maxima classified by random forest to generate and resolve merge clusters
+  # Merge clusters are groups of local maxima believed to correspond a single treetop. LiDAR point clouds yield clusters of local maxima
+  # treetop candidates when
+  # - Hits at identical heights occur in adjacent cells, either due to a treetop lying near the cell boundary or the LiDAR spot size being
+  #   comparable to the cell size.
+  # - Flat tops present multiple maxima whose elevations are not distinguishable within the flight data's vertical accuracy. This may be
+  #   due to habit, branch architecture, and leaf shape (multistemmed hardwoods, for example) or suppression (likely made visible by overstory
+  #   mortality).
+  # - Trees movement between flight lines due to wind sway, resulting in top displacements of two or more cells.
+  # - Misalignment of flight lines causes a tree's top to appear in multiple locations within the merged data.
+  # - Broken tops exposing a whorl of branches as a circle of local maxima, possibly with a central maxima at the main stem.
+  # Ideally, processing errors which produce copies of trees' upper portions are rejected as noise. These are difficult to identify in general,
+  # however, and more difficult to locate using the reduced set of information available from a digital surface model compared to a point 
+  # cloud.
+  #
+  # In postprocessing of classified local maxima, merge clusters occur where
+  # - A local maxima is classified as a merge point. If other maxima are close enough a cluster is formed, possibly including other merge
+  #   points or linking with additional local maxima captured by adjacent merge points. This case captures errors where the classifier puts up
+  #   a merge point but mislabels other points which should be merged as treetops or incorrectly discards local maxima.
+  # - Two or more nearby maxima classified as treetops are close enough to each other to be deemed a cluster. This case acts to reduce 
+  #   oversegmentation by capturing classification errors where the classifier should have generated a merge pair, triplet, or larger group.
+  # 
+  # The approach used here is
+  # - Reclassify treetops which pair with nearby treetops as candidate merge points. (Triples and larger groups are possible but unlikely.)
+  # - Find sufficiently close neighbors of all merge points, whether designated by classification or obtained from treetop pairing. 
+  # - Add any neighbors not already present in the merge point set and establish their neighbors within the set. Neighbors outside of the
+  #   set are excluded to prevent further cluster growth.
+  # - Extract merge clusters from the neighbor connectivity graph and find the clusters' xyz centroids. Clusters typically have limited
+  #   variation in height (z), either due to flat topping or limited changes in treetop elevation with wind sway and misalingment between
+  #   different flight lines' point cloud strips.
+  # - Identify and remove outliers from clusters. Clusters with a single merge point are reverted to treetops, converted to treetops if 
+  #   initially labeled as merge points, or dropped if not initially labeled as a treetop or merge point.
+  # - Yield treetop positions as the xyz averages of clusters with two or more merge points.
+  #
+  # Merge clustering around the initial classification is controlled primarily by the definition of neighbor distances, both for treetop
+  # pairing and cluster inclusion. Because neighbors are found by FNN's implementation of k-nearest neighbors (kNN), Euclidean distances 
+  # are used. And, because clusters' vertical extent tends to be limited, distinctions between two- (xy) and and three-dimensional (xyz) 
+  # neighborhoods are constrained. Currently, kNN searches are done in two dimensions and decisions on whether to include kNN identified
+  # neighbors in a merge cluster are based on separate consideration of points' xyz positions relative to the cluster's centroid. Since
+  # merge point clustering is presumed needed to seed crown segmentation, only the candidate cluster points and geometric information
+  # passed through from the digital surface model and point clouds is available for decision making.
+
+  # find cluster convertable treetop pairs (triplets, ...)
+  treetopTileIndices = which(treetopClassification == "yes")
+  treetopPoints = tileMaxima[treetopTileIndices, ]
+  neighborhoodTreetops = neighborhoodMaxima %>% filter(treetop == "yes")
+  treetopMergeKnn = get.knnx(neighborhoodTreetops[, c("x", "y")], treetopPoints[, c("x", "y")], k = 5)
+  treetopMergeKnn = tibble(tile = treetopPoints$tile, id = treetopPoints$id, uniqueID = treetopPoints$uniqueID, sourceID = treetopPoints$sourceID,
+                           treetop = treetopPoints$treetop, x = treetopPoints$x, y = treetopPoints$y,
+                           radius = treetopPoints$radius, dsmZ = treetopPoints$dsmZ, cmmZ = treetopPoints$cmmZ, height = treetopPoints$height,
+                           neighborDistanceThreshold = get_merge_distance(treetopPoints, treetopMerge = TRUE),
+                           neighborhoodIndex = treetopMergeKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
+                           neighbor1distance = treetopMergeKnn$nn.dist[, 2],
+                           neighbor2distance = treetopMergeKnn$nn.dist[, 3],
+                           neighbor3distance = treetopMergeKnn$nn.dist[, 4],
+                           neighbor4distance = treetopMergeKnn$nn.dist[, 5],
+                           neighbors = (neighbor1distance <= neighborDistanceThreshold) + (neighbor2distance <= neighborDistanceThreshold) + (neighbor3distance <= neighborDistanceThreshold) + (neighbor4distance <= neighborDistanceThreshold),
+                           # gather IDs of neighbors
+                           neighbor1uniqueID = if_else(neighbor1distance <= neighborDistanceThreshold, neighborhoodTreetops$uniqueID[treetopMergeKnn$nn.index[, 2]], NA_integer_), # NAs propagate through indexing, so IDs are NA for neighbors beyond mergeable range
+                           neighbor2uniqueID = if_else(neighbor2distance <= neighborDistanceThreshold, neighborhoodTreetops$uniqueID[treetopMergeKnn$nn.index[, 3]], NA_integer_),
+                           neighbor3uniqueID = if_else(neighbor3distance <= neighborDistanceThreshold, neighborhoodTreetops$uniqueID[treetopMergeKnn$nn.index[, 4]], NA_integer_),
+                           neighbor4uniqueID = if_else(neighbor4distance <= neighborDistanceThreshold, neighborhoodTreetops$uniqueID[treetopMergeKnn$nn.index[, 5]], NA_integer_),
+                           # find indices of neighbors
+                           neighbor1neighborhoodIndex = match(neighbor1uniqueID, neighborhoodTreetops$uniqueID),
+                           neighbor2neighborhoodIndex = match(neighbor2uniqueID, neighborhoodTreetops$uniqueID),
+                           neighbor3neighborhoodIndex = match(neighbor3uniqueID, neighborhoodTreetops$uniqueID),
+                           neighbor4neighborhoodIndex = match(neighbor4uniqueID, neighborhoodTreetops$uniqueID))
+  #table(treetopMergeKnn$neighbors) # likely ~99.5% singleton treetops which don't contribute merge points
+  #treetopMergeKnn %>% filter(id %in% c(24704, 25078, 24432, 25893, 26179)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000) %>% select(tile, id, neighbors, neighborDistanceThreshold, neighbor1uniqueID, neighbor1distance)
   
-  # kNN cluster merge points with sufficiently nearby local maxima (other merge points, treetops, and treetops)
-  # Clustering is done in three dimensions with vertical exaggeration to increase the likelihood of excluding branches and other canopy maxima
-  # which are not merge points. Clustering is inclusive of all maxima near merge points because few, if any, classifiers can be constrained
-  # to produce at least a pair of merge points rather than classifying single merge points, either as a standalone point which should be
-  # converted to a treetop as it's not actually a merge, as points which should be merged with nearby points not classified as a treetops, 
-  # points which should be merged with adjacent treetops, or combinations thereof.
-  # - mergePointKnn is not compacted to clusters as a row is retained for every input merge point.
-  # - Unclear if support more than four neighbors would usefully increase overall accuracy. In testing less than ~1% of merge points had four
-  #   neighbors and clusters up to seven points were formed by merge segment combination.
-  mergePointTileIndices = which(tileMaxima$treetop == "merge")
-  #if (length(mergePointTileIndices) < 1) # TODO: skip to isolated top check
-  #{
-  #  # no merge points, so nothing to do: return empty sets of merge treetops and indices
-  #  return(list(treetops = tileMaxima[, mergePointTileIndices], mergePointNeighborIndices = integer(), treetopTileIndices = integer()))
-  #}
+  # find merge point neighborhoods
+  mergePointTileIndices = which(treetopClassification == "merge")
   mergePoints = tileMaxima[mergePointTileIndices, ]
-  tileMergePointsXYZexaggerated = cbind(mergePoints[, c("x", "y")], zExaggerated = treetopOptions$verticalExaggeration * mergePoints$dsmZ)
-  neighborhoodMaximaXYZexaggerated = cbind(neighborhoodMaxima[, c("x", "y")], zExaggerated = treetopOptions$verticalExaggeration * neighborhoodMaxima$dsmZ)
-  
-  mergePointKnn = get.knnx(neighborhoodMaximaXYZexaggerated, tileMergePointsXYZexaggerated, k = 5) # could also use cutree(hclust(dist(xy))) but that's O(N²)
+  mergePointKnn = get.knnx(neighborhoodMaxima[, c("x", "y")], mergePoints[, c("x", "y")], k = 5) # could also use cutree(hclust(dist(xy))) but that's O(N²)
+  #range(mergePointKnn$nn.dist[, 1]) # should be [0, 0] as all merge points should be neighborhoodMaxima
   mergePointKnn = tibble(tile = mergePoints$tile, id = mergePoints$id, uniqueID = mergePoints$uniqueID, sourceID = mergePoints$sourceID,
-                         x = tileMergePointsXYZexaggerated[, "x"], y = tileMergePointsXYZexaggerated[, "y"], zExaggerated = tileMergePointsXYZexaggerated[, "zExaggerated"],
+                         treetop = mergePoints$treetop, x = mergePoints$x, y = mergePoints$y,
                          radius = mergePoints$radius, dsmZ = mergePoints$dsmZ, cmmZ = mergePoints$cmmZ, height = mergePoints$height,
-                         mergeRadiusExaggerated = get_merge_radius(mergePoints), # manual tuning from tile review
+                         mergeDistanceThreshold = get_merge_distance(mergePoints), # manual tuning from tile review
                          neighborhoodIndex = mergePointKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
                          neighbor1distance = mergePointKnn$nn.dist[, 2],
                          neighbor2distance = mergePointKnn$nn.dist[, 3],
@@ -129,190 +185,143 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
                          # TODO: should distance threshold be adjusted as a function of a neighbor's height relative to a merge point? 
                          #       whether a neighbor has the same or different source ID?
                          #       with neighborhood rugosity?
-                         neighbor1neighborhoodIndex = if_else(neighbor1distance < mergeRadiusExaggerated, mergePointKnn$nn.index[, 2], NA_integer_),
-                         neighbor2neighborhoodIndex = if_else(neighbor2distance < mergeRadiusExaggerated, mergePointKnn$nn.index[, 3], NA_integer_),
-                         neighbor3neighborhoodIndex = if_else(neighbor3distance < mergeRadiusExaggerated, mergePointKnn$nn.index[, 4], NA_integer_),
-                         neighbor4neighborhoodIndex = if_else(neighbor4distance < mergeRadiusExaggerated, mergePointKnn$nn.index[, 5], NA_integer_),
-                         neighbors = (neighbor1distance < mergeRadiusExaggerated) + (neighbor2distance < mergeRadiusExaggerated) + (neighbor3distance < mergeRadiusExaggerated) + (neighbor4distance < mergeRadiusExaggerated),
+                         #       should lower members of merge clusters sometimes be removed?
+                         neighbor1neighborhoodIndex = if_else(neighbor1distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 2], NA_integer_),
+                         neighbor2neighborhoodIndex = if_else(neighbor2distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 3], NA_integer_),
+                         neighbor3neighborhoodIndex = if_else(neighbor3distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 4], NA_integer_),
+                         neighbor4neighborhoodIndex = if_else(neighbor4distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 5], NA_integer_),
+                         neighbors = (neighbor1distance < mergeDistanceThreshold) + (neighbor2distance < mergeDistanceThreshold) + (neighbor3distance < mergeDistanceThreshold) + (neighbor4distance < mergeDistanceThreshold),
                          # gather IDs of neighbors
                          neighbor1uniqueID = neighborhoodMaxima$uniqueID[neighbor1neighborhoodIndex], # NAs propagate through indexing, so IDs are NA for neighbors beyond mregeable range
                          neighbor2uniqueID = neighborhoodMaxima$uniqueID[neighbor2neighborhoodIndex],
                          neighbor3uniqueID = neighborhoodMaxima$uniqueID[neighbor3neighborhoodIndex],
-                         neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex],
-                         # find indices of on tile neighbors
-                         neighbor1tileIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor1uniqueID, tileMaxima$uniqueID), NA_integer_),
-                         neighbor2tileIndex = if_else(neighborhoodMaxima$tile[neighbor2neighborhoodIndex] == tileName, match(neighbor2uniqueID, tileMaxima$uniqueID), NA_integer_),
-                         neighbor3tileIndex = if_else(neighborhoodMaxima$tile[neighbor3neighborhoodIndex] == tileName, match(neighbor3uniqueID, tileMaxima$uniqueID), NA_integer_),
-                         neighbor4tileIndex = if_else(neighborhoodMaxima$tile[neighbor4neighborhoodIndex] == tileName, match(neighbor4uniqueID, tileMaxima$uniqueID), NA_integer_),
-                         # find indices of any merge point neighbors
-                         neighbor1mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor1uniqueID, uniqueID), NA_integer_),
-                         neighbor2mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor2neighborhoodIndex] == tileName, match(neighbor2uniqueID, uniqueID), NA_integer_),
-                         neighbor3mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor3neighborhoodIndex] == tileName, match(neighbor3uniqueID, uniqueID), NA_integer_),
-                         neighbor4mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor4neighborhoodIndex] == tileName, match(neighbor4uniqueID, uniqueID), NA_integer_))
-
-  # find isolated top pairs
-  treetopTileIndices = which(tileMaxima$treetop == "yes")
-  treetopPoints = tileMaxima[treetopTileIndices, ]
-  neighborhoodTreetops = neighborhoodMaxima %>% filter(treetop == "yes")
-  isolatedTopKnn = get.knnx(neighborhoodTreetops[, c("x", "y", "dsmZ")], treetopPoints[, c("x", "y", "dsmZ")], k = 3)
-  isolatedTopKnn = tibble(tile = treetopPoints$tile, id = treetopPoints$id, uniqueID = treetopPoints$uniqueID, sourceID = treetopPoints$sourceID,
-                          x = treetopPoints$x, y = treetopPoints$y,
-                          radius = treetopPoints$radius, dsmZ = treetopPoints$dsmZ, cmmZ = treetopPoints$cmmZ, height = treetopPoints$height,
-                          isolatedTopRadius = get_merge_radius(treetopPoints, isolatedTop = TRUE),
-                          neighborhoodIndex = isolatedTopKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
-                          neighbor1distance = isolatedTopKnn$nn.dist[, 2],
-                          neighbor2distance = isolatedTopKnn$nn.dist[, 3],
-                          #neighbor3distance = isolatedTopKnn$nn.dist[, 4],
-                          #neighbor4distance = isolatedTopKnn$nn.dist[, 5],
-                          # indices of mergeable nearby tops
-                          # TODO: include radius penalty for same source ID
-                          neighbor1topIndex = if_else(neighbor1distance < isolatedTopRadius, isolatedTopKnn$nn.index[, 2], NA_integer_),
-                          neighbor2topIndex = if_else(neighbor2distance < isolatedTopRadius, isolatedTopKnn$nn.index[, 3], NA_integer_),
-                          #neighbor3topIndex = if_else(neighbor3distance < isolatedTopRadius, isolatedTopKnn$nn.index[, 4], NA_integer_),
-                          #neighbor4topIndex = if_else(neighbor4distance < isolatedTopRadius, isolatedTopKnn$nn.index[, 5], NA_integer_),
-                          neighbors = (neighbor1distance < isolatedTopRadius) + (neighbor2distance < isolatedTopRadius), # + (neighbor3distance < isolatedTopRadius) + (neighbor4distance < isolatedTopRadius),
-                          # gather IDs of neighbors
-                          neighbor1uniqueID = neighborhoodTreetops$uniqueID[neighbor1topIndex], # NAs propagate through indexing, so IDs are NA for neighbors beyond mregeable range
-                          neighbor2uniqueID = neighborhoodTreetops$uniqueID[neighbor2topIndex],
-                          #neighbor3uniqueID = neighborhoodTreetops$uniqueID[neighbor3topIndex],
-                          #neighbor4uniqueID = neighborhoodTreetops$uniqueID[neighbor4topIndex],
-                          # find indices of on tile neighbors
-                          neighbor1tileIndex = if_else(neighborhoodTreetops$tile[neighbor1topIndex] == tileName, match(neighbor1uniqueID, tileMaxima$uniqueID), NA_integer_),
-                          neighbor2tileIndex = if_else(neighborhoodTreetops$tile[neighbor2topIndex] == tileName, match(neighbor2uniqueID, tileMaxima$uniqueID), NA_integer_),
-                          #neighbor3tileIndex = if_else(neighborhoodTreetops$tile[neighbor3topIndex] == tileName, match(neighbor3uniqueID, tileMaxima$uniqueID), NA_integer_),
-                          #neighbor4tileIndex = if_else(neighborhoodTreetops$tile[neighbor4topIndex] == tileName, match(neighbor4uniqueID, tileMaxima$uniqueID), NA_integer_),
-                          # find indices of any merge point neighbors
-                          neighbor1mergePointIndex = if_else(neighborhoodTreetops$tile[neighbor1topIndex] == tileName, match(neighbor1uniqueID, uniqueID), NA_integer_),
-                          neighbor2mergePointIndex = if_else(neighborhoodTreetops$tile[neighbor2topIndex] == tileName, match(neighbor2uniqueID, uniqueID), NA_integer_))
-                          #neighbor3mergePointIndex = if_else(neighborhoodTreetops$tile[neighbor3topIndex] == tileName, match(neighbor3uniqueID, uniqueID), NA_integer_),
-                          #neighbor4mergePointIndex = if_else(neighborhoodTreetops$tile[neighbor4topIndex] == tileName, match(neighbor4uniqueID, uniqueID), NA_integer_))
-
-  # generate neighbor information for local maxima within range of initial set of merge points
-  # Expansion of the merge set to all tagged points is necessary to form complete merge clusters.
-  nonSingletonMergePoints = bind_rows(mergePointKnn %>% filter(neighbors > 0))
-  mergePointNeighborIDs = unique(c(na.omit(nonSingletonMergePoints$neighbor1uniqueID), 
-                                   na.omit(nonSingletonMergePoints$neighbor2uniqueID), 
-                                   na.omit(nonSingletonMergePoints$neighbor3uniqueID), 
-                                   na.omit(nonSingletonMergePoints$neighbor4uniqueID)))
-  addedMergePointIDs = setdiff(mergePointNeighborIDs, nonSingletonMergePoints$uniqueID)
-  addedMergePointNeighborhoodIndices = match(addedMergePointIDs, tileNeighborhood$uniqueID)
+                         neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex])
+  #table(mergePointKnn$neighbors)
+  #mergePointKnn %>% filter(id %in% c(59103, 59104, 59494)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000, neighbor2uniqueID = neighbor2uniqueID - 423006840000000) %>% select(tile, id, neighbors, mergeDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
   
-  addedMergePoints = tileNeighborhood[addedMergePointNeighborhoodIndices, ]
-  addedMergePointsXYZexaggerated = cbind(addedMergePoints[, c("x", "y")], zExaggerated = treetopOptions$verticalExaggeration * addedMergePoints$dsmZ)
-
-  addedMergePointKnn = get.knnx(neighborhoodMaximaXYZexaggerated, addedMergePointsXYZexaggerated, k = 5)
-  addedMergePointKnn = tibble(tile = addedMergePoints$tile, id = addedMergePoints$id, uniqueID = addedMergePoints$uniqueID, sourceID = addedMergePoints$sourceID,
-                              x = addedMergePointsXYZexaggerated[, "x"], y = addedMergePointsXYZexaggerated[, "y"], zExaggerated = addedMergePointsXYZexaggerated[, "zExaggerated"],
-                              radius = addedMergePoints$radius, dsmZ = addedMergePoints$dsmZ, cmmZ = addedMergePoints$cmmZ, height = addedMergePoints$height,
-                              mergeRadiusExaggerated = get_merge_radius(addedMergePoints), # manual tuning from tile review
-                              neighborhoodIndex = addedMergePointKnn$nn.index[, 1],
-                              neighbor1distance = addedMergePointKnn$nn.dist[, 2], # nn.dist[, 1] from get.knnx() is self
-                              neighbor2distance = addedMergePointKnn$nn.dist[, 3],
-                              neighbor3distance = addedMergePointKnn$nn.dist[, 4],
-                              neighbor4distance = addedMergePointKnn$nn.dist[, 5],
-                              # indices of mergeable neighbors within neighborhoodMaxima
-                              neighbor1neighborhoodIndex = if_else(neighbor1distance < mergeRadiusExaggerated, addedMergePointKnn$nn.index[, 2], NA_integer_),
-                              neighbor2neighborhoodIndex = if_else(neighbor2distance < mergeRadiusExaggerated, addedMergePointKnn$nn.index[, 3], NA_integer_),
-                              neighbor3neighborhoodIndex = if_else(neighbor3distance < mergeRadiusExaggerated, addedMergePointKnn$nn.index[, 4], NA_integer_),
-                              neighbor4neighborhoodIndex = if_else(neighbor4distance < mergeRadiusExaggerated, addedMergePointKnn$nn.index[, 5], NA_integer_),
-                              neighbors = (neighbor1distance < mergeRadiusExaggerated) + (neighbor2distance < mergeRadiusExaggerated) + (neighbor3distance < mergeRadiusExaggerated) + (neighbor4distance < mergeRadiusExaggerated),
-                              # gather IDs of spatial neighbors
-                              neighbor1uniqueID = neighborhoodMaxima$uniqueID[neighbor1neighborhoodIndex], # NAs propagate through indexing, so IDs are NA for neighbors beyond mregeable range
-                              neighbor2uniqueID = neighborhoodMaxima$uniqueID[neighbor2neighborhoodIndex],
-                              neighbor3uniqueID = neighborhoodMaxima$uniqueID[neighbor3neighborhoodIndex],
-                              neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex],
-                              # find indices of on tile neighbors
-                              #neighbor1tileIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor1uniqueID, tileMaxima$uniqueID), NA_integer_),
-                              #neighbor2tileIndex = if_else(neighborhoodMaxima$tile[neighbor2neighborhoodIndex] == tileName, match(neighbor2uniqueID, tileMaxima$uniqueID), NA_integer_),
-                              #neighbor3tileIndex = if_else(neighborhoodMaxima$tile[neighbor3neighborhoodIndex] == tileName, match(neighbor3uniqueID, tileMaxima$uniqueID), NA_integer_),
-                              #neighbor4tileIndex = if_else(neighborhoodMaxima$tile[neighbor4neighborhoodIndex] == tileName, match(neighbor4uniqueID, tileMaxima$uniqueID), NA_integer_),
-                              # find indices of any merge point neighbors
-                              # TODO: validate handling of multiple matches when on and off tile local maxima IDs collide
-                              neighbor1mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor1uniqueID, uniqueID), NA_integer_),
-                              neighbor2mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor2uniqueID, uniqueID), NA_integer_),
-                              neighbor3mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor3uniqueID, uniqueID), NA_integer_),
-                              neighbor4mergePointIndex = if_else(neighborhoodMaxima$tile[neighbor1neighborhoodIndex] == tileName, match(neighbor4uniqueID, uniqueID), NA_integer_))
-
   # find merge clusters
   # Most merge clusters are simple in the sense they consist of a pair (~75%) or triplet (~20%) of points with matching sets of neighbors.
   # More complex clusters regularly occur where merge points capture a nearby point which, in turn, connects to one or more additional points
   # which may connect to further points. Assembling # these clusters requires traversal of their connectivity graph, which is done here with 
   # the Matrix and igraph packages (code modified substantially from https://stackoverflow.com/questions/47322126/merging-list-with-common-elements).
-  #
-  # Isolated tops use different neighbor distance thresholds than random forest identified merges, so cannot be bind_rows()ed into addedMergePointKnn
-  # as their neighbors may be removed.
-  nonSingletonMergePoints = bind_rows(mergePointKnn %>% filter(neighbors > 0),
-                                      addedMergePointKnn %>% filter(neighbors > 0),
-                                      isolatedTopKnn %>% filter(neighbors > 0)) %>%
-    # prevent cluster growth beyond range of initially classified merge points by masking off IDs not within the merge point set
-    mutate(neighbor1uniqueID = if_else(neighbor1uniqueID %in% uniqueID, neighbor1uniqueID, NA_integer_),
-           neighbor2uniqueID = if_else(neighbor2uniqueID %in% uniqueID, neighbor2uniqueID, NA_integer_),
-           neighbor3uniqueID = if_else(neighbor3uniqueID %in% uniqueID, neighbor3uniqueID, NA_integer_),
-           neighbor4uniqueID = if_else(neighbor4uniqueID %in% uniqueID, neighbor4uniqueID, NA_integer_),
-           neighbors = 4 - is.na(neighbor1uniqueID) - is.na(neighbor2uniqueID) - is.na(neighbor3uniqueID) - is.na(neighbor4uniqueID)) # not necessary but useful for debugging
-  #table(nonSingletonMergePoints$neighbors)
-  
-  adjacencyMatrixFrame = pivot_longer(nonSingletonMergePoints %>% select(uniqueID, neighbor1uniqueID, neighbor2uniqueID, neighbor3uniqueID, neighbor4uniqueID) %>% mutate(neighbor0uniqueID = uniqueID) %>% rename(mergePointUniqueID = uniqueID), 
+  mergeClusterInitiatingPoints = bind_rows(mergePointKnn %>% filter(neighbors > 0),
+                                           treetopMergeKnn %>% filter(neighbors > 0))
+  mergePointUniqueIDs = unique(c(mergeClusterInitiatingPoints$uniqueID,
+                                 na.omit(mergeClusterInitiatingPoints$neighbor1uniqueID),
+                                 na.omit(mergeClusterInitiatingPoints$neighbor2uniqueID),
+                                 na.omit(mergeClusterInitiatingPoints$neighbor3uniqueID),
+                                 na.omit(mergeClusterInitiatingPoints$neighbor4uniqueID)))
+  addedMergePointIDs = setdiff(mergePointUniqueIDs, mergeClusterInitiatingPoints$uniqueID)
+
+  mergePoints = bind_rows(mergeClusterInitiatingPoints %>% mutate(isInitiating = TRUE), 
+                          neighborhoodMaxima %>% filter(uniqueID %in% addedMergePointIDs) %>% mutate(isInitiating = FALSE))
+
+  adjacencyMatrixFrame = pivot_longer(mergePoints %>% select(uniqueID, neighbor1uniqueID, neighbor2uniqueID, neighbor3uniqueID, neighbor4uniqueID) %>% mutate(neighbor0uniqueID = uniqueID) %>% rename(mergePointUniqueID = uniqueID),
                                       cols = c("neighbor0uniqueID", "neighbor1uniqueID", "neighbor2uniqueID", "neighbor3uniqueID", "neighbor4uniqueID"),
                                       names_pattern = "neighbor(.)uniqueID", names_to = "neighbor",
                                       values_to = "clusterMemberUniqueID") %>%
     filter(is.na(clusterMemberUniqueID) == FALSE) %>%
-    mutate(row = match(mergePointUniqueID, nonSingletonMergePoints$uniqueID), column = match(clusterMemberUniqueID, nonSingletonMergePoints$uniqueID))
-  adjacencyMatrix = Matrix::sparseMatrix(i = adjacencyMatrixFrame$row, j = adjacencyMatrixFrame$column, x = TRUE, dimnames = list(nonSingletonMergePoints$uniqueID, nonSingletonMergePoints$uniqueID))
+    mutate(row = match(mergePointUniqueID, mergePoints$uniqueID), column = match(clusterMemberUniqueID, mergePoints$uniqueID))
+  adjacencyMatrix = Matrix::sparseMatrix(i = adjacencyMatrixFrame$row, j = adjacencyMatrixFrame$column, x = TRUE, dimnames = list(mergePoints$uniqueID, mergePoints$uniqueID))
   connectivityMatrix = Matrix::tcrossprod(adjacencyMatrix, boolArith = TRUE) > 0
   mergeClusterComponents = igraph::components(igraph::graph_from_adjacency_matrix(connectivityMatrix))
   
-  nonSingletonMergePoints = left_join(nonSingletonMergePoints,
-                                      tibble(uniqueID = as.numeric(names(mergeClusterComponents$membership)), mergeClusterNumber = as.integer(mergeClusterComponents$membership)),
-                                      by = join_by("uniqueID"))
-  # 42300684000000
-  #(nonSingletonMergePoints %>% filter(id %in% c(17064, 17065)))$neighbor1uniqueID - 423006840000000
-
-  # identify merge points which need reclassification as treetops because they're in single point clusters
-  # TODO: reject, rather than convert, singleton merge points which did not match nearby tops
-  singletonMergePointTileIndices = match((mergePointKnn %>% filter(neighbors == 0))$uniqueID, tileMaxima$uniqueID)
-  #tibble(initialMergePoints = length(mergeIndices), mergeNeighbors = length(mergePointTileIndices), singletons = length(singletonMergePointTileIndices), total = length(unique(c(mergePoints$id, mergePointTileIndices))))
+  mergePoints = left_join(mergePoints,
+                          tibble(uniqueID = as.numeric(names(mergeClusterComponents$membership)), mergeClusterNumber = as.integer(mergeClusterComponents$membership)),
+                          by = join_by("uniqueID")) %>%
+    group_by(mergeClusterNumber) %>%
+    # calculate merge cluster geometry
+    # Not currently weighted by DSM z within each source ID, though doing so would likely increase accuracy in merging upper elevation wind sway clusters.
+    mutate(clusterCentroidX = mean(x),
+           clusterCentroidY = mean(y), 
+           clusterCentroidDsmZ = mean(dsmZ),
+           clusterDistance = sqrt((x - clusterCentroidX)^2 + (y - clusterCentroidY)^2 + (dsmZ - clusterCentroidDsmZ)^2),
+           clusterMaxDsmZ = max(dsmZ),
+           clusterMaxOriginatingDsmZ = max(if_else(isInitiating, dsmZ, -Inf)),
+           # ±14 cm vegetation accuracy in feet + height based wind motion tolerance, manual height coefficient tune from tile inspection
+           clusterThickness = 2 * 0.46 + 0.008 * max(height),
+           # enable rejection of non-initiating points significantly above the initiating points
+           # Makes clusters less likely to climb branches of adjacent trees.
+           clusterMaxDsmZ = if_else((clusterMaxDsmZ - clusterThickness) > clusterMaxOriginatingDsmZ, clusterMaxOriginatingDsmZ, clusterMaxDsmZ),
+           clusterMeanDistance = mean(clusterDistance)) %>%
+    # TODO: refine outlier removal
+    # If a noise point's included in a cluster, typically due to not being classified as such, .
+    filter((dsmZ >= (clusterMaxDsmZ - clusterThickness)) & (dsmZ <= clusterMaxDsmZ), # within height range
+           clusterDistance < 2 * clusterMeanDistance) %>% # within distance of centroid
+    # recalculate merge cluster geometry after outlier removal
+    mutate(clusterCentroidX = mean(x),
+           clusterCentroidY = mean(y), 
+           clusterCentroidDsmZ = mean(dsmZ),
+           clusterDistance = sqrt((x - clusterCentroidX)^2 + (y - clusterCentroidY)^2 + (dsmZ - clusterCentroidDsmZ)^2),
+           clusterMeanDistance = mean(clusterDistance),
+           clusterPoints = n())
+    # leave grouped
+    # likely contains some clusters with one point due to all neighbors being rejected as cluster suitable
+  table(mergePoints$clusterPoints)
+  #mergePoints %>% filter(clusterPoints == 1) %>% select(id, treetop, isInitiating, neighbors, neighbor1distance, neighbor2distance, neighbor3distance)
+  #mergePoints %>% ungroup() %>% summarize(mergePoints = n(), clusterlessPoints = sum(is.na(mergeClusterNumber))) # likely fewer points than the initial set due to outlier removal
+  #mergePoints %>% filter(id %in% c(24704, 25078)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000) %>% select(mergeClusterNumber, clusterCentroidX, clusterCentroidY, tile, id, x, y, neighborDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
+  #mergePoints %>% filter(mergeClusterNumber == 638) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000) %>% select(mergeClusterNumber, clusterCentroidX, clusterCentroidY, tile, id, x, y, neighborDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
   
-  # average treetops from 2+ point clusters
+  # summarize treetops out of merge clusters
   # Treetop IDs are ID of the lowest, on tile local maxima present in the merge cluster. Including off tile maxima potentially yields non-unique 
   # treetop IDs within tiles as taking an off tile ID could collide with another treetop on the tile.
   # Treetops which lie in other tiles are excluded by checking against tile extents to maintain tile boundaries. Processing of the adjacent tiles 
   # will also find these merge clusters.
   tileExtent = get_tile_extent(tileName)
-  treetopsFromMergePoints = nonSingletonMergePoints %>%
-    group_by(mergeClusterNumber) %>%
+  treetopsFromMergePoints = mergePoints %>% # still grouped by mergeClusterNumber
+    filter(clusterPoints > 1) %>% # exclude singletons
     summarize(id = min(if_else(str_equal(tile, tileName), id, NA_integer_), na.rm = TRUE),
               tile = tileName,
               sourceID = if_else(length(unique(sourceID)) == 1, sourceID[1], as.integer(0)), 
-              x = mean(x),
-              y = mean(y),
-              radius = max(radius), dsmZ = mean(dsmZ), cmmZ = mean(cmmZ), height = mean(height),
+              x = clusterCentroidX[1],
+              y = clusterCentroidY[1],
+              radius = max(radius), dsmZ = clusterCentroidDsmZ[1], cmmZ = mean(cmmZ), height = mean(height),
               maxima = n(),
               # leave ring statistics unpopulated as they're not well defined for treetops obtained from merge clusters
-              sourceIDs = length(unique(sourceID)), .groups = "drop") %>%
+              sourceIDs = length(unique(sourceID)), 
+              mergeClusterNumber = mergeClusterNumber[1],
+              .groups = "drop") %>%
     filter(tileExtent$xMin <= x, x < tileExtent$xMax, tileExtent$yMin <= y, y < tileExtent$yMax)
-  (treetopsFromMergePoints %>% filter(id %in% c(17064)))
-  #range(treetopsFromMergePoints$maxima)
+  treetopsFromMergePoints %>% filter(id %in% c(24704))
+  treetopsFromMergePoints %>% filter(mergeClusterNumber == 638)
   
-  # TODO: check for and include isolated top merges between random forest classified tops and tops from merge clusters
+  # identify merge points which need reclassification as treetops because they're in single point clusters
+  # Treetops with neighbors in treetopMergeKnn but which do not aggregate into multi-point clusters do not need to be listed here
+  # as they're already classified as treetops.
+  # Singleton merge points which do not appear to merit conversion to treetops could be rejected here.
+  singletonMergePointIDs = unique(c((mergePointKnn %>% filter(neighbors == 0))$uniqueID, # initiating merge points without any neighbors within mergable range
+                                    (mergePoints %>% filter(tile == tileName, clusterPoints == 1, treetop == "merge"))$uniqueID)) # initiating merge points with in range neighbors rejected by cluster filtering
+  singletonMergePointTileIndices = match(singletonMergePointIDs, tileMaxima$uniqueID)
+  #mergePointKnn %>% filter(neighbors == 0, id %in% c(24704, 25078, 24432, 25893, 26179))
+  #sum(is.na(singletonMergePointTileIndices))
   
   # identify on tile local maxima which are merge points so that caller can reclassify any non-merge points that were clustered in
-  mergePointTileIndices = unique(c(na.omit(nonSingletonMergePoints$neighbor1tileIndex), 
-                                   na.omit(nonSingletonMergePoints$neighbor2tileIndex), 
-                                   na.omit(nonSingletonMergePoints$neighbor3tileIndex), 
-                                   na.omit(nonSingletonMergePoints$neighbor4tileIndex))) # unique() doesn't support na.rm = TRUE
+  mergePointTileIndices = match((mergePoints %>% filter(tile == tileName, clusterPoints > 1))$uniqueID, tileMaxima$uniqueID)
+  #sum(is.na(mergePointTileIndices))
   
   return(list(treetops = treetopsFromMergePoints, mergePointIndices = mergePointTileIndices, treetopIndices = singletonMergePointTileIndices))
 }
 
-get_merge_radius = function(tileMaxima, isolatedTop = FALSE)
+get_merge_distance = function(tileMaxima, treetopMerge = FALSE)
 {
-  if (isolatedTop)
-  {
-    return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 100, 0, 1/40 * (tileMaxima$height - 125))))
-  } else {
-    return(treetopOptions$dsmCellSize + 0.1 * treetopOptions$verticalExaggeration + tileMaxima$height^0.45)
-  }
+  # TODO: include radius penalty for same source ID?
+  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 125, 0, 1/40 * (tileMaxima$height - 125))))
+  #if (treetopMerge)
+  #{
+  #  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 125, 0, 1/40 * (tileMaxima$height - 125))))
+  #} else {
+  #  return(treetopOptions$dsmCellSize + 0.1 * treetopOptions$verticalExaggeration + tileMaxima$height^0.45)
+  #}
+  
+  #inclusionRadius = tibble(height = seq(0, 250), 
+  #                         linear = treetopOptions$dsmCellSize * (1 + 1/60 * height + if_else(height < 125, 0, 1/40 * (height - 125))),
+  #                         power = height^0.5)
+  #ggplot() +
+  #  geom_line(aes(x = linear, y = height, color = "linear"), inclusionRadius) +
+  #  geom_line(aes(x = power, y = height, color = "power"), inclusionRadius) +
+  #  labs(x = "radius, feet", y = "height, feet", color = NULL) +
+  #  scale_x_continuous(breaks = seq(0, 20, by = 3.28084), labels = scales::number_format(accuracy = 0.01))
 }
 
 get_tile_extent = function(tileName, bufferWidth = 0)
@@ -791,47 +800,52 @@ if (treetopOptions$fitRandomForest)
 
 
 ## predict treetops, merge, and noise points
-#randomForestFit = readRDS("trees/segmentation/treetopRandomForest vsurf 48.14 s04200+s04230w06810.Rds")
-#randomForestFit = readRDS("trees/segmentation/treetopRandomForest vsurf 78.13 s04200+s04230w06810.Rds")
-treetopRandomForest = readRDS("trees/segmentation/treetopRandomForest vsurf 103.14 s04200w06840 + s4200+s04230w06810.Rds")
-tileName = "s04230w06840"
-tileMaxima = get_treetop_eligible_maxima(tileName) %>% filter(is.na(cmmSlope3) == FALSE)
-tileMaxima$treetop = predict(treetopRandomForest$finalModel, get_treetop_predictors(tileMaxima))$predictions
-table(tileMaxima$treetop)
-#writeVector(vect(tileMaxima, crs = tileCrs, geom = c("x", "y")), file.path(candidateTreetopsPath, "rf", paste0(tileName, " ranger.gpkg")), layer = "treetops", insert = TRUE, overwrite = TRUE)
-
-# group merge points and define merge treetops
-# In general, relative to the initial random forest classification, number of non-treetop maxima declines, number of singleton 
-# treetops increases, number of merge points increases, and noise points remain unchanged.
-tileNeighborhood = get_treetop_eligible_neighborhood(tileName, tileMaxima) # ~20 s, 9900X
-neighborhoodMaxima = tileNeighborhood
-tileMergePoints = get_merge_points(tileMaxima, tileNeighborhood)
-tileMaxima$treetop[tileMergePoints$mergePointIndices] = "merge" # update classifications based on merge point clustering results
-tileMaxima$treetop[tileMergePoints$treetopIndices] = "yes"
-table(tileMaxima$treetop)
-
-#                       tile           no           yes          merge         noise        maybe noise
-# from random forest    s04230w06840   143899       14453        1114          42           0             before merging
-# 25 DSM @ 4 + h^0.45   s04230w06840   143557       14411        1498          42           0
-
-# write tile's GeoPackage
-# layers are treetops (single maxima and from merges)
-tileTreetops = bind_rows(tileMaxima %>% filter(tileMaxima$treetop == "yes"), tileMergePoints$treetops) %>%
-  mutate(maxima = replace_na(maxima, as.integer(1)), sourceIDs = replace_na(maxima, as.integer(1))) # treetops not from merges have one maxima and one source ID but these values are only set on data from get_merge_points()
-writeVector(vect(tileTreetops, crs = tileCrs, geom = c("x", "y")), file.path(candidateTreetopsPath, "rf", paste0(tileName, ".gpkg")), layer = "treetops", insert = TRUE, overwrite = TRUE)
-
-writeVector(vect(tileMaxima %>% filter(tileMaxima$treetop == "merge"), crs = tileCrs, geom = c("x", "y")), file.path(candidateTreetopsPath, "rf", paste0(tileName, ".gpkg")), layer = "merge points", insert = TRUE, overwrite = TRUE)
-
-noisePoints = vect(tileMaxima %>% filter(treetop == "noise"), crs = tileCrs, geom = c("x", "y"))
-writeVector(noisePoints, file.path(candidateTreetopsPath, "rf", paste0(tileName, ".gpkg")), layer = "noise points", insert = TRUE, overwrite = TRUE)
-maybeNoisePoints = vect(tileMaxima %>% filter(treetop == "maybe noise"), crs = tileCrs, geom = c("x", "y"))
-writeVector(maybeNoisePoints, file.path(candidateTreetopsPath, "rf", paste0(tileName, ".gpkg")), layer = "maybe noise points", insert = TRUE, overwrite = TRUE)
-
-# checks
-range(tileNeighborhood$x)
-range(tileMaxima$x)
-range(tileNeighborhood$y)
-range(tileMaxima$y)
+if (treetopOptions$includeInvestigatory)
+{
+  #randomForestFit = readRDS("trees/segmentation/treetopRandomForest vsurf 48.14 s04200+s04230w06810.Rds")
+  #randomForestFit = readRDS("trees/segmentation/treetopRandomForest vsurf 78.13 s04200+s04230w06810.Rds")
+  treetopRandomForest = readRDS("trees/segmentation/treetopRandomForest vsurf 103.14 s04200w06840 + s4200+s04230w06810.Rds")
+  tileName = "s04230w06840"
+  tileMaxima = get_treetop_eligible_maxima(tileName) %>% filter(is.na(cmmSlope3) == FALSE)
+  tileMaxima$treetop = predict(treetopRandomForest$finalModel, get_treetop_predictors(tileMaxima))$predictions
+  table(tileMaxima$treetop)
+  #writeVector(vect(tileMaxima, crs = tileCrs, geom = c("x", "y")), file.path(candidateTreetopsPath, "rf", paste0(tileName, " ranger.gpkg")), layer = "treetops", insert = TRUE, overwrite = TRUE)
+  
+  # group merge points and define merge treetops
+  # In general, relative to the initial random forest classification, number of non-treetop maxima declines, number of singleton 
+  # treetops increases, number of merge points increases, and noise points remain unchanged.
+  tileNeighborhood = get_treetop_eligible_neighborhood(tileName, tileMaxima) # ~20 s, 9900X
+  neighborhoodMaxima = tileNeighborhood
+  tileMergePoints = get_merge_points(tileMaxima, tileNeighborhood)
+  tileMaxima$treetop[tileMergePoints$mergePointIndices] = "merge" # update classifications based on merge point clustering results
+  tileMaxima$treetop[tileMergePoints$treetopIndices] = "yes"
+  table(tileMaxima$treetop)
+  
+  #                                tile           no           yes          merge         noise        maybe noise
+  # from random forest             s04230w06840   143899       14453        1114          42           0             before merging
+  # v0: 25 DSM @ 4 + h^0.45        s04230w06840   143557       14411        1498          42           0
+  # v1: 1/60 + 1/40                s04230w06840   143441       14356        1669          42           0
+  
+  # write tile's GeoPackage
+  # layers are treetops (single maxima and from merges)
+  tileTreetops = bind_rows(tileMaxima %>% filter(tileMaxima$treetop == "yes"), tileMergePoints$treetops) %>%
+    mutate(maxima = replace_na(maxima, as.integer(1)), sourceIDs = replace_na(maxima, as.integer(1))) # treetops not from merges have one maxima and one source ID but these values are only set on data from get_merge_points()
+  
+  treetopsFilePath = file.path(candidateTreetopsPath, "rf", paste0(tileName, ".gpkg"))
+  writeVector(vect(tileTreetops, crs = tileCrs, geom = c("x", "y")), treetopsFilePath, layer = "treetops", insert = TRUE, overwrite = TRUE)
+  writeVector(vect(tileMaxima %>% filter(tileMaxima$treetop == "merge"), crs = tileCrs, geom = c("x", "y")), treetopsFilePath, layer = "merge points", insert = TRUE, overwrite = TRUE)
+  
+  noisePoints = vect(tileMaxima %>% filter(treetop == "noise"), crs = tileCrs, geom = c("x", "y"))
+  writeVector(noisePoints, treetopsFilePath, layer = "noise points", insert = TRUE, overwrite = TRUE)
+  maybeNoisePoints = vect(tileMaxima %>% filter(treetop == "maybe noise"), crs = tileCrs, geom = c("x", "y"))
+  writeVector(maybeNoisePoints, treetopsFilePath, layer = "maybe noise points", insert = TRUE, overwrite = TRUE)
+  
+  # checks
+  range(tileNeighborhood$x)
+  range(tileMaxima$x)
+  range(tileNeighborhood$y)
+  range(tileMaxima$y)
+}
 
 
 ## merge radius functions

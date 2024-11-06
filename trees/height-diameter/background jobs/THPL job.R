@@ -9,7 +9,6 @@
 # change working directory back to project root
 # RStudio defaults background jobs' working directory to the directory the .R file is in.
 jobStartTime = Sys.time()
-setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")

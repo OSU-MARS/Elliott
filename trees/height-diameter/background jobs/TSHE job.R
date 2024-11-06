@@ -2,7 +2,6 @@
 #  height: ~80 minutes fixed effects, ~60 minutes mixed 
 #  DBH: ~55 minutes fixed, ~1.2 hours mixed
 jobStartTime = Sys.time()
-setwd(file.path(getwd(), "../../.."))
 source("trees/height-diameter/setup.R")
 handlers(global = TRUE)
 handlers("progress")
