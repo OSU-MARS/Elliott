@@ -3,8 +3,8 @@ source("trees/segmentation/treetops.R")
 
 localMaximaFileNames = list.files(localMaximaPath, "\\.gpkg$")
 
-chunkIndex = 4 # chunks in progress: 1, 2
-chunkSize = 128
+chunkIndex = 5 # 561 tiles -> chunks, ~2 GB DDR @ 5.5 GB/s per job
+chunkSize = 128 # ~40 minutes, 9900X
 
 startIndex = chunkSize * (chunkIndex - 1) + 1
 endIndex = min(chunkSize * chunkIndex, length(localMaximaFileNames))
@@ -48,4 +48,4 @@ for (localMaximaFileName in localMaximaFileNames)
 }
 
 warnings()
-print(paste0("treetop classification ran for ", format(Sys.time() - jobStartTime), "."))
+cat(paste0("treetop classification ran for ", format(Sys.time() - jobStartTime), "."))
