@@ -1315,14 +1315,15 @@ is_model_converged = function(model)
   return(isConverged)
 }
 
-plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"))
+plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), legendHjustification = 1.8, plotRightMargin = 8)
 {
+  aucColorbarTheme = theme(legend.key.width = unit(6.5, "lines"), legend.title = element_text(vjust = 0.85))
   if (omitMab)
   {
     aucBank = ggplot() +
         geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
         labs(fill = fillLabel) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
         scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
@@ -1335,7 +1336,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
     aucBank = ggplot() +
         geom_raster(aes(x = species, y = name, fill = aucMab), aucs) +
         labs(fill = fillLabel) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant))), aucs) +
         scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
@@ -1346,7 +1347,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
       ggplot() +
         geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
         labs(fill = fillLabel) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
+        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
         geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMaeRank <= 2, aucMaeRank <= 2)), fill = "transparent") +
@@ -1361,7 +1362,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
     ggplot() +
       geom_raster(aes(x = species, y = name, fill = aucRmse), aucs) +
       labs(fill = fillLabel) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
       new_scale_fill() +
       geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant))), aucs) +
       geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucRmseRank <= 2, aucRmseRank <= 2)), fill = "transparent") +
@@ -1372,7 +1373,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
     ggplot() +
       geom_raster(aes(x = species, y = name, fill = aucDeltaAicN), aucs) +
       labs(fill = fillLabel) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
       new_scale_fill() +
       geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant))), aucs) +
       geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucDeltaAicNRank <= 2, aucDeltaAicNRank <= 2)), fill = "transparent") +
@@ -1383,7 +1384,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
     ggplot() +
       geom_raster(aes(x = species, y = name, fill = aucNse), aucs) +
       labs(fill = fillLabel) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, barheight = 6.5)) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
       new_scale_fill() +
       geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant))), aucs) +
       geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucNseRank <= 2, aucNseRank <= 2)), fill = "transparent") +
@@ -1394,11 +1395,13 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
     plot_annotation(theme = theme(plot.margin =  margin())) +
     plot_layout(nrow = 1, guides = "collect") &
       guides(color = guide_legend(override.aes = list(linewidth = 0.5)), linewidth = "none") &
-      scale_color_manual(breaks = c(FALSE, TRUE), labels = c("preferred\ngeneralization", "preferred\nbase form"), values = c("dodgerblue", "blue2")) &
+      scale_color_manual(breaks = c(FALSE, TRUE), labels = c("preferred\ngeneralization", "preferred\nbase form"), values = c("dodgerblue", "grey25")) &
       scale_linewidth_manual(breaks = c(FALSE, TRUE), values = c(0.3, 0.2)) &
       scale_x_discrete(limits = xLimits) &
       #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-      theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.spacing.y = unit(0.4, "line"), panel.grid = element_blank())
+      theme(axis.text.x = element_text(angle = 90, size = 10, hjust = 1, vjust = 0.5), axis.text.y = element_text(size = 10),
+            legend.position = "bottom", legend.spacing.y = unit(0.4, "line"), legend.justification = c(legendHjustification, 0.5), legend.title = element_text(size = 11),
+            panel.grid = element_blank(), plot.margin = margin(r = plotRightMargin), plot.title = element_text(margin = margin(b = 0.5)))
   
   return(aucBank)
 }
