@@ -14,6 +14,7 @@ library(stringr)
 library(terra)
 library(tidyr)
 
+options(cli.progress_format_iterator = "{cli::pb_bar} {cli::pb_percent} | cross validation fold {cli::pb_current} of {cli::pb_total}, {cli::pb_elapsed_clock} elapsed, {prettyunits::pretty_sec(as.numeric(cli::pb_eta_raw))} remaining")
 theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), 
                              panel.border = element_blank(), 
                              plot.title = element_text(size = 10)))
@@ -37,7 +38,7 @@ acceptedTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops acce
 candidateTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops"
 tileCrs = NULL
 
-fit_ranger = function(trainingMaxima, neighborhoodMaxima = trainingMaxima, mtry, minNodeSize, sampleFraction, classWeights = NULL, folds = treetopOptions$folds, repetitions = treetopOptions$repetitions)
+fit_ranger_treetop = function(trainingMaxima, neighborhoodMaxima = trainingMaxima, mtry, minNodeSize, sampleFraction, classWeights = NULL, folds = treetopOptions$folds, repetitions = treetopOptions$repetitions)
 {
   progressBar = progressor(steps = folds * repetitions)
   
@@ -57,18 +58,18 @@ fit_ranger = function(trainingMaxima, neighborhoodMaxima = trainingMaxima, mtry,
     return(allFitMetrics %>% mutate(repetition = 1, fold = 1))
   }
   
+  # dataFold = splitsAndFits$splits[[1]]
   fitFunction = function(dataFold)
   {
     start = Sys.time()
-    trainingData = analysis(dataFold)
-    fit = ranger(treetop ~ ., data = trainingData %>% select(-all_of(accuracyVariables)), mtry = mtry, min.node.size = minNodeSize, sample.fraction = sampleFraction, class.weights = classWeights, num.threads = treetopOptions$rangerThreads)
+    foldTrainingData = analysis(dataFold)
+    fit = ranger(treetop ~ ., data = foldTrainingData %>% select(-all_of(accuracyVariables)), mtry = mtry, min.node.size = minNodeSize, sample.fraction = sampleFraction, class.weights = classWeights, num.threads = treetopOptions$rangerThreads)
     validationData = assessment(dataFold)
     fitPredicted = predict(fit, validationData %>% select(-treetop))$predictions
 
     tileMergePoints = get_merge_points(validationData, neighborhoodMaxima, treetopClassification = fitPredicted)
     fitPredicted[tileMergePoints$mergePointIndices] = "merge"
     fitPredicted[tileMergePoints$treetopIndices] = "yes"
-
     fitMetrics = get_treetop_accuracy(fitPredicted, validationData)
     fitMetrics$fitTimeInS = as.numeric(difftime(Sys.time(), start, units = "secs"))
     progressBar()
@@ -76,7 +77,7 @@ fit_ranger = function(trainingMaxima, neighborhoodMaxima = trainingMaxima, mtry,
   }
   
   # use random cross validation as the training dataset lacks the spatial extent to block by stands
-  # ranger is presumably using all cores, so limited advantage to using future_map() instead of map()
+  # ranger is expected to use all cores, so little advantage to future_map() rather than map() is assumed
   splitsAndFits = vfold_cv(trainingMaxima, v = folds, repeats = repetitions) %>% 
     mutate(fit = map(splits, fitFunction)) %>% 
     select(-splits) %>%
@@ -95,8 +96,6 @@ fit_ranger = function(trainingMaxima, neighborhoodMaxima = trainingMaxima, mtry,
 
 get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassification = tileMaxima$treetop)
 {
-  tileName = tileMaxima$tile[1]
-
   ## unsupervised postprocessing of local maxima classified by random forest to generate and resolve merge clusters
   # Merge clusters are groups of local maxima believed to correspond a single treetop. LiDAR point clouds yield clusters of local maxima
   # treetop candidates when
@@ -169,35 +168,40 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
   
   # find merge point neighborhoods
   mergePointTileIndices = which(treetopClassification == "merge")
-  mergePoints = tileMaxima[mergePointTileIndices, ]
-  mergePointKnn = get.knnx(neighborhoodMaxima[, c("x", "y")], mergePoints[, c("x", "y")], k = 5) # could also use cutree(hclust(dist(xy))) but that's O(N²)
-  #range(mergePointKnn$nn.dist[, 1]) # should be [0, 0] as all merge points should be neighborhoodMaxima
-  mergePointKnn = tibble(tile = mergePoints$tile, id = mergePoints$id, uniqueID = mergePoints$uniqueID, sourceID = mergePoints$sourceID,
-                         treetop = mergePoints$treetop, x = mergePoints$x, y = mergePoints$y,
-                         radius = mergePoints$radius, dsmZ = mergePoints$dsmZ, cmmZ = mergePoints$cmmZ, height = mergePoints$height,
-                         mergeDistanceThreshold = get_merge_distance(mergePoints), # manual tuning from tile review
-                         neighborhoodIndex = mergePointKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
-                         neighbor1distance = mergePointKnn$nn.dist[, 2],
-                         neighbor2distance = mergePointKnn$nn.dist[, 3],
-                         neighbor3distance = mergePointKnn$nn.dist[, 4],
-                         neighbor4distance = mergePointKnn$nn.dist[, 5],
-                         # indices of mergeable neighbors within neighborhoodMaxima
-                         # TODO: should distance threshold be adjusted as a function of a neighbor's height relative to a merge point? 
-                         #       whether a neighbor has the same or different source ID?
-                         #       with neighborhood rugosity?
-                         #       should lower members of merge clusters sometimes be removed?
-                         neighbor1neighborhoodIndex = if_else(neighbor1distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 2], NA_integer_),
-                         neighbor2neighborhoodIndex = if_else(neighbor2distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 3], NA_integer_),
-                         neighbor3neighborhoodIndex = if_else(neighbor3distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 4], NA_integer_),
-                         neighbor4neighborhoodIndex = if_else(neighbor4distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 5], NA_integer_),
-                         neighbors = (neighbor1distance < mergeDistanceThreshold) + (neighbor2distance < mergeDistanceThreshold) + (neighbor3distance < mergeDistanceThreshold) + (neighbor4distance < mergeDistanceThreshold),
-                         # gather IDs of neighbors
-                         neighbor1uniqueID = neighborhoodMaxima$uniqueID[neighbor1neighborhoodIndex], # NAs propagate through indexing, so IDs are NA for neighbors beyond mregeable range
-                         neighbor2uniqueID = neighborhoodMaxima$uniqueID[neighbor2neighborhoodIndex],
-                         neighbor3uniqueID = neighborhoodMaxima$uniqueID[neighbor3neighborhoodIndex],
-                         neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex])
-  #table(mergePointKnn$neighbors)
-  #mergePointKnn %>% filter(id %in% c(59103, 59104, 59494)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000, neighbor2uniqueID = neighbor2uniqueID - 423006840000000) %>% select(tile, id, neighbors, mergeDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
+  if (length(mergePointTileIndices) > 0)
+  {
+    mergePoints = tileMaxima[mergePointTileIndices, ]
+    mergePointKnn = get.knnx(neighborhoodMaxima[, c("x", "y")], mergePoints[, c("x", "y")], k = 5) # could also use cutree(hclust(dist(xy))) but that's O(N²)
+    #range(mergePointKnn$nn.dist[, 1]) # should be [0, 0] as all merge points should be neighborhoodMaxima
+    mergePointKnn = tibble(tile = mergePoints$tile, id = mergePoints$id, uniqueID = mergePoints$uniqueID, sourceID = mergePoints$sourceID,
+                           treetop = mergePoints$treetop, x = mergePoints$x, y = mergePoints$y,
+                           radius = mergePoints$radius, dsmZ = mergePoints$dsmZ, cmmZ = mergePoints$cmmZ, height = mergePoints$height,
+                           mergeDistanceThreshold = get_merge_distance(mergePoints), # manual tuning from tile review
+                           neighborhoodIndex = mergePointKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
+                           neighbor1distance = mergePointKnn$nn.dist[, 2],
+                           neighbor2distance = mergePointKnn$nn.dist[, 3],
+                           neighbor3distance = mergePointKnn$nn.dist[, 4],
+                           neighbor4distance = mergePointKnn$nn.dist[, 5],
+                           # indices of mergeable neighbors within neighborhoodMaxima
+                           # TODO: should distance threshold be adjusted as a function of a neighbor's height relative to a merge point? 
+                           #       whether a neighbor has the same or different source ID?
+                           #       with neighborhood rugosity?
+                           #       should lower members of merge clusters sometimes be removed?
+                           neighbor1neighborhoodIndex = if_else(neighbor1distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 2], NA_integer_),
+                           neighbor2neighborhoodIndex = if_else(neighbor2distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 3], NA_integer_),
+                           neighbor3neighborhoodIndex = if_else(neighbor3distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 4], NA_integer_),
+                           neighbor4neighborhoodIndex = if_else(neighbor4distance <= mergeDistanceThreshold, mergePointKnn$nn.index[, 5], NA_integer_),
+                           neighbors = (neighbor1distance < mergeDistanceThreshold) + (neighbor2distance < mergeDistanceThreshold) + (neighbor3distance < mergeDistanceThreshold) + (neighbor4distance < mergeDistanceThreshold),
+                           # gather IDs of neighbors
+                           neighbor1uniqueID = neighborhoodMaxima$uniqueID[neighbor1neighborhoodIndex], # NAs propagate through indexing, so IDs are NA for neighbors beyond mregeable range
+                           neighbor2uniqueID = neighborhoodMaxima$uniqueID[neighbor2neighborhoodIndex],
+                           neighbor3uniqueID = neighborhoodMaxima$uniqueID[neighbor3neighborhoodIndex],
+                           neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex])
+    #table(mergePointKnn$neighbors)
+    #mergePointKnn %>% filter(id %in% c(59103, 59104, 59494)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000, neighbor2uniqueID = neighbor2uniqueID - 423006840000000) %>% select(tile, id, neighbors, mergeDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
+  } else {
+    mergePointKnn = tibble(uniqueID = numeric(), neighbors = integer())
+  }
   
   # find merge clusters
   # Most merge clusters are simple in the sense they consist of a pair (~75%) or triplet (~20%) of points with matching sets of neighbors.
@@ -257,7 +261,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
            clusterPoints = n())
     # leave grouped
     # likely contains some clusters with one point due to all neighbors being rejected as cluster suitable
-  table(mergePoints$clusterPoints)
+  #table(mergePoints$clusterPoints)
   #mergePoints %>% filter(clusterPoints == 1) %>% select(id, treetop, isInitiating, neighbors, neighbor1distance, neighbor2distance, neighbor3distance)
   #mergePoints %>% ungroup() %>% summarize(mergePoints = n(), clusterlessPoints = sum(is.na(mergeClusterNumber))) # likely fewer points than the initial set due to outlier removal
   #mergePoints %>% filter(id %in% c(24704, 25078)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000) %>% select(mergeClusterNumber, clusterCentroidX, clusterCentroidY, tile, id, x, y, neighborDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
@@ -268,11 +272,19 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
   # treetop IDs within tiles as taking an off tile ID could collide with another treetop on the tile.
   # Treetops which lie in other tiles are excluded by checking against tile extents to maintain tile boundaries. Processing of the adjacent tiles 
   # will also find these merge clusters.
-  tileExtent = get_tile_extent(tileName)
-  treetopsFromMergePoints = mergePoints %>% # still grouped by mergeClusterNumber
+  tileNames = unique(tileMaxima$tile)
+  tileGridIndices = get_tile_grid_indices(tileNames)
+  mergePointsInOnTileClusters = left_join(mergePoints %>% # still grouped by mergeClusterNumber
+                                            filter(clusterPoints > 1) %>% # exclude singletons
+                                            mutate(tileGridIndexX = floor(clusterCentroidX / treetopOptions$tileSize),
+                                                   tileGridIndexY = floor(clusterCentroidY / treetopOptions$tileSize)),
+                                            tileGridIndices %>% rename(centroidTile = tile),
+                                          by = join_by(tileGridIndexX, tileGridIndexY)) %>%
+                                  filter(is.na(tile) == FALSE)
+  treetopsFromMergePoints = mergePointsInOnTileClusters %>% # still grouped by mergeClusterNumber
     filter(clusterPoints > 1) %>% # exclude singletons
-    summarize(id = min(if_else(str_equal(tile, tileName), id, NA_integer_), na.rm = TRUE),
-              tile = tileName,
+    summarize(id = min(if_else(tile == centroidTile[1], id, NA_integer_), na.rm = TRUE), # all clusters should have at least one merge point in tileMaxima
+              tile = centroidTile[1],
               sourceID = if_else(length(unique(sourceID)) == 1, sourceID[1], as.integer(0)), 
               x = clusterCentroidX[1],
               y = clusterCentroidY[1],
@@ -281,23 +293,21 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
               # leave ring statistics unpopulated as they're not well defined for treetops obtained from merge clusters
               sourceIDs = length(unique(sourceID)), 
               mergeClusterNumber = mergeClusterNumber[1],
-              .groups = "drop") %>%
-    filter(tileExtent$xMin <= x, x < tileExtent$xMax, tileExtent$yMin <= y, y < tileExtent$yMax)
-  treetopsFromMergePoints %>% filter(id %in% c(24704))
-  treetopsFromMergePoints %>% filter(mergeClusterNumber == 638)
-  
+              .groups = "drop")
+
   # identify merge points which need reclassification as treetops because they're in single point clusters
   # Treetops with neighbors in treetopMergeKnn but which do not aggregate into multi-point clusters do not need to be listed here
   # as they're already classified as treetops.
   # Singleton merge points which do not appear to merit conversion to treetops could be rejected here.
   singletonMergePointIDs = unique(c((mergePointKnn %>% filter(neighbors == 0))$uniqueID, # initiating merge points without any neighbors within mergable range
-                                    (mergePoints %>% filter(tile == tileName, clusterPoints == 1, treetop == "merge"))$uniqueID)) # initiating merge points with in range neighbors rejected by cluster filtering
+                                    (mergePoints %>% filter(tile %in% tileNames, clusterPoints == 1, treetop == "merge"))$uniqueID)) # initiating merge points with in range neighbors rejected by cluster filtering
   singletonMergePointTileIndices = match(singletonMergePointIDs, tileMaxima$uniqueID)
   #mergePointKnn %>% filter(neighbors == 0, id %in% c(24704, 25078, 24432, 25893, 26179))
   #sum(is.na(singletonMergePointTileIndices))
   
   # identify on tile local maxima which are merge points so that caller can reclassify any non-merge points that were clustered in
-  mergePointTileIndices = match((mergePoints %>% filter(tile == tileName, clusterPoints > 1))$uniqueID, tileMaxima$uniqueID)
+  # Contains NAs for merge points which are in neighborhoodMaxima but not in tileMaxima.
+  mergePointTileIndices = match((mergePoints %>% filter(tile %in% tileNames, clusterPoints > 1))$uniqueID, tileMaxima$uniqueID)
   #sum(is.na(mergePointTileIndices))
   
   return(list(treetops = treetopsFromMergePoints, mergePointIndices = mergePointTileIndices, treetopIndices = singletonMergePointTileIndices))
@@ -326,12 +336,19 @@ get_merge_distance = function(tileMaxima, treetopMerge = FALSE)
 
 get_tile_extent = function(tileName, bufferWidth = 0)
 {
-  xTile = as.integer(str_sub(tileName, 2, 6))
-  yTile = as.integer(str_sub(tileName, 8, 12))
-  return(list(xMin = xTile * 100 - bufferWidth,
-              xMax = xTile * 100 + treetopOptions$tileSize + bufferWidth,
-              yMin = yTile * 100 - bufferWidth,
-              yMax = yTile * 100 + treetopOptions$tileSize + bufferWidth))
+  xTileMin = 100 * as.integer(str_sub(tileName, 2, 6))
+  yTileMin = 100 * as.integer(str_sub(tileName, 8, 12))
+  return(list(xMin = xTileMin - bufferWidth,
+              xMax = xTileMin + treetopOptions$tileSize + bufferWidth,
+              yMin = yTileMin - bufferWidth,
+              yMax = yTileMin + treetopOptions$tileSize + bufferWidth))
+}
+
+get_tile_grid_indices = function(tileNames)
+{
+  return(tibble(tile = tileNames,
+                tileGridIndexX = 100 * as.integer(str_sub(tileNames, 2, 6)) / treetopOptions$tileSize,
+                tileGridIndexY = 100 * as.integer(str_sub(tileNames, 8, 12)) / treetopOptions$tileSize))
 }
 
 get_treetop_accuracy = function(predicted, validationData)
@@ -356,9 +373,10 @@ get_treetop_accuracy = function(predicted, validationData)
                 overallAccuracy = confusionMatrix$overall["Accuracy"],
                 treetopAccuracy = classAccuracy["yes"], 
                 nonTreetopAccuracy = classAccuracy["no"], 
-                treetopMiscount = classCounts["yes"] - expectedClassCounts["yes"],
-                mergeMiscount = classCounts["merge"] - expectedClassCounts["merge"],
                 overallSubaccuracy = confusionSubmatrix$overall["Accuracy"],
+                expectedTreetop = expectedClassCounts["yes"],
+                expectedMerge = expectedClassCounts["merge"],
+                expectedNoise = expectedClassCounts["noise"] + expectedClassCounts["maybe noise"],
                 subclassAccuracy = list(subclassAccuracy),
                 confusionMatrix = list(confusionMatrix), 
                 confusionSubmatrix = list(confusionSubmatrix)))
@@ -526,6 +544,7 @@ get_treetop_predictors = function(treetopEligibleMaxima)
                        index5 = neighborKnn$nn.index[, 5], distance5 = neighborKnn$nn.dist[, 5],
                        meanDistance2 = rowMeans(neighborKnn$nn.dist[, 1:2]),
                        meanDistance3 = rowMeans(neighborKnn$nn.dist[, 1:3]),
+                       meanDistance4 = rowMeans(neighborKnn$nn.dist[, 1:4]),
                        meanDistance5 = rowMeans(neighborKnn$nn.dist[, 1:5]),
                        meanDistance10 = rowMeans(neighborKnn$nn.dist[, 1:10]),
                        meanDistance20 = rowMeans(neighborKnn$nn.dist[, 1:20]),
@@ -537,13 +556,14 @@ get_treetop_predictors = function(treetopEligibleMaxima)
            neighbor3sourceID = sourceID[neighborKnn$index3], neighbor3distance = neighborKnn$distance3, neighbor3dsmZ = dsmZ[neighborKnn$index3],
            neighbor4sourceID = sourceID[neighborKnn$index4], neighbor4distance = neighborKnn$distance4, neighbor4dsmZ = dsmZ[neighborKnn$index4],
            neighbor5sourceID = sourceID[neighborKnn$index5], neighbor5distance = neighborKnn$distance5, neighbor5dsmZ = dsmZ[neighborKnn$index5],
-           neighborDistance2Mean = neighborKnn$meanDistance2, neighborDistance3Mean = neighborKnn$meanDistance3, neighborDistance5Mean = neighborKnn$meanDistance5, neighborDistance10Mean = neighborKnn$meanDistance10, neighborDistance20Mean = neighborKnn$meanDistance20, neighborDistance50Mean = neighborKnn$meanDistance50,
+           neighborDistance2Mean = neighborKnn$meanDistance2, neighborDistance3Mean = neighborKnn$meanDistance3, neighborDistance4Mean = neighborKnn$meanDistance4, 
+           neighborDistance5Mean = neighborKnn$meanDistance5, neighborDistance10Mean = neighborKnn$meanDistance10, neighborDistance20Mean = neighborKnn$meanDistance20, neighborDistance50Mean = neighborKnn$meanDistance50,
            # convert all distances from feet to m
            #across(where(is.double), ~0.3048 * .x),
            deltaCmm = dsmZ - cmmZ,
            mean1delta = dsmZ - ring1mean, 
            mean2delta = dsmZ - ring2mean, 
-           mean3delta = dsmZ - ring2mean, 
+           mean3delta = dsmZ - ring3mean, 
            mean4delta = dsmZ - ring4mean, 
            mean5delta = dsmZ - ring5mean,
            mean1deltaNormalized = mean1delta / height, 
@@ -568,6 +588,7 @@ get_treetop_predictors = function(treetopEligibleMaxima)
            neighbor5prominenceNormalized = neighbor5prominence / height,
            neighborDifferentSourceID2 = neighbor1differentSourceID + neighbor2differentSourceID,
            neighborDifferentSourceID3 = neighbor1differentSourceID + neighbor2differentSourceID + neighbor3differentSourceID,
+           neighborDifferentSourceID4 = neighbor1differentSourceID + neighbor2differentSourceID + neighbor3differentSourceID + neighbor4differentSourceID,
            neighborDifferentSourceID5 = neighbor1differentSourceID + neighbor2differentSourceID + neighbor3differentSourceID + neighbor4differentSourceID + neighbor5differentSourceID,
            neighborDistance5Variance = 0.2 * ((neighbor1distance - neighborDistance5Mean)^2 + (neighbor2distance - neighborDistance5Mean)^2 + (neighbor3distance - neighborDistance5Mean)^2 + (neighbor4distance - neighborDistance5Mean)^2 + (neighbor5distance - neighborDistance5Mean)^2),
            neighborProminence5Mean = 0.2 * (neighbor1prominence + neighbor2prominence + neighbor3prominence + neighbor4prominence + neighbor5prominence),
@@ -582,6 +603,7 @@ get_treetop_predictors = function(treetopEligibleMaxima)
            prominence4normalized = prominence4 / height, 
            prominence5normalized = prominence5 / height,
            prominenceMean = 0.2 * (prominence1 + prominence2 + prominence3 + prominence4 + prominence5),
+           prominenceMeanNormalized = prominenceMean / height,
            prominenceVariance = 0.2 * ((prominence1 - prominenceMean)^2 + (prominence2 - prominenceMean)^2 + (prominence3 - prominenceMean)^2 + (prominence4 - prominenceMean)^2 + (prominence5 - prominenceMean)^2),
            prominenceVarianceNormalized = prominenceVariance / height,
            prominenceNeighbor5Variance = 0.2 * ((neighbor1prominence - neighborProminence5Mean)^2 + (neighbor2prominence - neighborProminence5Mean)^2 + (neighbor3prominence - neighborProminence5Mean)^2 + (neighbor4prominence - neighborProminence5Mean)^2 + (neighbor5prominence - neighborProminence5Mean)^2),
@@ -592,6 +614,7 @@ get_treetop_predictors = function(treetopEligibleMaxima)
            range4 = ring4max - ring4min, 
            range5 = ring5max - ring5min,
            rangeMean = 0.2 * (range1 + range2 + range3 + range4 + range5),
+           rangeMeanNormalized = rangeMean / height,
            range1normalized = range1 / height, 
            range2normalized = range2 / height, 
            range3normalized = range3 / height, 
@@ -612,6 +635,7 @@ get_treetop_predictors = function(treetopEligibleMaxima)
            netProminenceNormalized = netProminence / height,
            netProminenceNeighbor2Normalized = (neighbor1prominence / neighbor1distance + neighbor2prominence / neighbor2distance) / (height * (1 / neighbor1distance + 1 / neighbor2distance)),
            netProminenceNeighbor3Normalized = (neighbor1prominence / neighbor1distance + neighbor2prominence / neighbor2distance + neighbor3prominence / neighbor3distance) / (height * (1 / neighbor1distance + 1 / neighbor2distance + 1 / neighbor3distance)),
+           netProminenceNeighbor4Normalized = (neighbor1prominence / neighbor1distance + neighbor2prominence / neighbor2distance + neighbor3prominence / neighbor3distance + neighbor4prominence / neighbor4distance) / (height * (1 / neighbor1distance + 1 / neighbor2distance + 1 / neighbor3distance + 1 / neighbor4distance)),
            netProminenceNeighbor5Normalized = (neighbor1prominence / neighbor1distance + neighbor2prominence / neighbor2distance + neighbor3prominence / neighbor3distance + neighbor4prominence / neighbor4distance + neighbor5prominence / neighbor5distance) / (height * (1 / neighbor1distance + 1 / neighbor2distance + 1 / neighbor3distance + 1 / neighbor4distance + 1 / neighbor5distance)),
            netRange = range1 + range2 + range3 + range4 + range5,
            netRangeNormalized = netRange / height,
@@ -625,68 +649,183 @@ get_treetop_predictors = function(treetopEligibleMaxima)
 }
 
 ## treetop random forests
+# 15 tile load (2.6M maxima, single threaded): ~30 s 9900X + DDR5-5600, ~41 s 5950X + DDR4-3200
+loadStart = Sys.time()
+s4268maxima = get_treetop_predictors(bind_rows(get_treetop_eligible_maxima("s04200w06810", acceptedTileName = "s04200w06810"), # truthed tiles
+                                               get_treetop_eligible_maxima("s04200w06840", acceptedTileName = "s04200w06840"), 
+                                               get_treetop_eligible_maxima("s04230w06810", acceptedTileName = "s04230w06810"),
+                                               get_treetop_eligible_maxima("s04170w06870"), # adjacent tiles for neighborhood calculations
+                                               get_treetop_eligible_maxima("s04200w06870"), # 15 warnings on z coordinate loss on read, one for each tile
+                                               get_treetop_eligible_maxima("s04230w06870"), # 2 additional warnings from s04200w06840 and s04230w06810 truth
+                                               get_treetop_eligible_maxima("s04170w06840"),
+                                               get_treetop_eligible_maxima("s04230w06840"),
+                                               get_treetop_eligible_maxima("s04260w06840"),
+                                               get_treetop_eligible_maxima("s04170w06810"),
+                                               get_treetop_eligible_maxima("s04260w06840"),
+                                               get_treetop_eligible_maxima("s04170w06780"),
+                                               get_treetop_eligible_maxima("s04200w06780"),
+                                               get_treetop_eligible_maxima("s04230w06780"),
+                                               get_treetop_eligible_maxima("s04260w06780"))) %>% 
+  filter(is.na(cmmSlope3) == FALSE, # is.na(dsmSlope) == FALSE not needed as dsmSlope is not used as a predictor variable
+         ((420000 - treetopOptions$neighborhoodBufferWidth) < x) & (x < (426000 + treetopOptions$neighborhoodBufferWidth)), ((680000 - treetopOptions$neighborhoodBufferWidth) < y) & (y < (686000 + treetopOptions$neighborhoodBufferWidth))) %>% # window neighboring tiles, all of s04230w06840 is still included
+  select(-neighbor1sourceID, -neighbor2sourceID, -neighbor3sourceID, -neighbor4sourceID, -neighbor5sourceID, # drop most non-portable values (id, sourceID, x, y, dsmZ, and cmmZ are excluded from training by predictor variable selection)
+         -ring1max, -ring2max, -ring3max, -ring4max, -ring5max, -ring1mean, -ring2mean, -ring3mean, -ring4mean, -ring5mean, -ring1min, -ring2min, -ring3min, -ring4min, -ring5min, # drop elevations
+         -neighbor1dsmZ, -neighbor2dsmZ, -neighbor3dsmZ, -neighbor4dsmZ, -neighbor5dsmZ) 
+Sys.time() - loadStart
+sum(is.na(s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(-dsmSlope))) # check for incomplete cases in training data
+#colSums(is.na(s4268maxima)))
+#(sum(s4268maxima$neighbor1distance <= s4268maxima$neighbor2distance) + sum(s4268maxima$neighbor2distance <= s4268maxima$neighbor3distance) + sum(s4268maxima$neighbor3distance <= s4268maxima$neighbor4distance) + sum(s4268maxima$neighbor4distance <= s4268maxima$neighbor5distance)) / nrow(s4268maxima) # check neighbor distance sort; should be exactly 4
+
+# variable selection
+if (treetopOptions$includeInvestigatory)
+{
+  # PCA
+  predictorPca = prcomp(~ ., s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(-treetop, -tile, -id, -uniqueID, -sourceID, -x, -y) %>% mutate(across(ends_with("differentSourceID"), as.numeric)), scale = TRUE) # ~20 s @ 621k rows, 9900X
+  factoextra::fviz_eig(predictorPca, ncp = 20)
+  factoextra::fviz_pca_var(predictorPca, col.var = "cos2", axes = c(1, 2), labelsize = 2, repel = TRUE)
+  ggsave("trees/segmentation/treetop PCA 621k axes 0102 v2.png", width = 30, height = 30, units = "cm", bg = "white", dpi = 250)
+  factoextra::fviz_pca_var(predictorPca, col.var = "cos2", axes = c(3, 4), labelsize = 2, repel = TRUE)
+  ggsave("trees/segmentation/treetop PCA 621k axes 0304 v2.png", width = 30, height = 30, units = "cm", bg = "white", dpi = 250)
+  factoextra::fviz_pca_var(predictorPca, col.var = "cos2", axes = c(5, 6), labelsize = 2, repel = TRUE)
+  ggsave("trees/segmentation/treetop PCA 621k axes 0506 v2.png", width = 30, height = 30, units = "cm", bg = "white", dpi = 250)
+  factoextra::fviz_pca_var(predictorPca, col.var = "cos2", axes = c(7, 8), labelsize = 2, repel = TRUE)
+  ggsave("trees/segmentation/treetop PCA 621k axes 0708 v2.png", width = 30, height = 30, units = "cm", bg = "white", dpi = 250)
+  factoextra::fviz_pca_var(predictorPca, col.var = "cos2", axes = c(9, 10), labelsize = 2, repel = TRUE)
+  ggsave("trees/segmentation/treetop PCA 621k axes 0910 v2.png", width = 30, height = 30, units = "cm", bg = "white", dpi = 250)
+  factoextra::fviz_pca_var(predictorPca, col.var = "cos2", axes = c(11, 12), labelsize = 2, repel = TRUE)
+  ggsave("trees/segmentation/treetop PCA 621k axes 1112 v2.png", width = 30, height = 30, units = "cm", bg = "white", dpi = 250)
+
+  # MCA  
+  predictorFamd = FactoMineR::FAMD(s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(-treetop, -tile, -id, -uniqueID, -sourceID, -x, -y), graph = FALSE, ncp = 6)
+  factoextra::fviz_famd_var(predictorFamd, col.ind = "cos2", gradient.cols = c("blue", "orange", "red"), axes = c(5, 6), labelsize = 2, repel = TRUE)
+  
+  # LDA
+  ldaData = s4268maxima %>% filter(is.na(treetop) == FALSE) %>% slice_sample(n = 100000) %>% # ordination plots start to get slow with > 100k points
+    select(-tile, -id, -uniqueID, -sourceID, -x, -y, # exclude non-predictors
+           -dsmZ, -cmmZ, # exclude non-portable predictors
+           -rangeMean, -rangeMeanNormalized, -neighborDistance2Mean, -neighborDistance3Mean, -neighborDistance4Mean, -neighborDistance5Mean, -starts_with("neighborDifferentSourceID"), -neighborDistance5Variance, -neighborProminence5Mean, -prominenceMean, -prominenceMeanNormalized, -rangeNeighbor5Normalized, -netProminence, -netProminenceNormalized, -starts_with("netProminenceNeighbor"), -netRange, -netRangeNormalized) %>% # exclude colinear variables
+    mutate(across(where(is.numeric), scale))
+  predictorLda = MASS::lda(treetop ~ ., ldaData, tol = 1E-4)
+  ggord::ggord(predictorLda, ldaData$treetop, arrow = 0.2, axes = c(1, 2), direction = "both", ext = 0.99, force = 10, grp_title = NULL, max.overlaps = 150, repel = TRUE, size = 0.5, txt = 2.5, vec_ext = 100, veccol = "grey40", xlims = NA * c(-1, 1), ylims = NA * c(-1, 1)) +
+  ggord::ggord(predictorLda, ldaData$treetop, arrow = 0.2, axes = c(3, 4), direction = "both", ext = 0.99, force = 10, grp_title = NULL, max.overlaps = 150, repel = TRUE, size = 0.5, txt = 2.5, vec_ext = 100, veccol = "grey40", xlims = NA * c(-1, 1), ylims = NA * c(-1, 1)) +
+  patchwork::plot_annotation(theme = theme(plot.margin = margin())) +
+  patchwork::plot_layout(guides = "collect")
+  
+  # rows   predictors   CPU    VSURF  cores selected  accuracy   tune  trees  threads   mtry  min node size  sample fraction
+  # 407k   PCA+MCA+LDA  9900X         12    13
+  #
+  # 164k   48           5950X   3.0h  14    12        ~98%       2.0h  1000   12
+  # 308k   48           5950X   6.3h  14    12        ~98%       5.4h  1000   12
+  # 308k   78           5950X  15.3h  14    13        99.1%      7.4h   500   15        8     5
+  # 461k   99           5950X   1.1d  14    13                   10h    500   14        7     9              0.547
+  # 461k   101          5950X   2.2d  14    14                   10h    500   14        8     7              0.549
+  library(forcats)
+  library(VSURF)
+  treetopVsurf = VSURF(treetop ~ ., s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(all_of(predictorVariables)), ncores = treetopOptions$rangerThreads, parallel = TRUE, RFimplem = "ranger")
+  saveRDS(treetopVsurf, "trees/segmentation/treetop vsurf s4268 407k PMCADAV13.Rds")
+  #treetopVsurf = readRDS("trees/segmentation/treetop vsurf s4268 407k PMCADAV13.Rds")
+  treetopVsurf$nums.varselect # threshold -> interpretation -> prediction
+  treetopVsurf$mean.perf # fractional error rate
+  treetopVsurf$overall.time
+  treetopVsurf$comput.times
+  
+  plot(treetopVsurf)
+  (variablesTreshold = attributes(treetopVsurf$terms[treetopVsurf$varselect.thres])$term.labels)
+  (variablesInterpretation = attributes(treetopVsurf$terms[treetopVsurf$varselect.interp])$term.labels)
+  (variablesPrediction = attributes(treetopVsurf$terms[treetopVsurf$varselect.pred])$term.labels)
+  
+  predictorImportance = tibble(predictor = as.character(attr(treetopVsurf$terms, "predvars"))[treetopVsurf$imp.mean.dec.ind + 2], importance = treetopVsurf$imp.mean.dec) %>% # offset as.character() by two since first element is "list" and second is classification
+    mutate(importance = importance / sum(importance), selection = factor(if_else(predictor %in% variablesPrediction, "prediction", if_else(predictor %in% variablesInterpretation, "interpretation", if_else(predictor %in% variablesTreshold, "thresholding", "excluded"))), levels = c("prediction", "interpretation", "thresholding", "excluded")))
+  ggplot() +
+    geom_col(aes(x = importance, y = fct_reorder(predictor, importance), fill = selection), predictorImportance) +
+    labs(x = "normalized variable importance", y = NULL, fill = "VSURF") +
+    scale_fill_manual(values = c("forestgreen", "blue2", "darkviolet", "black"))
+  ggsave("trees/segmentation/treetop vsurf s4268 407k PMCADAV13 importance.png", width = 14, height = 0.33 * nrow(predictorImportance), units = "cm", dpi = 150)
+  
+  library(tuneRanger)
+  library(mlr)
+  #predictorVariables = c("treetop", variablesPrediction)
+  rangerTuneData = as.data.frame(s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(all_of(predictorVariables))) # placing inline to makeClassifTask() fails with "Must have length 1" for certain combinations of predictor variables (but works with most combinations?!)
+  rangerTuneTask = makeClassifTask(data = rangerTuneData, target = "treetop")
+  #estimateStart = Sys.time()
+  #estimateTimeTuneRanger(rangerTuneTask, num.trees = 500, num.threads = 14, iters = 70)# 5950X: 1.5 min to estimate 1h47m @ 164k tops and 12 predictors
+  #Sys.time() - estimateStart
+  (rangerTuneStart = Sys.time())
+  rangerTuning = tuneRanger(rangerTuneTask, measure = list(multiclass.brier), num.trees = 500, num.threads = 12, iters = 70,
+                            build.final.model = FALSE)
+  (rangerTuneTime = Sys.time() - rangerTuneStart)
+  (rangerTuning)
+  saveRDS(rangerTuning, "trees/segmentation/treetop ranger tuning s4268 407k PMCADAV13.Rds")
+  detach("package:tuneRanger", unload = TRUE)
+  detach("package:mlrMBO", unload = TRUE)
+  detach("package:mlr", unload = TRUE)
+  #rangerTuning = readRDS("trees/segmentation/treetop ranger tuning s4268 407k PMCADAV18.Rds")
+}
+
+# fitting
 if (treetopOptions$fitRandomForest)
 {
-  # 15 tile load (2.6M maxima, single threaded): ~29.4 s 9900X + DDR5-5600, ~41 s 5950X + DDR4-3200
-  loadStart = Sys.time()
-  s4268maxima = get_treetop_predictors(bind_rows(get_treetop_eligible_maxima("s04200w06810", acceptedTileName = "s04200w06810"), # truthed tiles
-                                                 get_treetop_eligible_maxima("s04200w06840", acceptedTileName = "s04200w06840"), 
-                                                 get_treetop_eligible_maxima("s04230w06810", acceptedTileName = "s04230w06810"),
-                                                 get_treetop_eligible_maxima("s04170w06870"), # adjacent tiles for neighborhood calculations
-                                                 get_treetop_eligible_maxima("s04200w06870"), # 15 warnings on z coordinate loss on read, one for each tile
-                                                 get_treetop_eligible_maxima("s04230w06870"), # 2 additional warnings from s04200w06840 and s04230w06810 truth
-                                                 get_treetop_eligible_maxima("s04170w06840"),
-                                                 get_treetop_eligible_maxima("s04230w06840"),
-                                                 get_treetop_eligible_maxima("s04260w06840"),
-                                                 get_treetop_eligible_maxima("s04170w06810"),
-                                                 get_treetop_eligible_maxima("s04260w06840"),
-                                                 get_treetop_eligible_maxima("s04170w06780"),
-                                                 get_treetop_eligible_maxima("s04200w06780"),
-                                                 get_treetop_eligible_maxima("s04230w06780"),
-                                                 get_treetop_eligible_maxima("s04260w06780"))) %>% 
-    filter(is.na(cmmSlope3) == FALSE, # is.na(dsmSlope) == FALSE not needed as dsmSlope is not used as a predictor variable
-           ((420000 - treetopOptions$neighborhoodBufferWidth) < x) & (x < (426000 + treetopOptions$neighborhoodBufferWidth)), ((680000 - treetopOptions$neighborhoodBufferWidth) < y) & (y < (686000 + treetopOptions$neighborhoodBufferWidth))) %>% # window neighboring tiles, all of s04230w06840 is still included
-    select(-neighbor1sourceID, -neighbor2sourceID, -neighbor3sourceID, -neighbor4sourceID, -neighbor5sourceID, # drop most non-portable values (id, sourceID, x, y, dsmZ, and cmmZ are excluded from training by predictor variable selection)
-           -ring1max, -ring2max, -ring3max, -ring4max, -ring5max, -ring1mean, -ring2mean, -ring3mean, -ring4mean, -ring5mean, -ring1min, -ring2min, -ring3min, -ring4min, -ring5min, # drop elevations
-           -neighbor1dsmZ, -neighbor2dsmZ, -neighbor3dsmZ, -neighbor4dsmZ, -neighbor5dsmZ) 
-  Sys.time() - loadStart
-  sum(is.na(s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(-dsmSlope))) # check for incomplete cases in training data
-  #colSums(is.na(s4268maxima)))
-  #(sum(s4268maxima$neighbor1distance <= s4268maxima$neighbor2distance) + sum(s4268maxima$neighbor2distance <= s4268maxima$neighbor3distance) + sum(s4268maxima$neighbor3distance <= s4268maxima$neighbor4distance) + sum(s4268maxima$neighbor4distance <= s4268maxima$neighbor5distance)) / nrow(s4268maxima) # check neighbor distance sort; should be exactly 4
-  
-  
-  # variables which need to flow through cross validation for accuracy measurements but should not be used for predictors
-  accuracyVariables = c("tile", "id", "sourceID", "x", "y", "dsmZ", "cmmZ") # x and y coordinates are also used for merge point kNNs
-  
   # predictor variable selection
   # s04200w06810 only
   #predictorVariables = c("treetop", "prominenceStdDevNormalized", "height", "radius", "prominence1normalized", "prominence3normalized", "netProminenceNormalized", "prominence4normalized", "prominence5normalized", "netRange", "range1", "deltaCmm", "ring2max")
   # s04200w06810 and s04230w06810
   #predictorVariables = c("treetop", "height", "prominenceStdDevNormalized", "prominence2normalized", "radius", "prominence2", "prominence3normalized", "prominence1normalized", "netProminenceNormalized", "prominence4normalized", "netRange", "range2", "range1", "prominence1", "ring1min" )
   #predictorVariables = c("treetop", "height", "radius", "prominence2normalized", "prominence3normalized", "netProminenceNormalized", "prominence1normalized", "ring2variance", "prominence4normalized", "mean2delta", "ring1variance", "netRange", "mean5delta", "neighbor1distance", "deltaCmm")
-  # s04200w06810, s04230w06810, and s04230w06810 VSURF
-  #predictorVariables = c("treetop", "prominence2normalized", "height", "netProminenceNormalized", "radius", "ring2variance", "prominence3normalized", "prominence1normalized", "ring1variance", "range2", "prominence4normalized", "mean2deltaNormalized", "netRange", "mean4delta")
-  predictorVariables = c("treetop", "prominence2normalized", "height", "radius", "netProminenceNormalized", "ring2variance", "prominence3normalized", "prominence1normalized", "prominence4normalized", "mean2deltaNormalized", "cmmSlope3", "mean3delta", "rangeMean", "neighbor1prominence", "mean4delta")
   # controls
   #predictorVariables = c("treetop", "height", "radius")
+  #rangerTuning = tibble(mtry = 2, minNodeSize = 756, sampleFraction = 0.282)
   #predictorVariables = c("treetop", "height", "radius", "netProminenceNormalized")
+  #rangerTuning = tibble(mtry = 2, minNodeSize = 143, sampleFraction = 0.255)
+  # s04200w06810, s04230w06810, and s04230w06810 VSURF
+  #predictorVariables = c("treetop", "prominence2normalized", "height", "netProminenceNormalized", "radius", "ring2variance", "prominence3normalized", "prominence1normalized", "ring1variance", "range2", "prominence4normalized", "mean2deltaNormalized", "netRange", "mean4delta")
+  #predictorVariables = c("treetop", "prominence2normalized", "height", "radius", "netProminenceNormalized", "ring2variance", "prominence3normalized", "prominence1normalized", "prominence4normalized", "mean2deltaNormalized", "cmmSlope3", "mean3delta", "rangeMean", "neighbor1prominence", "mean4delta") # legacy14
+  #rangerTuning = tibble(mtry = 8, minNodeSize = 7, sampleFraction = 0.549)
+  #predictorVariables = c("treetop", "height", "radius", "netProminenceNormalized", "deltaCmm", "cmmSlope3", "prominenceMean", "netProminence", "mean3delta", "rangeMeanNormalized", "netRange", "netRangeNormalized", "rangeVarianceNormalized", "prominenceNeighbor5Variance", "neighborDistance5Mean", "netProminenceNeighbor5", "ring2variance", "prominence1normalized", "prominence2normalized", "prominence3normalized", "prominence4normalized", "mean2deltaNormalized", "rangeMean", "neighbor1prominence", "mean4delta") # PCA+MCA+LDA+VSURF
+  #rangerTuning = tibble(mtry = 13, minNodeSize = 4, sampleFraction = 0.629)
+  #predictorVariables = c("treetop", "radius", "prominence2normalized", "prominence3normalized", "prominence1normalized", "netProminenceNormalized", "height", "prominenceMean", "netProminence", "ring2variance", "prominence4normalized", "cmmSlope3", "neighbor1prominence", "rangeMean", "netRange", "mean2deltaNormalized", "netRangeNormalized", "rangeMeanNormalized", "deltaCmm") # PMCDAV18
+  #rangerTuning = tibble(mtry = 11, minNodeSize = 7, sampleFraction = 0.577)
+  #predictorVariables = c("treetop", "radius", "prominence2normalized", "prominence3normalized", "prominence1normalized", "netProminenceNormalized", "height", "ring2variance", "prominence4normalized", "cmmSlope3", "neighbor1prominence", "rangeMean", "mean2deltaNormalized", "netRangeNormalized", "rangeMeanNormalized", "deltaCmm") # PMCADAV15
+  #rangerTuning = tibble(mtry = 8, minNodeSize = 4, sampleFraction = 0.565)
+  #predictorVariables = c("treetop", "radius", "prominence2normalized", "prominence3normalized", "prominence1normalized", "netProminenceNormalized", "height", "ring2variance", "prominence4normalized", "cmmSlope3", "neighbor1prominence", "rangeMean", "mean2deltaNormalized", "netRangeNormalized", "deltaCmm") # PMCADAV14
+  #rangerTuning = tibble(mtry = 8, minNodeSize = 7, sampleFraction = 0.591)
+  #predictorVariables = c("treetop", "height", "radius", "prominence1", "prominence2", "prominence3", "prominence4", "netProminence", "ring2variance", "cmmSlope3", "neighbor1prominence", "rangeMean", "mean2delta", "netRange", "deltaCmm") # PMCADAV14un
+  #rangerTuning = tibble(mtry = 10, minNodeSize = 5, sampleFraction = 0.533)
+  predictorVariables = c("treetop", "radius", "prominence2normalized", "prominence3normalized", "prominence1normalized", "netProminenceNormalized", "height", "ring2variance", "prominence4normalized", "cmmSlope3", "neighbor1prominence", "mean2deltaNormalized", "netRangeNormalized", "deltaCmm") # PMCADAV13
+  rangerTuning = tibble(mtry = 7, minNodeSize = 11, sampleFraction = 0.549)
+  #rangerTuning = tibble(mtry = rangerTuning$recommended.pars$mtry, minNodeSize = rangerTuning$recommended.pars$min.node.size, sampleFraction = rangerTuning$recommended.pars$sample.fraction)
   
+  # variables which need to flow through cross validation for accuracy measurements but should not be used for predictors
+  accuracyVariables = c("tile", "id", "uniqueID", "sourceID", "x", "y", "dsmZ", "cmmZ") # x and y coordinates are also used for merge point kNNs
   if (sum(accuracyVariables %in% predictorVariables) > 0)
   {
     stop("At least one accuracy assessment variable excluded from training data is indicated as a predictor variable. Should it be removed from the exclusion list?")
   }
   
   # cross validated accuracy estimation
-  # tiles                             maxima    predictors   cross validation   accuracy   mtry  node size  sampling
-  # s04200w06810 + s4200+s04230w06810 461k      99->14       2x25 @ 1.2h                   8     7          0.549
+  #                                                                                                                     cross validated accuracy
+  # tiles                              maxima predictors        tune          mtry minNode sampling cross validation    treetop  overall
+  # s04200+s04230w06810 + s4200w06840  407k   hR                 1.5h 5950X    2   756     0.282    2x25 @ 0.18h 9900X  0.861    0.950
+  # s04200+s04230w06810 + s4200w06840  407k   hRnnp              2.0h 5950X    2   143     0.255    2x25 @ 0.20h 9900X  0.940    0.970
+  # s04200+s04230w06810 + s4200w06840  407k   legacy14          10h   5950X    8     7     0.549    2x25 @ 0.77h 9900X  0.943    0.976
+  # s04200+s04230w06810 + s4200w06840  407k   PMCADAV13          3.66h 9900X   7    11     0.650    2x25 @ 0.80h 9900X  0.943    0.975
+  # s04200+s04230w06810 + s4200w06840  407k   PMCADAV14          3.91h 9900X   8     7     0.591    2x25 @ 0.79h 9900X  0.942    0.975
+  # s04200+s04230w06810 + s4200w06840  407k   PMCADAV14un        2.99h 9900X  10     5     0.533    2x25 @ 0.58h 9900X  0.940    0.975
+  # s04200+s04230w06810 + s4200w06840  407k   PMCADAV15          4.59h 9900X   8     5     0.564    2x25 @ 0.94h 9900X  0.943    0.975
+  # s04200+s04230w06810 + s4200w06840  407k   PMCADAV18          5.00h 9900X  11     7     0.577    2x25 @ 1.21h 9900X  0.943    0.975
+  # s04200+s04230w06810 + s4200w06840  407k   PCA+MCA+LDA+VSURF  7.89h 9900X  13     4     0.629    2x25 @ 1.61h 9900X  0.944    0.976
   handlers(global = TRUE)
-  handlers("progress")
+  handlers("cli")
   s4268training = s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(all_of(predictorVariables), all_of(accuracyVariables)) # drop maxima in tiles neighboring training region
-  crossValidationStart = Sys.time()
-  s4268crossValidation = fit_ranger(s4268training, s4268maxima, mtry = 8, minNodeSize = 7, sampleFraction = 0.549, folds = 2, repetitions = 25)
-  (crossValidationTime = Sys.time() - crossValidationStart)
-  saveRDS(s4268crossValidation, "trees/segmentation/treetopRandomForest s4268 103.14 2x25 cross validation.Rds")
-  
+  (crossValidationStartTime = Sys.time())
+  s4268crossValidation = fit_ranger_treetop(s4268training, s4268maxima, 
+                                            mtry = rangerTuning$mtry, minNodeSize = rangerTuning$minNodeSize, sampleFraction = rangerTuning$sampleFraction, 
+                                            folds = 2, repetitions = 25)
+  crossValidationTime = Sys.time() - crossValidationStartTime
+  s4268crossValidation %>% summarize(cvTime = crossValidationTime, treetopAccuracy = mean(treetopAccuracy), overallAccuracy = mean(overallAccuracy), treetopMiscountPct = 100 * mean((treetop - expectedTreetop) / expectedTreetop))
+  saveRDS(s4268crossValidation, paste0("trees/segmentation/treetopRandomForest s4268 407k PMCADAV13 2x25 m", rangerTuning$mtry, "n", rangerTuning$minNodeSize, ".Rds"))
+  #s4268crossValidation = readRDS(paste0("trees/segmentation/treetopRandomForest s4268 407k PMCADAV13 2x25 m", rangerTuning$mtry, "n", rangerTuning$minNodeSize, ".Rds"))
+
+  s4268crossValidation$confusionSubmatrix[1]$Accuracy["merge"]
   ggplot() +
     geom_violin(aes(x = overallAccuracy, y = "overall", color = "overall"), s4268crossValidation, draw_quantiles = c(0.25, 0.5, 0.75), width = 0.6) +
     geom_violin(aes(x = treetopAccuracy, y = "treetop", color = "treetop"), s4268crossValidation, draw_quantiles = c(0.25, 0.5, 0.75), width = 0.6) +
@@ -695,32 +834,53 @@ if (treetopOptions$fitRandomForest)
     guides(color = "none") +
     labs(x = "accuracy", y = NULL) + 
     scale_y_discrete(limits = rev(c("overall", "treetop", "not treetop")))
-  
-  # tuneRanger(): s04200w06810 only @ 48->12 predictors: mtry = 6, min node size = 2
-  #               s04200w06810 + s04230w06810 @ 48->12: also mtry = 6, min node size = 2, ~2h train time
-  #                                             78->13: mtry = 8, min node size = 4, train time not logged
-  # tiles                             maxima    predictors   cross validation    accuracy   κ       mtry  node size  sampling
-  # s04200w06840 + s4200+s04230w06810 461k      ht + radius  2x10 @ 7 m (5950)   0.937      0.779   2     756        0.282
-  # s04200w06840 + s4200+s04230w06810 461k      h + r + NNP  2x10 @ 8 m (5950)   0.941      0.788   2     143        0.255
-  # s04200w06840 + s4200+s04230w06810 461k      99->13       2x10 @ 50 m (5950)  0.974      0.905   7     9          0.547
-  # s04200w06840 + s4200+s04230w06810 461k      103->14      2x10 @ 20 m (9900)  0.973      0.904   7     9          0.547
-  # s04200+s04230w06810               308k      99->13       2x10 @ 23 m (5950)  0.994      0.920   7     9          0.547
-  # s04200+s04230w06810               317k      99->13       2x10 @ 23 m (5950)  0.975      0.920   7     9          0.547
-  fitStart = Sys.time() # ~ m for s04200w06840 + s4200+s04230w06810, 9900X + DDR5-5600 @ ~62 GB/s
-  treetopRandomForest = train(treetop ~ ., data = s4268maxima %>% filter(tile %in% c("s04200w06810", "s04230w06810", "s04200w06840")) %>% select(all_of(predictorVariables)),
-                              method = "ranger", # importance = "impurity_corrected", # see https://github.com/imbs-hl/ranger/issues/664 for impurity corrected
-                              trControl = trainControl(method = "repeatedcv", number = 2, repeats = 10, verboseIter = TRUE),
-                              tuneGrid = expand.grid(mtry = c(7),
-                                                     splitrule = "gini",
-                                                     min.node.size = c(9)),
-                              #class.weights = c(0.2, 1, 1, 1, 1),
-                              sample.fraction = 0.547,
-                              num.threads = treetopOptions$rangerThreads)
-  (randomForestFitTime = Sys.time() - fitStart)
+
+  # fit random forest
+  treetopRandomForest = ranger::ranger(treetop ~ ., data = s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(all_of(predictorVariables)),
+                                       mtry = rangerTuning$mtry, splitrule = 'gini', min.node.size = rangerTuning$minNodeSize, 
+                                       sample.fraction = rangerTuning$sampleFraction,
+                                       num.threads = treetopOptions$rangerThreads)
   treetopRandomForest
-  saveRDS(treetopRandomForest, "trees/segmentation/treetopRandomForest vsurf 103.14 s04200w06840 + s4200+s04230w06810.Rds")
-  #treetopRandomForest = readRDS("trees/segmentation/treetopRandomForest vsurf 99 height-radius+netNormalizedProminence s04200w06840+s04230w06810.Rds")
-  #varImp(randomForestFit)
+  saveRDS(treetopRandomForest, paste0("trees/segmentation/treetopRandomForest s4268 407k PMCADAV13 m", rangerTuning$mtry, "n", rangerTuning$minNodeSize, ".Rds"))
+  #treetopRandomForest = readRDS("trees/segmentation/treetopRandomForest s4268 407k legacy14 m8n25.Rds")
+
+  # variable importance
+  randomForestImportance = ranger::ranger(treetop ~ ., data = s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(all_of(predictorVariables)),
+                                          importance = "impurity_corrected",
+                                          mtry = rangerTuning$mtry, splitrule = 'gini', min.node.size = rangerTuning$minNodeSize, 
+                                          sample.fraction = rangerTuning$sampleFraction,
+                                          num.threads = treetopOptions$rangerThreads)
+  randomForestLocalImportance = ranger::ranger(treetop ~ ., data = s4268maxima %>% filter(is.na(treetop) == FALSE) %>% select(all_of(predictorVariables)),
+                                               importance = "permutation", local.importance = TRUE,
+                                               mtry = rangerTuning$mtry, splitrule = 'gini', min.node.size = rangerTuning$minNodeSize, 
+                                               sample.fraction = rangerTuning$sampleFraction,
+                                               num.threads = treetopOptions$rangerThreads)
+  localImportance = as_tibble(randomForestLocalImportance$variable.importance.local) %>% mutate(treetop = (s4268maxima %>% filter(is.na(treetop) == FALSE))$treetop) %>% group_by(treetop) %>%
+    summarize(across(everything(), mean)) %>%
+    rowwise() %>%
+    mutate(across(where(is.numeric), ~100 * .x / max(across(where(is.numeric))))) %>%
+    rename(any_of(c(NNP = "netProminenceNormalized"))) %>%
+    relocate(treetop, any_of(c("height", "radius")))
+
+  ggplot() +
+    geom_raster(aes(x = predictor, y = treetop, fill = importance), localImportance %>% pivot_longer(!treetop, names_to = "predictor", values_to = "importance")) +
+    scale_x_discrete(limits = names(localImportance %>% select(-treetop)), labels = NULL) +
+    scale_y_discrete(limits = rev(c("yes", "merge", "noise", "maybe noise", "no"))) +
+  ggplot() +
+    geom_raster(aes(x = predictor, y = "all subclasses combined", fill = importance), tibble::as_tibble_row(randomForestImportance$variable.importance) %>% 
+                                                                                        rename(any_of(c(NNP = "netProminenceNormalized"))) %>%
+                                                                                        pivot_longer(everything(), names_to = "predictor", values_to = "importance") %>%
+                                                                                        mutate(importance = 100 * importance / max(importance))) +
+    scale_x_discrete(limits = names(localImportance %>% select(-treetop))) +
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 2, ncol = 1, guides = "collect") &
+    coord_equal() &
+    labs(x = NULL, y = NULL, fill = "variable\nimportance, %") &
+    scale_fill_viridis_c(option = "plasma", limits = c(0, 100 + 1E-14)) &
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 0.5), legend.title = element_text(size = 10))
+  ggsave(file.path(getwd(), paste0("trees/segmentation/treetopRandomForest s4268 407k PMCADAV13 m", rangerTuning$mtry, "n", rangerTuning$minNodeSize, " cubic subclass.png")), units = "cm", height = 8, width = 12, dpi = 200)
+  
+  print(tibble(variable = names(randomForestImportance$variable.importance), importance = randomForestImportance$variable.importance, relativePct = 100 * importance / max(importance)) %>% arrange(desc(importance)), n = 25)
   
   # leave one out cross validation
   s04200w06810data = s4268maxima %>% filter(tile == "s04200w06810")
@@ -750,52 +910,6 @@ if (treetopOptions$fitRandomForest)
   randomForestConfusionMatrix = confusionMatrix(predict(treetopRandomForest, s4268maxima %>% select(-treetop)), s4268maxima$treetop)
   randomForestConfusionMatrix$table
   randomForestConfusionMatrix$overall
-  
-  if (treetopOptions$includeInvestigatory)
-  {
-    # rows   predictors   VSURF  cores selected  accuracy   tune  trees  threads   mtry  min node size  sample fraction
-    # 164k   48            3.0h  14    12        ~98%       2.0h  1000   12
-    # 308k   48            6.3h  14    12        ~98%       5.4h  1000   12
-    # 308k   78           15.3h  14    13        99.1%      7.4h   500   15        8     5
-    # 461k   ht + radius                                    1.5h   500   14        2     756            0.282
-    # 461k   h + r + NNP                                    2.0h   500   14        2     143            0.255
-    # 461k   99            1.1d  14    13                   10h    500   14        7     9              0.547
-    # 461k   101           2.2d  14    14                   10h    500   14        8     7              0.549
-    library(forcats)
-    library(VSURF)
-    treetopVsurf = VSURF(treetop ~ ., s4268maxima %>% select(-tile), ncores = 14, parallel = TRUE, RFimplem = "ranger")
-    saveRDS(treetopVsurf, "trees/segmentation/treetop vsurf 101 s04200+s04230w06810+s04230w06840.Rds")
-    #treetopVsurf = readRDS("trees/segmentation/treetop vsurf 101 s04200+s04230w06810+s04230w06840.Rds")
-    treetopVsurf$nums.varselect # threshold -> interpretation -> prediction
-    treetopVsurf$mean.perf # fractional error rate
-    treetopVsurf$overall.time
-    treetopVsurf$comput.times
-    
-    plot(treetopVsurf)
-    (variablesTreshold = attributes(treetopVsurf$terms[treetopVsurf$varselect.thres])$term.labels)
-    (variablesInterpretation = attributes(treetopVsurf$terms[treetopVsurf$varselect.interp])$term.labels)
-    (variablesPrediction = attributes(treetopVsurf$terms[treetopVsurf$varselect.pred])$term.labels)
-    
-    predictorImportance = tibble(predictor = as.character(attr(treetopVsurf$terms, "predvars"))[treetopVsurf$imp.mean.dec.ind + 2], importance = treetopVsurf$imp.mean.dec) %>% # offset as.character() by two since first element is "list" and second is classification
-      mutate(importance = importance / sum(importance), selection = factor(if_else(predictor %in% variablesPrediction, "prediction", if_else(predictor %in% variablesInterpretation, "interpretation", if_else(predictor %in% variablesTreshold, "thresholding", "excluded"))), levels = c("prediction", "interpretation", "thresholding", "excluded")))
-    ggplot() +
-      geom_col(aes(x = importance, y = fct_reorder(predictor, importance), fill = selection), predictorImportance) +
-      labs(x = "normalized variable importance", y = NULL, fill = "VSURF") +
-      scale_fill_manual(values = c("forestgreen", "blue2", "darkviolet", "black"))
-    ggsave("trees/segmentation/treetop vsurf 101 importance s04200+s04230w06810.png", width = 14, height = 0.33 * nrow(predictorImportance), units = "cm", dpi = 150)
-  
-    library(tuneRanger)
-    library(mlr)
-    predictorVariables = c("treetop", variablesPrediction)
-    rangerTuneTask = makeClassifTask(data = as.data.frame(s4268maxima %>% select(all_of(predictorVariables))), target = "treetop")
-    #estimateStart = Sys.time()
-    #estimateTimeTuneRanger(rangerTuneTask, num.trees = 500, num.threads = 14, iters = 70)# 1.5 min to estimate 1h47m @ 164k tops and 12 predictors
-    #Sys.time() - estimateStart
-    tuneStart = Sys.time()
-    rangerTuning = tuneRanger(rangerTuneTask, measure = list(multiclass.brier), num.trees = 500, num.threads = 14, iters = 70)
-    Sys.time() - tuneStart
-    (rangerTuning)
-  }
 }
 
 
