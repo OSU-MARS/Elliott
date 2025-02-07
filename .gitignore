@@ -39,6 +39,7 @@ GIS/**/*.mxd
 GIS/**/*.ovr
 GIS/**/*.prj
 GIS/**/*.qgz
+GIS/**/*.qwz
 GIS/**/*.qix
 GIS/**/*.rrd
 GIS/**/*.sbn
@@ -63,9 +64,7 @@ presentation/
 Woodstock/
 
 # QGIS and RStudio user data
-Elliott.qgz
-Elliott\ ABA.qgz
-Elliott\ orthoimage.qgz
+Elliott*.qgz
 Elliott.Rproj
 **/*.jpg
 **/*.png

@@ -19,7 +19,7 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.bo
 
 # load treetop locations, elevations, and heights, merge other physiological predictor variables
 # Stand level variables (top height, relative height, ABA, AAT) are calculated below based on trees' stand IDs.
-stands2022 = read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx") # from height-diameter/setup.R plus manual revisions to stand 1672, 1807, and 2463 area for boundary shifts and slivers (2016 IDs)
+stands2022 = read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx") # from height-diameter/setup.R plus manual revisions to stand 1672, 1807, and 2463 area for boundary shifts and slivers (2016 IDs) and synchronization with stand numbering changes in GIS
 
 if (treeOptions$rebuildTreeList)
 {
@@ -587,4 +587,13 @@ if (treetopOptions$includeInvestigatory)
     labs(x = "x", y = "y", fill = "octant")
   
   #write_xlsx(distance %>% filter(ring > 0), "trees/segmentation/rings.xlsx")
+}
+
+## stand distribution
+if (treetopOptions$includeInvestigatory)
+{
+  stands2022 %>% filter(inElliottGis) %>% group_by(isPlantation) %>% 
+    summarize(standArea = sum(standArea), .groups = "drop") %>% 
+    mutate(standArea = if_else(isPlantation, standArea + 318.8, standArea), # add Hakki plantations
+           pctArea = 100 * standArea / sum(standArea))
 }

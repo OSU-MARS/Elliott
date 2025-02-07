@@ -549,14 +549,14 @@ if (classificationOptions$predictClasses)
   #    nAerial                                          0
   #                               0.875     0.860     0.868       0.874 overall accuracy with importance = "impurity_corrected"
   # PCA+MCA at 1.8 m: 3800 polygons -> 462k pixels: mari -> luminosity, iQ20_018 -> iQ10, hMean018 -> hQ90_018, hQ10_018 -> hQ20_018, pGround018 -> mcari, intensitySkew018 -> scanAngleCosine
-  #predictorVariables = c("classification", "luminosity", "msavi", "brvi", "mcari", "intensityQ10_018", "intensityQ70_018", "hQ90_018", "hQ20_018", "sunZenithAngleCosine", "scanAngleCosine") # PCA10 iQ17
-  #rangerTuning = tibble(mtry = 8, minNodeSize = 25, samplingFraction = 0.745) # 3800 polygons -> 462k pixels
+  predictorVariables = c("classification", "luminosity", "msavi", "brvi", "mcari", "intensityQ10_018", "intensityQ70_018", "hQ90_018", "hQ20_018", "sunZenithAngleCosine", "scanAngleCosine") # PCA10 iQ17
+  rangerTuning = tibble(mtry = 8, minNodeSize = 25, samplingFraction = 0.745) # 3800 polygons -> 462k pixels
   #predictorVariables = c("classification", "luminosity", "msavi", "brvi", "mcari", "intensityQ10_018", "intensityQ70_018", "hQ90_018", "hQ20_018", "sunZenithAngleCosine", "cmmAspectSunRelativeCosine") # PCA10 iQ17csr
   #rangerTuning = tibble(mtry = 8, minNodeSize = 27, samplingFraction = 0.762) # 3800 polygons -> 462k pixels
   #predictorVariables = c("classification", "mari", "msavi", "brvi", "intensityQ70_018", "intensityQ10_018", "intensitySkew018", "hQ90_018", "hQ20_018", "pGround018", "sunZenithAngleCosine", "cmmAspectSunRelativeCosine") # PCA11 iQ17hQ29csr
   #rangerTuning = tibble(mtry = 9, minNodeSize = 25, samplingFraction = 0.744) # 3800 polygons
-  predictorVariables = c("classification", "mari", "msavi", "brvi", "intensityQ70_018", "intensityQ10_018", "intensitySkew018", "hQ90_018", "hQ20_018", "pGround018", "sunZenithAngleCosine", "dsmAspectSunRelativeCosine", "dsmSlope") # PCA12 iQ17hQ29dsr
-  rangerTuning = tibble(mtry = , minNodeSize = , samplingFraction = 0.) # 3800 polygons
+  #predictorVariables = c("classification", "mari", "msavi", "brvi", "intensityQ70_018", "intensityQ10_018", "intensitySkew018", "hQ90_018", "hQ20_018", "pGround018", "sunZenithAngleCosine", "dsmAspectSunRelativeCosine", "dsmSlope") # PCA12 iQ17hQ29dsr
+  #rangerTuning = tibble(mtry = , minNodeSize = , samplingFraction = 0.) # 3800 polygons
   #predictorVariables = c("classification", "mari", "msavi", "brvi", "pGround018", "intensitySkew018", "intensityQ20_018", "hMean018", "sunZenithAngleCosine", "intensityQ70_018", "hQ10_018") # PCA10 iQ27
   #rangerTuning = tibble(mtry = 8, minNodeSize = 22, samplingFraction = 0.725) # 3800 polygons
   
@@ -603,6 +603,117 @@ if (classificationOptions$predictClasses)
     #rangerTuning = tibble(minNodeSize = 3, mtry = 2, samplingFraction = 0.883)
     #predictorVariables = c("classification", "gNormalized", "chm", "viewZenithAngle", "viewAzimuthSunRelativeAbsolute")
     #rangerTuning = tibble(minNodeSize = 3, mtry = 2, samplingFraction = 0.892)
+    
+    # caret recursive feature elimination (RFE) using ranger
+    # Not useful: high runtime and selects all variables (overall accuracy 0.910), with a 10 variable accuracy of 0.622 versus
+    # 0.855 with other selection methods, which RFE appears likely to need 80 variables to match. This is attributable to selection
+    # of many vegetation indices, plus direct pixel values, with limited use of heights and other LiDAR variables along with
+    # difficulty selecting decorrelated quantiles.
+    # library(caret)
+    # rangerFuncs = list(summary = caret::defaultSummary,
+    #                    fit = function(x, y, first, last, ...)
+    #                    {
+    #                      return(ranger::ranger(y ~ ., cbind(y, x), oob.error = TRUE, importance = "impurity_corrected", num.threads = classificationOptions$rangerThreads))
+    #                    },
+    #                    pred = function(object, x)
+    #                    {
+    #                      return(predict(object, x)$predictions)
+    #                    },
+    #                    rank = function(object, x, y)
+    #                    {
+    #                      return(tibble(var = names(object$variable.importance), Overall = object$variable.importance) %>% arrange(desc(Overall)))
+    #                    },
+    #                    selectSize = caret::pickSizeBest,
+    #                    selectVar = caret::pickVars)
+    # rangerControl = rfeControl(method = "repeatedcv", number = 2, repeats = 25, functions = rangerFuncs, verbose = TRUE) # allowParallel defaults to TRUE
+    # 
+    # caretRfeData = trainingData %>% slice_sample(n = 10000) # slice_sample(by) takes n samples from each group indicated by by
+    # (caretRfeStartTime = Sys.time()) # ~26 hours 9900X with seven variable selection sizes @ 462k rows
+    # caretRfe = rfe(classification ~ ., trainingData %>% select(-polygon), sizes = c(10, 15, 20, 25, 50, 100, 200), metric = "Accuracy", maximize = TRUE, rfeControl = rangerControl)
+    # (caretRfeTime = Sys.time() - caretRfeStartTime)
+    # saveRDS(caretRfe, "trees/segmentation/classification feature reduction ranger RFE 3800.Rds")
+    # print(caretRfe$variables %>% group_by(Variables, var) %>% reframe(selections = n()) %>% pivot_wider(names_from = "Variables", names_prefix = "vars", values_from = "selections") %>% arrange(desc(vars10)), n = 100)
+    
+    # mutual information feature reduction
+    #tibble::enframe(colSums(trainingData == Inf)) %>% filter(value> 0)
+    #tibble::enframe(colSums(is.na(trainingData))) %>% filter(value> 0)
+    
+    library(praznik)
+    praznikData = trainingData %>% select(-polygon, -arvi2, -evi, -vari, -zSkew018, -ends_with("030"), -ends_with("046"), -ends_with("100")) # praznik requires finite values, exclude lower resolution metrics to avoid repeat selections
+    variablesToSelect = 25
+    
+    #praznikCmiStartTime = Sys.time() # CMI crashes
+    #praznikCmi = CMI(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    #praznikCmiTime = Sys.time() - praznikCmiStartTime
+    
+    praznikCmimStartTime = Sys.time() # ~400 ms @ 462k pixels with all columns and 15 variables
+    praznikCmim = CMIM(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikCmimTime = Sys.time() - praznikCmimStartTime
+    
+    praznikDisrStartTime = Sys.time() # ~900 ms @ 462k pixels with all columns and 15 variables
+    praznikDisr = DISR(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikDisrTime = Sys.time() - praznikDisrStartTime
+
+    praznikJimStartTime = Sys.time() # ~1 s @ 462k pixels with all columns and 15 variables
+    praznikJim = JIM(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikJimTime = Sys.time() - praznikJimStartTime
+    
+    praznikJmiStartTime = Sys.time() # ~700 ms @ 462k pixels with all columns and 15 variables
+    praznikJmi = JMI(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikJmiTime = Sys.time() - praznikJmiStartTime
+    
+    praznikJmi3StartTime = Sys.time() # ~3 s @ 462k pixels with all columns and 15 variables
+    praznikJmi3 = JMI3(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikJmi3Time = Sys.time() - praznikJmi3StartTime
+
+    praznikJmimStartTime = Sys.time() # ~500 ms @ 462k pixels with all columns and 15 variables
+    praznikJmim = JMIM(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikJmimTime = Sys.time() - praznikJmimStartTime
+    
+    praznikMimStartTime = Sys.time() # ~400 ms @ 462k pixels with all columns and 15 variables
+    praznikMim = MIM(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikMimTime = Sys.time() - praznikMimStartTime
+    
+    praznikMrmrStartTime = Sys.time() # ~600 ms @ 462k pixels with all columns and 15 variables
+    praznikMrmr = MRMR(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikMrmrTime = Sys.time() - praznikMrmrStartTime
+
+    praznikNjmimStartTime = Sys.time() # ~500 ms @ 462k pixels with all columns and 15 variables
+    praznikNjmim = NJMIM(praznikData %>% select(-classification), praznikData$classification, k = variablesToSelect, threads = classificationOptions$rangerThreads)
+    praznikNjmimTime = Sys.time() - praznikNjmimStartTime
+    
+    tibble(CMIM = praznikCmimTime, DISR = praznikDisrTime, JIM = praznikJimTime, JMI = praznikJmiTime, JMI3 = praznikJmi3Time, JMIM = praznikJmimTime, MIM = praznikMimTime, MRMR = praznikMrmrTime, NJMIM = praznikNjmimTime) %>% mutate(across(everything(), as.numeric))
+    
+    praznikPreferences = bind_rows(tibble::enframe(praznikCmim$score) %>% mutate(method = "CMIM", value = value / max(value)),
+                                   tibble::enframe(praznikDisr$score) %>% mutate(method = "DISR", value = value / max(value)),
+                                   tibble::enframe(praznikJim$score) %>% mutate(method = "JIM", value = value / max(value)),
+                                   tibble::enframe(praznikJmi$score) %>% mutate(method = "JMI", value = value / max(value)),
+                                   tibble::enframe(praznikJmi3$score) %>% mutate(method = "JMI3", value = value / max(value)),
+                                   tibble::enframe(praznikJmim$score) %>% mutate(method = "JMIM", value = value / max(value)),
+                                   tibble::enframe(praznikMim$score) %>% mutate(method = "MIM", value = value / max(value)),
+                                   tibble::enframe(praznikMrmr$score) %>% mutate(method = "MRMR", value = value / max(value)),
+                                   tibble::enframe(praznikNjmim$score) %>% mutate(method = "NJMIM", value = value / max(value))) %>%
+      pivot_wider(names_from = "method", values_from = "value") %>%
+      rowwise() %>%
+      mutate(selections = 9 - sum(is.na(c_across(CMIM:NJMIM))), mean = mean(c_across(CMIM:NJMIM), na.rm = TRUE)) %>%
+      relocate(selections, mean, name) %>%
+      arrange(desc(selections), desc(mean))
+    print(praznikPreferences, n = 75)
+    
+    praznikVariables = c("ndgr", "rgbv", "bNormalized", "mcari", "gli") # all nine methods
+    praznikVariables = c("rNormalized", "greenness", "ndgb", "wbi", "mgrv") # eight methods, rNormalized-greenness-mgrv-wbi > 90% correlated
+    praznikVariables = c("brvi", "gNormalized", "redBlueRatio", "normalizedBlue", "rdvi") # seven methods, brvi-normalizedBlue > 90% correlated
+    praznikVariables = c("bgi", "coloration", "triangularVegIndex", "bndvi", "hMax018") # six methods, coloration-bgi > 90% correlated
+    # five methods is just bri
+    ggcorrplot::ggcorrplot(cor(trainingData %>% select(all_of(praznikVariables))))
+    
+    #library(Rdimtools) # impractically (and probably unusuably) slow
+    #mifsData = trainingData %>% select(-polygon, -arvi2, -evi, -vari, -zSkew018) %>% slice_sample(n = 10000) # arvi2, evi, and vari have a few infinite values from divides by zero, zSkew018 contains a few NAs
+    #(mifsStartTime = Sys.time()) # 10.3 minutes on 9900X at n = 10000, do.mifs() is single threaded
+    #dimtoolsMifs = do.mifs(mifsData %>% select(-classification), mifsData$classification, ndim = 15, preprocess = "cscale")
+    #names(mifsData %>% select(-classification))[dimtoolsMifs$featidx]
+    #(mifsTime = Sys.time() - mifsStartTime)
+    #saveRDS(caretRfe, "trees/segmentation/classification feature reduction MIFS 15 3800.Rds")
   }
 }
 
@@ -940,6 +1051,7 @@ ggplot() +
   geom_col(aes(x = importance, y = forcats::fct_reorder(variable, importance)), variableImportance) +
   labs(x = "normalized importance, %", y = NULL)
 
+# random forest recall, SVM, gradient boosting, polygon summary
 if (classificationOptions$includeExploratory)
 {
   # sanity check random forest recall
@@ -1011,6 +1123,85 @@ if (classificationOptions$includeExploratory)
   #                          tuneGrid = expand.grid(size = c(2, 3), decay = seq(0.05, 1, length.out = 5)))
   #neuralNetworkFitTime = Sys.time() - fitStart
   #save(neuralNetworkFit, file = file.path(getwd(), "trees/segmentation/neuralNetworkFit 20 m grid metrics.Rdata"))
+  
+  # training polygon summary
+  trainingPolygons = as_tibble(vect(file.path(getwd(), "GIS/Trees/classification training polygons.gpkg"), layer = "hardwood-conifer training polygons")) %>%
+    rename(subclass = classification) %>%
+    mutate(subclass = factor(subclass, levels = c("conifer", "conifer shadow", "conifer deep shadow", "hardwood", "hardwood shadow", "hardwood deep shadow", "brown tree", "grey tree", "snag shadow", "snag deep shadow", "bare", "bare shadow", "shrub shadow", "shrub deep shadow", "gap")),
+           class = forcats::fct_collapse(subclass, conifer = c("conifer", "conifer shadow", "conifer deep shadow"), hardwood = c("hardwood", "hardwood shadow", "hardwood deep shadow"), snag = c("brown tree", "grey tree", "snag shadow", "snag deep shadow"), `non-tree` = c("bare", "bare shadow"), shrub = c("shrub shadow", "shrub deep shadow"), other = "gap"),
+           polygon = row_number(),
+           trainingSet = if_else(polygon <= (1931 + 20), 1931, if_else(polygon <= (2811 + 20), 2811, 4058)))
+  trainingPolygonDistribution = trainingPolygons %>% group_by(trainingSet, subclass) %>%
+    summarize(class = class[1],
+              trainingSet = trainingSet[1],
+              n = n(), .groups = "drop") %>%
+    pivot_wider(names_from = "trainingSet", names_prefix = "trainingSet", values_from = "n") %>%
+    mutate(trainingSet1931 = replace_na(trainingSet1931, 0),
+           trainingSet2811 = trainingSet1931 + replace_na(trainingSet2811, 0),
+           trainingSet4058 = trainingSet2811 + replace_na(trainingSet4058, 0)) %>%
+    relocate(class, subclass)
+  trainingPolygons %>% filter(class %in% c("conifer", "hardwood")) %>% group_by(trainingSet, class) %>% summarize(trees = length(unique(localMaximaID)), .groups = "drop") %>%
+    pivot_wider(names_from = "class", values_from = "trees") %>%
+    mutate(conifer = cumsum(conifer), 
+           hardwood = cumsum(hardwood),
+           total = conifer + hardwood)
+
+  trainingPixelDistribution = trainingData %>% group_by(polygon) %>%
+    summarize(subclass = classification[1], pixels = n(), .groups = "drop") %>%
+    mutate(subclass = factor(subclass, levels = c("conifer", "conifer shadow", "conifer deep shadow", "hardwood", "hardwood shadow", "hardwood deep shadow", "brown tree", "grey tree", "snag shadow", "snag deep shadow", "bare", "bare shadow", "shrub shadow", "shrub deep shadow", "gap")),
+           class = forcats::fct_collapse(subclass, conifer = c("conifer", "conifer shadow", "conifer deep shadow"), hardwood = c("hardwood", "hardwood shadow", "hardwood deep shadow"), snag = c("brown tree", "grey tree", "snag shadow", "snag deep shadow"), `non-tree` = c("bare", "bare shadow"), shrub = c("shrub shadow", "shrub deep shadow"), other = "gap"),
+           trainingSet = if_else(polygon <= (1931 + 20), 1931, if_else(polygon <= (2811 + 20), 2811, 4058))) %>%
+    group_by(trainingSet, subclass) %>%
+    summarize(class = class[1], pixels = sum(pixels), .groups = "drop") %>%
+    pivot_wider(names_from = "trainingSet", names_prefix = "trainingSet", values_from = "pixels") %>%
+    mutate(trainingSet1931 = replace_na(trainingSet1931, 0),
+           trainingSet2811 = trainingSet1931 + replace_na(trainingSet2811, 0),
+           trainingSet4058 = trainingSet2811 + replace_na(trainingSet4058, 0)) %>%
+    relocate(class, subclass)
+
+  yLimits = rev(c("conifer", "hardwood", "snag", "non-tree", "shrub", "other"))
+  #yLimits = rev(c("conifer", "conifer shadow", "conifer deep shadow", "hardwood", "hardwood shadow", "hardwood deep shadow", "brown tree", "grey tree", "snag shadow", "snag deep shadow", "bare", "bare shadow", "shrub shadow", "shrub deep shadow", "gap")) # subclass
+  ggplot() +
+    geom_col(aes(x = trainingSet1931, y = class, fill = subclass, group = subclass), trainingPolygonDistribution) +
+    coord_cartesian(xlim = c(0, 2500)) +
+    labs(x = "training polygons", y = NULL, fill = NULL, title = "a) 1931 polygon dataset (952 trees)") +
+    scale_y_discrete(limits = yLimits) +
+  ggplot() +
+    geom_col(aes(x = trainingSet2811, y = class, fill = subclass, group = subclass), trainingPolygonDistribution) +
+    coord_cartesian(xlim = c(0, 2500)) +
+    labs(x = "training polygons", y = NULL, fill = NULL, title = "b) 2811 polygon dataset (1385 trees)") +
+    scale_y_discrete(labels = NULL, limits = yLimits) +
+  ggplot() +
+    geom_col(aes(x = trainingSet4058, y = class, fill = subclass, group = subclass), trainingPolygonDistribution) +
+    coord_cartesian(xlim = c(0, 2500)) +
+    labs(x = "training polygons", y = NULL, fill = NULL, title = "c) 4058 polygon dataset (1786 trees)") +
+    scale_y_discrete(labels = NULL, limits = yLimits) +
+  ggplot() +
+    geom_col(aes(x = trainingSet1931, y = class, fill = subclass, group = subclass), trainingPixelDistribution) +
+    coord_cartesian(xlim = c(0, 200000)) +
+    guides(fill = "none") +
+    labs(x = "training pixels", y = NULL, fill = NULL, title = "d) 1931 polygon dataset") +
+    scale_x_continuous(labels = scales::comma) +
+    scale_y_discrete(limits = yLimits) +
+  ggplot() +
+    geom_col(aes(x = trainingSet2811, y = class, fill = subclass, group = subclass), trainingPixelDistribution) +
+    coord_cartesian(xlim = c(0, 200000)) +
+    guides(fill = "none") +
+    labs(x = "training pixels", y = NULL, fill = NULL, title = "e) 2811 polygon dataset") +
+    scale_x_continuous(labels = scales::comma) +
+    scale_y_discrete(labels = NULL, limits = yLimits) +
+  ggplot() +
+    geom_col(aes(x = trainingSet4058, y = class, fill = subclass, group = subclass), trainingPixelDistribution) +
+    coord_cartesian(xlim = c(0, 200000)) +
+    guides(fill = "none") +
+    labs(x = "training pixels", y = NULL, fill = NULL, title = "f) 4058 polygon dataset") +
+    scale_x_continuous(labels = scales::comma) +
+    scale_y_discrete(labels = NULL, limits = yLimits) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout(nrow = 2, ncol = 3, guides = "collect") &
+    # scale_fill_manual(breaks = c("conifer", "hardwood", "snag", "non-tree", "shrub", "other"), values = c("forestgreen", "red2", "grey70", "tan", "yellowgreen", "grey20")) # classes
+    scale_fill_manual(breaks = c("conifer", "conifer shadow", "conifer deep shadow", "hardwood", "hardwood shadow", "hardwood deep shadow", "brown tree", "grey tree", "snag shadow", "snag deep shadow", "bare", "bare shadow", "shrub shadow", "shrub deep shadow", "gap"),
+                      values = c("forestgreen", "#117811", "darkgreen", "red2", "red3", "firebrick", "brown", "grey70", "grey40", "grey20", "tan", "#9e8259", "yellowgreen", "#66991a", "purple4")) # subclasses
 }
 
 

@@ -1,22 +1,24 @@
 jobStartTime = Sys.time()
 source("trees/segmentation/treetops.R")
+treetopOptions$setTreetopStandIDs = FALSE
 
 localMaximaFileNames = list.files(localMaximaPath, "\\.gpkg$")
 
 chunkIndex = 5 # 561 tiles -> chunks, ~2 GB DDR @ 5.5 GB/s per job
-chunkSize = 128 # ~40 minutes, 9900X
+chunkSize = 128 # ~40 minutes/chunk with five concurrent jobs, 9900X
 
 startIndex = chunkSize * (chunkIndex - 1) + 1
 endIndex = min(chunkSize * chunkIndex, length(localMaximaFileNames))
 localMaximaFileNames = localMaximaFileNames[startIndex:endIndex]
 
 treetopRandomForest = readRDS("trees/segmentation/treetopRandomForest vsurf 103.14 s04200w06840 + s4200+s04230w06810.Rds")
+treetopsPath = file.path(candidateTreetopsPath, "rf")
 
 cat(paste0("Processing chunk ", chunkIndex, " (indices ", startIndex, ":", endIndex, ") with ", length(localMaximaFileNames), " tiles..."))
 for (localMaximaFileName in localMaximaFileNames)
 {
   tileName = tools::file_path_sans_ext(localMaximaFileName)
-  treetopsFilePath = file.path(candidateTreetopsPath, "rf", paste0(tileName, ".gpkg"))
+  treetopsFilePath = file.path(treetopsPath, "rf", paste0(tileName, ".gpkg"))
   if (file.exists(treetopsFilePath))
   {
     next
@@ -49,3 +51,19 @@ for (localMaximaFileName in localMaximaFileNames)
 
 warnings()
 cat(paste0("treetop classification ran for ", format(Sys.time() - jobStartTime), "."))
+
+
+## join stand IDs to treetops
+if (treetopOptions$setTreetopStandIDs)
+{
+  stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", quiet = TRUE, layer = "unified stands 2016"),
+                            st_crs(6557)) %>%
+    select(standID2016)
+  
+  treetopTilePaths = list.files(treetopsPath, "\\.gpkg$", full = TRUE)
+  for (treetopTilePath in treetopTilePaths)
+  {
+    tileTreetops = st_join(st_read(treetopTilePath, quiet = TRUE, layer = "treetops"), stands2016, left = TRUE)
+    st_write(tileTreetops, treetopTilePath, delete_dsn = FALSE, delete_layer = TRUE)
+  }
+}

@@ -36,8 +36,8 @@ htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
                       includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
-plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
-#plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
+#plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
 
 append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
 {
@@ -1967,6 +1967,30 @@ if (htDiaOptions$includeInvestigatory)
   plot_layout() &
     coord_cartesian(ylim = c(0, 10))
   
+  # tree counts by stand
+  treeCountsByStand2016 = trees2016 %>% group_by(StandID) %>% summarize(
+  
+  # distribution of count and measure trees by stand
+  treesByStand2016 = trees2016 %>% group_by(StandID) %>% summarize(count = sum((PlotType == "CO") * TreeCount), 
+                                                                   dbhMeasureOnly = sum(((is.na(DBH) == FALSE) & (is.na(TotalHt) & is.na(Ht2))) * TreeCount), 
+                                                                   heightAndDbhMeasure = sum(((is.na(TotalHt) == FALSE) | (is.na(Ht2) == FALSE)) * TreeCount), .groups = "drop")
+  (standSamplingIntensity = treesByStand2016 %>%
+    reframe(quantiles = c(0.25, 0.75),
+            trees = quantile(count + dbhMeasureOnly + heightAndDbhMeasure, quantiles),
+            height = quantile(heightAndDbhMeasure, quantiles)))
+  ggplot() +
+    geom_histogram(aes(x = count), treesByStand2016, binwidth = 1) +
+    labs(x = "count trees", y = "stands") +
+  ggplot() +
+    geom_histogram(aes(x = dbhMeasureOnly), treesByStand2016, binwidth = 1) +
+    labs(x = "DBH measure trees", y = NULL) +
+  ggplot() +
+    geom_histogram(aes(x = heightAndDbhMeasure), treesByStand2016, binwidth = 1) +
+    labs(x = "height measure trees", y = NULL) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout() &
+    coord_cartesian(xlim = c(0, 250), ylim = c(0, 35))
+    
   # sizes of trees and taper limits
   treeStemLimits = get_species_limits(trees2016)
   ggplot(trees2016) +
