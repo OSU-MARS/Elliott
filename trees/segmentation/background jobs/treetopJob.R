@@ -4,22 +4,22 @@ treetopOptions$setTreetopStandIDs = FALSE
 
 localMaximaFileNames = list.files(localMaximaPath, "\\.gpkg$")
 
-chunkIndex = 5 # 561 tiles -> chunks, ~2 GB DDR @ 5.5 GB/s per job
+chunkIndex = 1 # 561 tiles -> chunks, ~2 GB DDR @ 5.5 GB/s per job
 chunkSize = 128 # ~40 minutes/chunk with five concurrent jobs, 9900X
 
 startIndex = chunkSize * (chunkIndex - 1) + 1
 endIndex = min(chunkSize * chunkIndex, length(localMaximaFileNames))
 localMaximaFileNames = localMaximaFileNames[startIndex:endIndex]
 
-treetopRandomForest = readRDS("trees/segmentation/treetopRandomForest vsurf 103.14 s04200w06840 + s4200+s04230w06810.Rds")
-treetopsPath = file.path(candidateTreetopsPath, "rf")
+treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3.Rds")
+treetopsPathRandomForest = file.path(candidateTreetopsPath, "rf v1")
 
 cat(paste0("Processing chunk ", chunkIndex, " (indices ", startIndex, ":", endIndex, ") with ", length(localMaximaFileNames), " tiles..."))
 for (localMaximaFileName in localMaximaFileNames)
 {
   tileName = tools::file_path_sans_ext(localMaximaFileName)
-  treetopsFilePath = file.path(treetopsPath, "rf", paste0(tileName, ".gpkg"))
-  if (file.exists(treetopsFilePath))
+  treetopsFilePathRandomForest = file.path(treetopsPathRandomForest, paste0(tileName, ".gpkg"))
+  if (file.exists(treetopsFilePathRandomForest))
   {
     next
   }
@@ -39,18 +39,18 @@ for (localMaximaFileName in localMaximaFileNames)
   # write tile's treetop GeoPackage
   tileTreetops = bind_rows(tileMaxima %>% filter(tileMaxima$treetop == "yes"), tileMergePoints$treetops) %>%
     mutate(maxima = replace_na(maxima, as.integer(1)), sourceIDs = replace_na(maxima, as.integer(1)))
-  writeVector(vect(tileTreetops, crs = tileCrs, geom = c("x", "y")), treetopsFilePath, layer = "treetops", insert = TRUE, overwrite = TRUE)
+  writeVector(vect(tileTreetops, crs = tileCrs, geom = c("x", "y")), treetopsFilePathRandomForest, layer = "treetops", insert = TRUE, overwrite = TRUE)
   
-  writeVector(vect(tileMaxima %>% filter(tileMaxima$treetop == "merge"), crs = tileCrs, geom = c("x", "y")), treetopsFilePath, layer = "merge points", insert = TRUE, overwrite = TRUE)
+  writeVector(vect(tileMaxima %>% filter(tileMaxima$treetop == "merge"), crs = tileCrs, geom = c("x", "y")), treetopsFilePathRandomForest, layer = "merge points", insert = TRUE, overwrite = TRUE)
   
   noisePoints = vect(tileMaxima %>% filter(treetop == "noise"), crs = tileCrs, geom = c("x", "y"))
-  writeVector(noisePoints, treetopsFilePath, layer = "noise points", insert = TRUE, overwrite = TRUE)
+  writeVector(noisePoints, treetopsFilePathRandomForest, layer = "noise points", insert = TRUE, overwrite = TRUE)
   maybeNoisePoints = vect(tileMaxima %>% filter(treetop == "maybe noise"), crs = tileCrs, geom = c("x", "y"))
-  writeVector(maybeNoisePoints, treetopsFilePath, layer = "maybe noise points", insert = TRUE, overwrite = TRUE)
+  writeVector(maybeNoisePoints, treetopsFilePathRandomForest, layer = "maybe noise points", insert = TRUE, overwrite = TRUE)
 }
 
 warnings()
-cat(paste0("treetop classification ran for ", format(Sys.time() - jobStartTime), "."))
+cat(paste0("treetop clustered random forest classification ran for ", format(Sys.time() - jobStartTime), "."))
 
 
 ## join stand IDs to treetops
@@ -60,7 +60,7 @@ if (treetopOptions$setTreetopStandIDs)
                             st_crs(6557)) %>%
     select(standID2016)
   
-  treetopTilePaths = list.files(treetopsPath, "\\.gpkg$", full = TRUE)
+  treetopTilePaths = list.files(treetopsPathRandomForest, "\\.gpkg$", full = TRUE)
   for (treetopTilePath in treetopTilePaths)
   {
     tileTreetops = st_join(st_read(treetopTilePath, quiet = TRUE, layer = "treetops"), stands2016, left = TRUE)
