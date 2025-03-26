@@ -18,6 +18,7 @@ options(cli.progress_format_iterator = "{cli::pb_bar} {cli::pb_percent} | cross 
 theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), 
                              legend.title = element_text(size = 10),
                              panel.border = element_blank(), 
+                             plot.subtitle = element_text(size = 9),
                              plot.title = element_text(size = 10, vjust = 0.5),
                              plot.title.position = "plot"))
 plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
@@ -28,6 +29,7 @@ plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "
 treetopOptions = tibble(fitRandomForest = FALSE,
                         includeInvestigatory = FALSE,
                         includeSetup = FALSE,
+                        setTreetopStandIDs = FALSE, # for treetopJob.R
                         folds = 2,
                         repetitions = 25,
                         neighborhoodBufferWidth = 25, # in CRS units, so feet
@@ -326,13 +328,14 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
     
     treetopsFromMergePoints = mergePointsInOnTileClusters %>% # still grouped by mergeClusterNumber
       filter(clusterPoints > 1) %>% # exclude singletons
-      summarize(id = min(if_else(tile == centroidTile[1], id, NA_integer_), na.rm = TRUE), # all clusters should have at least one merge point in tileMaxima
+      summarize(treeID = min(if_else(tile == centroidTile[1], id, NA_integer_), na.rm = TRUE), # all clusters should have at least one merge point in tileMaxima
                 tile = centroidTile[1],
                 sourceID = if_else(length(unique(sourceID)) == 1, sourceID[1], as.integer(0)), 
                 x = clusterCentroidX[1],
                 y = clusterCentroidY[1],
                 radius = max(radius), dsmZ = clusterCentroidDsmZ[1], cmmZ = mean(cmmZ), height = mean(height),
-                maxima = n(),
+                mergePoints = n(),
+                mergePointsOnTile = sum(tile == centroidTile[1]),
                 # leave ring statistics unpopulated as they're not well defined for treetops obtained from merge clusters
                 sourceIDs = length(unique(sourceID)), 
                 mergeClusterNumber = mergeClusterNumber[1],
@@ -443,7 +446,7 @@ get_treetop_accuracy = function(predicted, validationData)
 }
 
 # default to minimum height of 1 m
-get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima", minimumHeightInM = 1, acceptedTileName = NULL, localMaximaPath = localMaximaDsmPath, acceptedTreetopsPath = acceptedTreetopsDsmPath)
+get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima", minimumHeightInM = 1, acceptedTileName = NULL, localMaximaPath = localMaximaDsmPath, acceptedTreetopsPath = acceptedTreetopsDsmPath, returnNullIfNoFile = FALSE)
 {
   #tileName = "s04200w06840"
   #acceptedTileName = "s04200w06840 cmm"
@@ -452,14 +455,18 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
   #localMaximaPath = localMaximaChmCmmPath
   
   localMaximaFilePath = file.path(localMaximaPath, paste0(tileName, ".gpkg"))
+  if (returnNullIfNoFile & (file.exists(localMaximaFilePath) == FALSE))
+  {
+    return(NULL)
+  }
   localMaxima = st_read(localMaximaFilePath, layer = localMaximaLayer, quiet = TRUE)
   
   # use minimumHeight to exclude groundcover maxima and maxima from sensor noise or error
   # Height is still in English units at this point so convert minimumHeight from metric.
   # For now, also exclude treetop candidates with so few adjacent points ring 1 or ring 2 has no data since it's 1) it's difficult to tell if these are maxima, 2) it's unlikely they're actually maxima, and 3) these likely comprise < 0.01% of maximas.
-  localMaximaUnits = st_crs(localMaxima, parameters = TRUE)$units_gdal
+  localMaximaCrsParameters = st_crs(localMaxima, parameters = TRUE)
   minimumHeightInCrsUnits = minimumHeightInM
-  if (localMaximaUnits == "foot")
+  if (localMaximaCrsParameters$units_gdal == "foot")
   {
     minimumHeightInCrsUnits = 3.28084 * minimumHeightInM
   }
@@ -468,7 +475,7 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
   localMaxima %<>% filter((height >= minimumHeightInCrsUnits) & (is.na(ring1mean) == FALSE) & (is.na(ring2mean) == FALSE))
   
   # convert to metric
-  if (localMaximaUnits == "foot")
+  if (localMaximaCrsParameters$units_gdal == "foot")
   {
     localMaxima$radius = 0.3048 * localMaxima$radius
     localMaxima$dsmZ = 0.3048 * localMaxima$dsmZ
@@ -504,12 +511,14 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
   localMaxima$dsmSlope = localMaximaSlopeAspect$dsmSlope
   localMaxima$cmmSlope3 = localMaximaSlopeAspect$cmmSlope3
   
+  localMaximaCrs = crs(localMaxima) # capture CRS for callers needing to rebuild sf geometry later
   localMaximaXY = st_coordinates(localMaxima)[, c("X", "Y")]
   localMaxima = as_tibble(localMaxima) %>% 
     mutate(x = localMaximaXY[, "X"], 
            y = localMaximaXY[, "Y"], 
            uniqueID = 1000000 * as.integer(str_c(str_sub(tileName, 2, 6), str_sub(tileName, 8, 12))) + localMaxima$id,
            uniqueMergeClusterID = 1000000 * as.integer(str_c(str_sub(tileName, 2, 6), str_sub(tileName, 8, 12))) + localMaxima$mergeClusterID)
+  attributes(localMaxima)$crs = localMaximaCrs
   
   if (is.null(acceptedTileName))
   {
@@ -534,11 +543,19 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
     isTreetopKnn = tibble(index = isTreetopKnn$nn.index[, 1], distance = isTreetopKnn$nn.dist[, 1]) %>% filter(distance < 0.1) # assume any top farther away is a merge top and thus not to be marked as a single top
     localMaxima$treetop[isTreetopKnn$index] = "yes"
   }
-  if ("merge treetops" %in% availableTruthLayers$name)
+  
+  hasMergePoints = "merge points" %in% availableTruthLayers$name
+  hasMergeTreetops = "merge treetops" %in% availableTruthLayers$name # backwards compatibility
+  if (hasMergePoints | hasMergeTreetops)
   {
+    if (hasMergePoints & hasMergeTreetops)
+    {
+      stop(paste0("'", acceptedTreetopsFilePath, "' has a 'merge points' layer as well as a 'merge treetops' layer. Don't know which to use."))
+    }
+
     # for now, assume dataset consistency checking ensures consistent merge clustering
     # Cross checking of merge points against treetops distanced from nearest local maxima can be implemented if needed.
-    mergePoints = st_read(acceptedTreetopsFilePath, layer = "merge treetops", quiet = TRUE)
+    mergePoints = st_read(acceptedTreetopsFilePath, layer = if_else(hasMergePoints, "merge points", "merge treetops"), quiet = TRUE)
     if ((is.null(acceptedTreetopsBelowMinimumHeight) == FALSE) & (nrow(acceptedTreetopsBelowMinimumHeight) > 0))
     {
       treesBelowMinimumHeightByID = unique(acceptedTreetopsBelowMinimumHeight$treeID)
@@ -811,11 +828,17 @@ get_treetop_predictors = function(treetopEligibleMaxima)
   return(treetopPredictors)
 }
 
-unnest_cv_accuracy_by_height = function(crossValidatedAccuracy)
+make_compound_crs = function(projectedEpsg, verticalEpsg)
 {
-  return(unnest(crossValidatedAccuracy %>% select(repetition, fold, overallAccuracyByHeight), cols = overallAccuracyByHeight) %>% 
-           mutate(meanN = n / max(repetition)))
+  projectedCrs = st_crs(projectedEpsg)
+  projectedCrsName = str_extract(projectedCrs$wkt, "PROJCRS\\[\"([A-Za-z0-9_\\[\\]\\(\\){}<=>\\.,:;\\+\\- #%&'*^/\\@|°]+)", group = 1) # <quoted Latin text> except <doublequote symbol>, https://docs.ogc.org/is/18-010r11/18-010r11.pdf
+  verticalCrs = st_crs(verticalEpsg)
+  verticalCrsName = str_extract(verticalCrs$wkt, "VERTCRS\\[\"([A-Za-z0-9_\\[\\]\\(\\){}<=>\\.,:;\\+\\- #%&'*^/\\@|°]+)", group = 1)
+  
+  compoundWkt = paste0("COMPOUNDCRS[\"", projectedCrsName, " + ", verticalCrsName, "\",\n    ", projectedCrs$wkt, ",\n    ", verticalCrs$wkt, "]")
+  return(st_crs(compoundWkt))
 }
+
 
 ## treetop dataset + surrounding context
 # 15 tile load (2.6M maxima, single threaded): ~2m 35s 9900X + DDR5-5600
@@ -2077,7 +2100,7 @@ if (treetopOptions$includeSetup)
     singleTopsMatched$height = localMaxima$height[singleTopMatching$maximaIndex] # update height and radius to new surface
     singleTopsMatched$radius = localMaxima$radius[singleTopMatching$maximaIndex]
     # flow through remaining fields: notes, mergePoints (1, by definition), mergePointsOnTile (also 1)
-    singleTopsMatched$nearestNeighborDistance = NA # TBD what to do here, for now field is retained by cleared to block flow of data that's no longer valid
+    singleTopsMatched$nearestNeighborDistance = NULL # TBD what to do here, for now field is retained by cleared to block flow of data that's no longer valid
   
     # transfer merge points as best able given conflicts
     mergePointsXyh = bind_cols(st_coordinates(mergePoints)[, c("X", "Y")], H = mergePoints$height)
@@ -2097,7 +2120,7 @@ if (treetopOptions$includeSetup)
     mergePointsMatched$id = localMaxima$id[mergePointMatching$maximaIndex]
     mergePointsMatched$height = localMaxima$height[mergePointMatching$maximaIndex]
     # mergePointsMatched$clusterID is needed later for merge top regeneration and cannot be updated or cleared here
-    mergePointsMatched$nearestNeighborDistance = NA
+    mergePointsMatched$nearestNeighborDistance = NULL
 
     # transfer noise points as best able given conflicts
     # local maxima can be also be designated both treetops and noise points

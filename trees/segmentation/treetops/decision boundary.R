@@ -3,7 +3,7 @@ library(rsample) # blocking by merge cluster not needed for radius accuracy asse
 
 handlers(global = TRUE)
 handlers("cli")
-plan(multisession, workers = 8) # no gain for form selection with vfold_cv() but effective for best fit searches
+plan(multisession, workers = 0.5 * future::availableCores()) # no gain for form selection with vfold_cv() but effective for best fit searches and classifying treetops in tiles
 
 fit_radius_power = function(maximaData, startingParameters, folds = treetopOptions$folds, repetitions = treetopOptions$repetitions)
 {
@@ -155,6 +155,12 @@ rename_vfold_cv_ids = function(splitsAndFits)
 #            -0.15315471 + 0.04290902 h^0.97412857                        0.866461
 #            -0.14833223 + 0.04001325 h^0.98906210                        0.866461
 #            -0.14567118 + 0.03973732 h^0.99257187                        0.866372
+#
+#             0.11816692 + 0.03506441 h^0.97880166                        0.861297
+#             0.11812274 + 0.04008985 h^0.93729610                        0.861040
+#             0.15394049 + 0.03312562 h^0.98698206                        0.860773
+#             0.15713721 + 0.03580347 h^0.95656241                        0.860717
+#             0.17222569 + 0.03045372 h^1.00218924                        0.860650
 # PRELIMINARY: change from treetopDataChm and treetopDataCmm to acceptedTreetops46chm and acceptedTreetops46cmm if/when those layers are manually reviewed and editied.
 with_progress({
   progressBar = progressor(steps = 100) # 6m for 100 iterations @ 8 workers
@@ -190,7 +196,8 @@ with_progress({
   progressBar = progressor(steps = 100)
   cmmFits = future_map(1:100, function(iteration)
   {
-    cmmFitPower = optim(par = c(-0.15, 0.04, 0.98) + c(0.01, 0.001, 0.01) * runif(3), method = "BFGS", control = list(fnscale = -1, trace = 0), fn = function(coefficients)
+    #cmmFitPower = optim(par = c(-0.15, 0.04, 0.98) + c(0.01, 0.001, 0.01) * runif(3), method = "BFGS", control = list(fnscale = -1, trace = 0), fn = function(coefficients)
+    cmmFitPower = optim(par = c(0.2, 0.03, 0.98) + c(0.01, 0.001, 0.01) * runif(3), method = "BFGS", control = list(fnscale = -1, trace = 0), fn = function(coefficients)
     {
       return(get_radius_accuracy_power(treetopDataCmm, coefficients))
     })
@@ -205,7 +212,7 @@ print_fits_power(cmmFits)
 if (treetopOptions$includeSetup)
 {
   powerStart = Sys.time() # ~63s, 9900X
-  radiusDsmAccuracyPower = fit_radius_power(treetopDataDsm, c(0.420, 0.038, 1))
+  radiusDsmAccuracyPower = fit_radius_power(treetopDataDsm, c(0.420, 0.033, 1.02))
   Sys.time() - powerStart
   saveRDS(radiusDsmAccuracyPower, "trees/segmentation/treetops/radius DSM power s4268 458k 2x25.Rds")
   
@@ -299,7 +306,7 @@ if (treetopOptions$includeInvestigatory)
 if (treetopOptions$includeSetup)
 {
   powerStart = Sys.time() # ~6.5m, 9900X
-  radiusChmAccuracyPower = fit_radius_power(treetopDataChm, c(0.44, 0.05, 0.94))
+  radiusChmAccuracyPower = fit_radius_power(treetopDataChm, c(0.48, 0.11, 0.65))
   Sys.time() - powerStart
   #saveRDS(radiusChmAccuracyPower, "trees/segmentation/treetops/radius CHM power s4268 458k 2x25.Rds")
   
@@ -323,9 +330,9 @@ if (treetopOptions$includeSetup)
 if (treetopOptions$includeSetup)
 {
   powerStart = Sys.time() # ~58s, 9900X
-  radiusCmmAccuracyPower = fit_radius_power(treetopDataCmm, c(0.1, 0.04, 0.9))
+  radiusCmmAccuracyPower = fit_radius_power(treetopDataCmm, c(-0.15, 0.04, 0.98))
   Sys.time() - powerStart
-  #saveRDS(radiusCmmAccuracyPower, "trees/segmentation/treetops/radius CMM power s4268 458k 2x25.Rds")
+  saveRDS(radiusCmmAccuracyPower, "trees/segmentation/treetops/radius CMM power s4268 458k 2x25.Rds")
   
   quadraticStart = Sys.time() # ~1.9m, 9900X
   radiusCmmAccuracyQuadratic = fit_radius_quadratic(treetopDataCmm, c(0.420, 0.0374, -0.00005))
@@ -339,4 +346,119 @@ if (treetopOptions$includeSetup)
     reframe(a0 = range(para0), a1 = range(para1), b1 = range(parb1))
   radiusCmmAccuracyQuadratic %>% unnest_wider(col = "fit") %>% unnest_wider(col = "par", names_sep = "") %>%
     reframe(a0 = range(para0), a1 = range(para1), a2 = range(para2))
+}
+
+
+## classify local maxima
+localMaximaTilePaths = list.files(localMaximaChmCmmPath, "\\.gpkg$", full.names = TRUE)
+radiusTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/radius"
+
+minimumHeightInM = 1
+
+stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", quiet = TRUE, layer = "unified stands 2016"),
+                          make_compound_crs(6557, 8228)) %>% # keep in sync with same code in treetopJob.R
+  select(standID2016)
+
+treetopStartTime = Sys.time() # 7m21s @ 8 workers, 5m56s @ 12 workers, 9900X
+with_progress({
+  progressBar = progressor(steps = length(localMaximaTilePaths))
+  radiusTreetops = bind_rows(future_map(localMaximaTilePaths, function(localMaximaTilePath)
+  {
+    treetopsDsm = st_join(st_read(localMaximaTilePath, quiet = TRUE, layer = "localMaximaDsm") %>% select(tile, id, height, radius) %>%
+                            filter(is.na(height) == FALSE, # exclude local maxima along north and west edges of DTM
+                                   0.3048 * height >= minimumHeightInM, 
+                                   0.3048 * radius > 0.42644864 + 0.03226514 * (0.3048 * height)^1.02543385),
+                          stands2016, left = TRUE) %>%
+      rename(treeID = id)
+    
+    treetopsChm = st_join(st_read(localMaximaTilePath, quiet = TRUE, layer = "localMaximaChm") %>% select(tile, id, height, radius) %>%
+                            filter(is.na(height) == FALSE,
+                                   0.3048 * height >= minimumHeightInM, 
+                                   0.3048 * radius > 0.51709010 + 0.11263928 * (0.3048 * height)^0.67990521),
+                          stands2016, left = TRUE) %>%
+      rename(treeID = id)
+    
+    treetopsCmm = st_join(st_read(localMaximaTilePath, quiet = TRUE, layer = "localMaximaCmm") %>% 
+                            mutate(is.na(height) == FALSE, # exclude local maxima along north and west edges of DTM
+                                   dsmHeight = height,
+                                   height = dsmHeight + cmmZ - dsmZ) %>%
+                            select(tile, id, height, radius, dsmHeight) %>%
+                            filter(is.na(height) == FALSE,
+                                   0.3048 * height >= minimumHeightInM, 
+                                   0.3048 * radius > -0.22250373 + 0.05153255 * (0.3048 * height)^0.93888880),
+                                   #0.3048 * radius > 0.15370334 + 0.03378425 * (0.3048 * height)^0.97994540),
+                          stands2016, left = TRUE) %>%
+      rename(treeID = id)
+    #tibble(dsm = nrow(treetopsDsm), chm = nrow(treetopsChm), cmm = nrow(treetopsCmm))
+    
+    tileFile = basename(localMaximaTilePath)
+    treetopTilePath = file.path(radiusTreetopsPath, tileFile)
+    st_write(treetopsDsm, treetopTilePath, layer = "treetopsDsm", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    st_write(treetopsChm, treetopTilePath, layer = "treetopsChm", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    st_write(treetopsCmm, treetopTilePath, layer = "treetopsCmm", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    
+    progressBar()
+    
+    tileName = tools::file_path_sans_ext(tileFile)
+    return(bind_rows(st_drop_geometry(treetopsDsm) %>% mutate(heightClassInM = round(0.3048 * height)) %>% group_by(standID2016, heightClassInM) %>%
+                       summarize(method = "DSM radius", tile = tile[1], treetops = n(), .groups = "drop"),
+                     st_drop_geometry(treetopsChm) %>% mutate(heightClassInM = round(0.3048 * height)) %>% group_by(standID2016, heightClassInM) %>%
+                       summarize(method = "CHM radius", tile = tile[1], treetops = n(), .groups = "drop"),
+                     st_drop_geometry(treetopsCmm) %>% mutate(heightClassInM = round(0.3048 * height)) %>% group_by(standID2016, heightClassInM) %>%
+                       summarize(method = "CMM radius", tile = tile[1], treetops = n(), .groups = "drop")) %>%
+            relocate(method, tile, standID2016, heightClassInM))
+  }, .options = furrr_options(seed = TRUE))) # unclear why seed warnings occur as nothing here's randomized but it's handled just in case
+})
+Sys.time() - treetopStartTime
+radiusTreetops %<>% mutate(method = factor(method, levels = c("DSM", "CHM", "CMM")))
+
+#writexl::write_xlsx(radiusTreetops, file.path(radiusTreetopsPath, "standsByHeightClass.xlsx")) # 4.8 MB DSM only, 17.7 MB all surfaces
+
+radiusTreetops %>% group_by(method) %>%
+  summarize(tiles = length(unique(tile)), stands = length(unique(standID2016)), maxHeightInM = max(heightClassInM), 
+            elliottTreetops1m = sum(if_else(is.na(standID2016) | (standID2016 >= 4000), 0, treetops)),
+            elliottTreetops5m = sum(if_else(is.na(standID2016) | (standID2016 >= 4000) | (heightClassInM < 5), 0, treetops)), 
+            totalTreetops1m = sum(treetops), totalTreetops5m = sum(if_else(heightClassInM >= 5, treetops, 0)))
+
+if (treetopOptions$includeInvestigatory)
+{
+  # full area distribution: all 561 tiles
+  ggplot() +
+    geom_histogram(aes(y = heightClassInM, weight = treetops, alpha = heightClassInM > 5), radiusTreetops %>% filter(surface == "DSM"), binwidth = 1, width = 1) +
+    labs(x = "treetops", y = "height above ground, m", alpha = NULL, title = paste(plotLetters[1], "DSM radius")) +
+  ggplot() +
+    geom_histogram(aes(y = heightClassInM, weight = treetops, alpha = heightClassInM > 5), radiusTreetops %>% filter(surface == "CHM"), binwidth = 1, width = 1) +
+    labs(x = "treetops", y = NULL, alpha = NULL, title = paste(plotLetters[2], "CHM radius")) +
+  ggplot() +
+    geom_histogram(aes(y = heightClassInM, weight = treetops, alpha = heightClassInM > 5), radiusTreetops %>% filter(surface == "CMM"), binwidth = 1, width = 1) +
+    labs(x = "treetops", y = NULL, alpha = NULL, title = paste(plotLetters[3], "CMM radius")) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout() &
+    guides(alpha = "none") &
+    scale_alpha_manual(breaks = c(TRUE, FALSE), values = c(1, 0.5)) &
+    coord_trans(x = scales::pseudo_log_trans(sigma = 10), xlim = c(0, 900000), ylim = c(0, 110)) &
+    scale_x_continuous(breaks = c(0, 10, 100, 1000, 10000, 100000, 1000000), labels = scales::comma, minor_breaks = c(10 * 2:9, 100 * 2:9, 1000 * 2:9, 10000 * 2:9, 100000 * 2:9)) &
+    scale_y_continuous(breaks = seq(0, 110, by = 10), expand = c(0, 1))
+  
+  # local maxima distribution on current tile
+  dsm = st_read(localMaximaTilePath, quiet = TRUE, layer = "localMaximaDsm")
+  chm = st_read(localMaximaTilePath, quiet = TRUE, layer = "localMaximaChm")
+  cmm = st_read(localMaximaTilePath, quiet = TRUE, layer = "localMaximaCmm") %>% mutate(dsmHeight = height, height = dsmHeight + cmmZ - dsmZ)
+  tibble(dsm = nrow(dsm), chm = nrow(chm), cmm = nrow(cmm))
+  
+  ggplot() +
+    geom_histogram(aes(y = heightClassInM, alpha = heightClassInM > 5), dsm %>% mutate(heightClassInM = round(0.3048 * height)), binwidth = 1) +
+    labs(x = "local maxima", y = "height above ground, m", alpha = NULL, title = paste(plotLetters[1], "DSM")) +
+  ggplot() +
+    geom_histogram(aes(y = heightClassInM, alpha = heightClassInM > 5), chm %>% mutate(heightClassInM = round(0.3048 * height)), binwidth = 1) +
+    labs(x = "local maxima", y = NULL, alpha = NULL, title = paste(plotLetters[2], "CHM")) +
+  ggplot() +
+    geom_histogram(aes(y = heightClassInM, alpha = heightClassInM > 5), cmm %>% mutate(heightClassInM = round(0.3048 * height)), binwidth = 1) +
+    labs(x = "local maxima", y = NULL, alpha = NULL, title = paste(plotLetters[3], "CMM")) +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout() &
+    guides(alpha = "none") &
+    scale_alpha_manual(breaks = c(TRUE, FALSE), values = c(1, 0.5)) &
+    scale_x_continuous(labels = scales::comma) &
+    scale_y_continuous(breaks = seq(0, 100, by = 10))
 }

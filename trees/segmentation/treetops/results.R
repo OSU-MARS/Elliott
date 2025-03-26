@@ -51,6 +51,63 @@ plot_treetop_probability = function(treetopProbability, fAtH = function(h) { ret
            theme(axis.title.x = element_text(vjust = -0.3)))
 }
 
+unnest_binary_confusion_median = function(crossValidatedAccuracy)
+{
+  confusion = crossValidatedAccuracy %>% select(repetition, fold) %>% mutate(confusion = vector(mode = "list", length = n()))
+  for (row in 1:nrow(crossValidatedAccuracy))
+  {
+    confusion$confusion[[row]] = crossValidatedAccuracy$confusionMatrix[[row]]$table
+  }
+  confusion %<>% unnest_wider(col = confusion)
+  if (("no" %in% names(confusion)) == FALSE)
+  {
+    # binary matrix from radius classification
+    confusion %<>% rename(no = `FALSE`, yes = `TRUE`)
+  }
+  confusion %<>% pivot_longer(cols = c("no", "yes"), names_to = "prediction", values_to = "reference") %>%
+    mutate(reference_no = reference[, 1], reference_yes = reference[, 2]) %>%
+    select(-reference) %>%
+    pivot_longer(cols = c("reference_no", "reference_yes"), names_prefix = "reference_", names_to = "reference", values_to = "n") %>%
+    group_by(repetition, fold) %>%
+    mutate(fraction = n / sum(n)) %>%
+    ungroup() %>%
+    mutate(prediction = forcats::fct_recode(factor(prediction, levels = c("yes", "no")), treetop = "yes", other = "no"),
+           reference = forcats::fct_recode(factor(reference, levels = c("yes", "no")), treetop = "yes", other = "no"))
+  
+  confusionMedian = confusion %>% group_by(prediction, reference) %>%
+    summarize(fraction = median(fraction), .groups = "drop")
+  return(confusionMedian)
+}
+
+unnest_cv_accuracy_by_height = function(crossValidatedAccuracy)
+{
+  return(unnest(crossValidatedAccuracy %>% select(repetition, fold, overallAccuracyByHeight), cols = overallAccuracyByHeight) %>% 
+           mutate(meanN = n / max(repetition)))
+}
+
+unnest_quinary_confusion_median = function(crossValidatedAccuracy)
+{
+  confusion = crossValidatedAccuracy %>% select(repetition, fold) %>% mutate(confusion = vector(mode = "list", length = n()))
+  for (row in 1:nrow(crossValidatedAccuracy))
+  {
+    confusion$confusion[[row]] = crossValidatedAccuracy$confusionSubmatrix[[row]]$table
+  }
+  unnest_binary_confusion_medianconfusion %<>% unnest_wider(col = confusion) %>% 
+    pivot_longer(cols = c("no", "yes", "merge", "noise", "maybe noise"), names_to = "prediction", values_to = "reference") %>% 
+    mutate(reference_no = reference[, 1], reference_yes = reference[, 2], reference_merge = reference[, 3], reference_noise = reference[, 4], `reference_maybe noise` = reference[, 5]) %>%
+    select(-reference) %>%
+    pivot_longer(cols = c("reference_no", "reference_yes", "reference_merge", "reference_noise", "reference_maybe noise"), names_prefix = "reference_", names_to = "reference", values_to = "n") %>%
+    group_by(repetition, fold) %>%
+    mutate(fraction = n / sum(n)) %>%
+    ungroup() %>%
+    mutate(prediction = forcats::fct_recode(factor(prediction, levels = c("yes", "merge", "no", "noise", "maybe noise")), treetop = "yes", `merge point` = "merge", `residual noise` = "noise", other = "no", `processing artifact` = "maybe noise"),
+           reference = forcats::fct_recode(factor(reference, levels = c("yes", "merge", "no", "noise", "maybe noise")), treetop = "yes", `merge point` = "merge", `residual noise` = "noise", other = "no", `processing artifact` = "maybe noise"))
+  
+  confusionMedian = confusion %>% group_by(prediction, reference) %>%
+    summarize(fraction = median(fraction), .groups = "drop")
+  return(confusionMedian)
+}
+
 acceptedTreetops46dsm = bind_rows(st_drop_geometry(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06840.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06840"),
                                   st_drop_geometry(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06810"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
                                   st_drop_geometry(st_read(file.path(acceptedTreetopsDsmPath, "s04230w06810.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04230w06810"))
@@ -70,6 +127,11 @@ missingOrAmbiguous46dsm = pointsOfInterest46 %>% filter(notes %in% c("point clou
 missingOrAmbiguous46dsm$height = 0.3048 * terra::extract(chm46, st_coordinates(missingOrAmbiguous46dsm))[, 1] # convert to metric
 missingOrAmbiguous46dsm = st_drop_geometry(missingOrAmbiguous46dsm) %>% mutate(notes = factor(forcats::fct_collapse(factor(notes), `obscured by branch` = c("broken top obscured by branch", "reiterated leader obscured by branch", "top obscured by branch"), `obscured by noise` = c("top obscured by noise"), `local maxima absent` = c("snag lacking observable top", "top obscured by snag", "tree lacking observable top")), levels = c("obscured by branch", "obscured by noise", "local maxima absent", "point cloud ambiguous")))
 
+radiusDsmAccuracyPower = readRDS("trees/segmentation/treetops/radius DSM power s4268 458k 2x25.Rds")
+radiusChmAccuracyPower = readRDS("trees/segmentation/treetops/radius CHM power s4268 458k 2x25.Rds")
+radiusCmmAccuracyPower = readRDS("trees/segmentation/treetops/radius CMM power s4268 458k 2x25.Rds")
+randomForestAccuracy = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde 2x25 m9n3.Rds")
+
 #missingOrAmbiguous46dsm %>% group_by(notes) %>% summarize(n = n())
 #st_drop_geometry(pointsOfInterest46) %>% filter(str_starts(notes, "broken top") | (notes %in% c("broken top", "point cloud ambiguous", "reiterated leader", "reiterated leader obscured by branch", "snag lacking observable top", "top obscured by branch", "top obscured by noise", "tree lacking observable top")))
 #print(st_drop_geometry(pointsOfInterest46) %>% group_by(notes) %>% summarize(n = n()), n = 100)
@@ -84,6 +146,9 @@ localMaximaHistogramDsm = get_local_maxima_histogram(treetopDataDsm)
 missingOrAmbiguousHistogramDsm = missingOrAmbiguous46dsm %>% mutate(heightClass = round(height)) %>% group_by(heightClass, notes) %>%
   summarize(trees = n(), .groups = "drop_last")
 treetopProbabilityDsm = get_treetop_probability(treetopDataDsm)
+
+overallOmmissionRate = missingOrAmbiguous46dsm %>% group_by(notes) %>% summarize(n = n()) %>% summarize(nOmitted = sum(if_else(notes != "point cloud ambiguous", n, 0.5 * n))) %>% # absent any more accurate indication, assume trees in half of ambiguous locations
+  mutate(nTreetops = nrow(acceptedTreetops46dsm), omissionRatePct = 100 * nOmitted / (nTreetops + nOmitted))
 
 plot_local_maxima_density(localMaximaHistogramDsm) +
 plot_local_maxima_distribution(localMaximaHistogramDsm) +
@@ -128,8 +193,6 @@ treetopsByHeight = left_join(left_join(acceptedTreetops46dsm %>% mutate(heightCl
                                summarize(treetopsPerHectareCmm = n() / totalTileAreaHa),
                              by = join_by(heightClass))
 
-treetopsByHeight %>% mutate(chmFrac = treetopsPerHectareChm / treetopsPerHectareDsm, cmmFrac = treetopsPerHectareCmm / treetopsPerHectareDsm)
-
 ggplot() +
   geom_col(aes(x = treetopsPerHectareDsm, y = heightClass, alpha = heightClass >= 5, fill = "DSM"), treetopsByHeight, orientation = "y", width = 1) +
   geom_segment(aes(x = 0, y = 4.5, xend = 25, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
@@ -173,11 +236,8 @@ plot_layout(nrow = 1, widths = c(0.7, 0.7, 0.7, 1, 0.65), guides = "collect") &
   scale_y_continuous(breaks = seq(0, 90, by = 10), expand = c(0, 1)) &
   theme(legend.margin = margin())
 
-# Figure 04: DSM accuracy distribution by height
-radiusDsmAccuracyPower = readRDS("trees/segmentation/treetops/radius DSM power s4268 458k 2x25.Rds")
+# Figure 04: DSM and random forest accuracy distribution by height
 radiusDsmAccuracyPowerByHeight = unnest_cv_accuracy_by_height(radiusDsmAccuracyPower)
-
-randomForestAccuracy = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde 2x25 m9n3.Rds")
 randomForestAccuracyByHeight = unnest_cv_accuracy_by_height(randomForestAccuracy)
 
 aucByHeight = left_join(radiusDsmAccuracyPowerByHeight %>% rename(nRadius = n, radiusAccuracy = overallAccuracy) %>% select(-meanN),
@@ -232,7 +292,67 @@ plot_layout(nrow = 1, widths = c(1, 1, 0.7, 0.85), guides = "collect") &
   scale_color_gradient(breaks = c(1, 10, 100, 1000, 10000, 100000), labels = c(1, 10, 100, 1000, 10000, 100000), limits = c(1, NA), high = "#132B43", low = "#96F1FF", transform = "log10") &
   scale_y_continuous(breaks = seq(0, 90, by = 10), expand = c(0, 1))
 
-# Figure TBD: random forest variable selection and importance
+# Figure 06: confusion matrices
+rfDsmConfusionBinaryMedian = unnest_binary_confusion_median(randomForestAccuracy)
+rfDsmConfusionQuinaryMedian = unnest_quinary_confusion_median(randomForestAccuracy)
+radiusDsmConfusionMedian = unnest_binary_confusion_median(radiusDsmAccuracyPower)
+radiusChmConfusionMedian = unnest_binary_confusion_median(radiusChmAccuracyPower)
+radiusCmmConfusionMedian = unnest_binary_confusion_median(radiusCmmAccuracyPower)
+
+medianErrorBySurface = bind_rows(rfDsmConfusionBinaryMedian %>% mutate(method = "DSM forest"),
+                                 radiusDsmConfusionMedian %>% mutate(method = "DSM radius"),
+                                 radiusChmConfusionMedian %>% mutate(method = "CHM radius"),
+                                 radiusCmmConfusionMedian %>% mutate(method = "CMM radius")) %>% 
+  mutate(surface = factor(method, levels = c("DSM forest", "DSM radius", "CHM radius", "CMM radius"))) %>%
+  filter(prediction != reference) %>% 
+  group_by(surface) %>%
+  summarize(overallErrorPct = 100 * sum(fraction), netTreeCountErrorPct = 100 * abs(diff(fraction)))
+
+ggplot() +
+  geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusDsmConfusionMedian) +
+  geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), rfDsmConfusionBinaryMedian, size = 3.5) +
+  guides(fill = "none") +
+  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste("                 ", plotLetters[1], "DSM forest, merged"), subtitle = sprintf("                          %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "DSM forest")])) +
+ggplot() +
+  geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusDsmConfusionMedian) +
+  geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusDsmConfusionMedian, size = 3.5) +
+  guides(fill = "none") +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[2], "DSM radius"), subtitle = sprintf("      %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "DSM radius")])) +
+ggplot() +
+  geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusChmConfusionMedian) +
+  geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusChmConfusionMedian, size = 3.5) +
+  guides(fill = "none") +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[3], "CHM radius"), subtitle = sprintf("      %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "CHM radius")])) +
+ggplot() +
+  geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusCmmConfusionMedian) +
+  geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusCmmConfusionMedian, size = 3.5) +
+  guides(fill = "none") +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[4], "CMM radius"), subtitle = sprintf("      %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "CMM radius")])) +
+ggplot() +
+  geom_tile(aes(x = reference, y = prediction, fill = if_else(fraction > 0, fraction, NA_real_)), rfDsmConfusionQuinaryMedian) +
+  geom_text(aes(x = reference, y = prediction, label = if_else(fraction > 0, sprintf(if_else(fraction > 0.005, "%.1f%%", "%.1g%%"), 100 * fraction), "0%"), color = fraction > 0.60), rfDsmConfusionQuinaryMedian, size = 3.5) +
+  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[5], "DSM forest, unmerged"), subtitle = sprintf("     %.1f%% overall accuracy", 100 * sum((rfDsmConfusionQuinaryMedian %>% filter(prediction == reference))$fraction))) +
+  scale_x_discrete(breaks = c("treetop", "merge point", "other", "residual noise", "processing artifact"), labels = c("treetop", "merge\npoint", "other", "residual\nnoise", "processing\nartifact")) +
+  theme(legend.margin = margin(l = -150), plot.subtitle = element_text(hjust = 0.35), plot.title = element_text(hjust = 0.35)) +
+plot_annotation(theme = theme(plot.margin = margin(l = -40))) +
+plot_layout(design = "ABCD
+EEEE", heights = c(2, 3.6)) &
+  coord_fixed(ratio = 1.05) & # coord_equal() visually appears stretched due to cell labels
+  guides(color = "none") &
+  scale_color_manual(breaks = c(TRUE, FALSE), values = c("white", "black")) &
+  paletteer::scale_fill_paletteer_c("ggthemes::Blue-Teal", labels = scales::percent, limits = c(0, 1), na.value = "white") &
+  scale_y_discrete(limits = rev) &
+  theme(panel.grid.major = element_blank())
+
+plot_annotation(theme = theme(plot.margin = margin())) +
+plot_layout(nrow = 1, guides = "collect") &
+  coord_fixed(ratio = 1.05) & # coord_equal() visually appears stretched due to cell labels
+  guides(color = "none") &
+  scale_color_manual(breaks = c(TRUE, FALSE), values = c("white", "black")) &
+  paletteer::scale_fill_paletteer_c("ggthemes::Blue-Teal", labels = scales::percent, limits = c(0, 1), na.value = "white") &
+  scale_y_discrete(limits = rev)
+
+# Figure 07: random forest variable selection and importance
 globalImportance = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 global importance.Rds")
 localImportance = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 local importance.Rds")
 
@@ -317,3 +437,31 @@ stats46cmm = left_join(treetopDataCmm %>% group_by(tile, treetop) %>% summarize(
   relocate(surface, tile, `total maxima`, treetops, `single top`, `merge point`, `residual noise`, `processing artifact`, other, `maybe noise`)
 stats46cmm
 #write_xlsx(stats46cmm, "trees/segmentation/treetops/treetop CMM dataset.xlsx")
+
+
+## investigatory, prototypes
+if (treetopOptions$includeInvestigatory)
+{
+  # ranges are small so violins are uninformative
+  ggplot() +
+    geom_violin(aes(x = FALSE, y = trueNegative / total), radiusDsmConfusion, draw_quantiles = c(0.25, 0.5, 0.75)) +
+    stat_summary(aes(x = FALSE, y = trueNegative / total), radiusDsmConfusion, fun = mean, geom = "point") +
+    labs(x = NULL, y = "true negatives") +
+    ggplot() +
+    geom_violin(aes(x = TRUE, y = falseNegative / total), radiusDsmConfusion, draw_quantiles = c(0.25, 0.5, 0.75)) +
+    stat_summary(aes(x = TRUE, y = falseNegative / total), radiusDsmConfusion, fun = mean, geom = "point") +
+    labs(x = NULL, y = "false negatives") +
+    ggplot() +
+    geom_violin(aes(x = FALSE, y = falsePositive / total), radiusDsmConfusion, draw_quantiles = c(0.25, 0.5, 0.75)) +
+    stat_summary(aes(x = FALSE, y = falsePositive / total), radiusDsmConfusion, fun = mean, geom = "point") +
+    labs(x = NULL, y = "false positives") +
+    ggplot() +
+    geom_violin(aes(x = TRUE, y = truePositive / total), radiusDsmConfusion, draw_quantiles = c(0.25, 0.5, 0.75)) +
+    stat_summary(aes(x = TRUE, y = truePositive / total), radiusDsmConfusion, fun = mean, geom = "point") +
+    labs(x = NULL, y = "true positives") +
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 2, ncol = 2, guides = "collect") &
+    coord_cartesian(ylim = c(0, 1)) &
+    scale_x_discrete(labels = NULL) &
+    scale_y_continuous(labels = scales::percent)
+}
