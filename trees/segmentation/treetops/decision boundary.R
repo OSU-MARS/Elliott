@@ -350,7 +350,7 @@ if (treetopOptions$includeSetup)
 
 
 ## classify local maxima
-localMaximaTilePaths = list.files(localMaximaChmCmmPath, "\\.gpkg$", full.names = TRUE)
+localMaximaTilePaths = list.files(localMaximaPathV3, "\\.gpkg$", full.names = TRUE)
 radiusTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/radius"
 
 minimumHeightInM = 1
@@ -411,7 +411,6 @@ with_progress({
 })
 Sys.time() - treetopStartTime
 radiusTreetops %<>% mutate(method = factor(method, levels = c("DSM", "CHM", "CMM")))
-
 #writexl::write_xlsx(radiusTreetops, file.path(radiusTreetopsPath, "standsByHeightClass.xlsx")) # 4.8 MB DSM only, 17.7 MB all surfaces
 
 radiusTreetops %>% group_by(method) %>%

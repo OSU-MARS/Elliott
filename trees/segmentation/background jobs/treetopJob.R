@@ -1,82 +1,137 @@
-jobStartTime = Sys.time()
 source("trees/segmentation/treetops.R")
-treetopOptions$setTreetopStandIDs = FALSE
 
-localMaximaFileNames = list.files(localMaximaChmCmmPath, "\\.gpkg$")
+handlers(global = TRUE)
+handlers("cli")
+plan(multisession, workers = 0.5 * future::availableCores()) # workers mostly run single threaded in sf, so fine to also use treetopOptions$rangerThreads = half cores
 
-# TODO: investigate future_map() instead of chunking as 12 workers is probably fine
-chunkIndex = 5 # 561 tiles -> chunks, ~2 GB DDR @ 5.5 GB/s peak per job
-chunkSize = 128 # ~40 minutes/chunk with five concurrent jobs, 9900X
-
-startIndex = chunkSize * (chunkIndex - 1) + 1
-endIndex = min(chunkSize * chunkIndex, length(localMaximaFileNames))
-localMaximaFileNames = localMaximaFileNames[startIndex:endIndex]
-
-treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3.Rds")
-treetopsPathRandomForest = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1"
-
-cat(paste0("Processing chunk ", chunkIndex, " (indices ", startIndex, ":", endIndex, ") with ", length(localMaximaFileNames), " tiles..."))
-for (localMaximaFileName in localMaximaFileNames)
+get_tile_by_height_class = function(tileName, tileTreetops, tileMergePoints, tileNoisePoints, tileMaybeNoisePoints = NULL)
 {
-  tileName = tools::file_path_sans_ext(localMaximaFileName)
-  treetopsFilePathRandomForest = file.path(treetopsPathRandomForest, paste0(tileName, ".gpkg"))
-  if (file.exists(treetopsFilePathRandomForest))
+  tileByHeightClass = full_join(full_join(st_drop_geometry(tileTreetops) %>% mutate(heightClassInM = round(height)) %>% group_by(standID2016, heightClassInM) %>%
+                                            summarize(treetops = n(), .groups = "drop"),
+                                          st_drop_geometry(tileMergePoints)  %>% mutate(heightClassInM = round(height)) %>% group_by(standID2016, heightClassInM) %>%
+                                            summarize(mergePoints = n(), .groups = "drop"),
+                                          by = join_by(standID2016, heightClassInM)),
+                                st_drop_geometry(tileNoisePoints) %>% mutate(heightClassInM = round(height)) %>% group_by(standID2016, heightClassInM) %>%
+                                  summarize(noisePoints = n(), .groups = "drop"),
+                                by = join_by(standID2016, heightClassInM))
+  if (is.null(tileMaybeNoisePoints) == FALSE)
   {
-    next
+    tileByHeightClass %<>% full_join(st_drop_geometry(tileMaybeNoisePoints) %>% mutate(heightClassInM = round(height)) %>% group_by(standID2016, heightClassInM) %>%
+                                       summarize(maybeNoisePoints = n(), .groups = "drop"),
+                                     by = join_by(standID2016, heightClassInM))
+  } else {
+    tileByHeightClass %<>% mutate(maybeNoisePoints = 0)
   }
-  cat(paste0(tileName, "...\n"))
-
-  # load tile, also neighborhood if density predictors are used
-  tileMaxima = get_treetop_eligible_maxima(tileName) %>% filter(is.na(cmmSlope3) == FALSE) #, is.na(ring4mean) == FALSE) # s03870w06600 and s04020w07230, at least, have ring4mean NAs that fail random forest prediction on ring4delta
-  tileNeighborhood = get_treetop_eligible_neighborhood(tileName, tileMaxima)
-  tileIndices = which(tileNeighborhood$tile == tileName)
-
-  # classify local maxima
-  tileMaxima$treetop = predict(treetopRandomForest, get_treetop_predictors(tileNeighborhood) %>% filter(tile == tileName), num.threads = treetopOptions$rangerThreads)$predictions
-  tileNeighborhood$treetop = factor(NA, levels = levels(tileMaxima$treetop))
-  tileNeighborhood$treetop[tileIndices] = tileMaxima$treetop
-
-  tileMergePoints = get_merge_points(tileMaxima, tileNeighborhood)
-  tileMaxima$treetop[tileMergePoints$mergePointIndices] = "merge"
-  tileMaxima$treetop[tileMergePoints$treetopIndices] = "yes"
-
-  # write tile's treetop GeoPackage
-  tileTreetopPoints = st_as_sf(bind_rows(tileMaxima %>% filter(treetop != "no") %>% rename(treeID = id) %>% select(-mergeClusterID, -sourceID, -uniqueID, -uniqueMergeClusterID),
-                                         tileMergePoints$treetops %>% select(-mergeClusterNumber, -sourceID, -sourceIDs) %>% mutate(treetop = factor("yes"))) %>%
-                                 mutate(mergePoints = replace_na(mergePoints, as.integer(1))), 
-                               coords = c("x", "y"), crs = attributes(tileMaxima)$crs, sf_column_name = "geom") # crs attribute set by get_treetop_eligible_maxima()
-
-  st_write(tileTreetopPoints %>% filter(treetop == "yes"), treetopsFilePathRandomForest, layer = "treetops", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
-  st_write(tileTreetopPoints %>% filter(treetop == "merge"), treetopsFilePathRandomForest, layer = "merge points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
-  st_write(tileTreetopPoints %>% filter(treetop == "noise"), treetopsFilePathRandomForest, layer = "noise points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
-  if (any(tileTreetopPoints$treetop == "maybe noise"))
-  {
-    # debatable whether to write an empty layer or omit the layer entirely, for now complete omission is used
-    st_write(tileTreetopPoints %>% filter(treetop == "maybe noise"), treetopsFilePathRandomForest, layer = "maybe noise points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
-  }
+  
+  return(tileByHeightClass %>% mutate(method = factor("DSM forest"), tile = tileName,
+                                      treetops = replace_na(treetops, 0), mergePoints = replace_na(mergePoints, 0), noisePoints = replace_na(noisePoints, 0), maybeNoisePoints = replace_na(maybeNoisePoints, 0)) %>%
+           relocate(method, tile, standID2016, heightClassInM))
 }
+
+localMaximaFileNames = list.files(localMaximaPathV3, "\\.gpkg$")
+
+stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", quiet = TRUE, layer = "unified stands 2016"),
+                          make_compound_crs(6557, 8228)) %>% # for DSM v3, keep in sync with same code in treetopJob.R
+                          # st_crs(6557)) %>% # for runs against DSM v3 beta
+  select(standID2016)
+treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3.Rds") 
+forestTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1"
+
+treetopStartTime = Sys.time()
+with_progress({
+  progressBar = progressor(steps = length(localMaximaFileNames))
+  
+  forestTreetops = bind_rows(future_map(localMaximaFileNames, function(localMaximaFileName) # 46.04m with 12 workers, 9900X
+  {
+    require(ranger) # ranger apparently doesn't flow to workers for some reason, so predict() fails to resolve without this
+    
+    tileName = tools::file_path_sans_ext(localMaximaFileName)
+    tileForestTreetopsPath = file.path(forestTreetopsPath, paste0(tileName, ".gpkg"))
+    if (file.exists(tileForestTreetopsPath))
+    {
+      return(NULL)
+    }
+    cat(paste0(tileName, "...\n"))
+  
+    # load tile, also neighborhood if density predictors are used
+    tileMaxima = get_treetop_eligible_maxima(tileName) %>% filter(is.na(cmmSlope3) == FALSE) #, is.na(ring4mean) == FALSE) # s03870w06600 and s04020w07230, at least, have ring4mean NAs that fail random forest prediction on ring4delta
+    tileNeighborhood = get_treetop_eligible_neighborhood(tileName, tileMaxima)
+    tileIndices = which(tileNeighborhood$tile == tileName)
+  
+    # classify local maxima
+    tileMaxima$treetop = predict(treetopRandomForest, get_treetop_predictors(tileNeighborhood) %>% filter(tile == tileName), num.threads = treetopOptions$rangerThreads)$predictions
+    tileNeighborhood$treetop = factor(NA, levels = levels(tileMaxima$treetop)) # needed by get_merge_points()
+    tileNeighborhood$treetop[tileIndices] = tileMaxima$treetop
+  
+    # cluster treetops and update local maxima classifications
+    tileMergePoints = get_merge_points(tileMaxima, tileNeighborhood)
+    tileMaxima$treetop[tileMergePoints$singleTreetops$tileIndex] = "yes"
+    tileMaxima$treetop[tileMergePoints$mergePoints$tileIndex] = "merge"
+    tileMaxima$mergeClusterNumber = NA_integer_
+    tileMaxima$mergeClusterNumber[tileMergePoints$mergePoints$tileIndex] = tileMergePoints$mergePoints$mergeClusterNumber
+
+    if (sum(tileMaxima$treetop == "merge") != nrow(tileMergePoints$mergePoints))
+    {
+      stop("Internal consistency failure. Expected merge point clustering and single treetop revisions to result in ", nrow(tileMergePoints$mergePoints), " merge points on tile ", tileName, " but ", sum(tileMaxima$treetop == "merge"), " merge points are defined after clustering.")
+      #tileMaxima[setdiff(which(tileMaxima$treetop == "merge"), tileMergePoints$mergePoints$tileIndex), ] %>% select(-starts_with("ring"), -geom)
+    }
+    
+    # write tile's treetop GeoPackage
+    tileCrs = st_crs(attributes(tileMaxima)$crs)
+    tileTreetopPoints = st_join(st_as_sf(bind_rows(tileMaxima %>% filter(treetop != "no") %>% rename(treeID = id) %>% select(-sourceID, -uniqueID, -uniqueMergeClusterID, -starts_with("ring"), -dsmSlope, -cmmSlope3),
+                                                   tileMergePoints$mergeTreetops),
+                                         coords = c("x", "y"), crs = tileCrs, sf_column_name = "geom"), # crs attribute set by get_treetop_eligible_maxima()
+                                stands2016, left = TRUE)
+    tileTreetopsToWrite = tileTreetopPoints %>% filter(treetop %in% c("yes", "merge treetop")) %>% 
+      select(-treetop, -mergeClusterID, -mergeClusterNumber) %>% # no merge cluster ID update needed as it's the same as treeID
+      mutate(mergePoints = replace_na(mergePoints, as.integer(1)), mergePointsOnTile = replace_na(mergePointsOnTile, as.integer(1))) %>%
+      relocate(tile, treeID, height, radius, cmmZ, dsmZ, mergePoints, mergePointsOnTile, standID2016)
+    
+    tileByHeightClass = get_tile_by_height_class(tileName,
+                                                 tileTreetopsToWrite, # 1 m height classes are metric, so get summary before English unit conversion (if applicable)
+                                                 tileTreetopPoints %>% filter(treetop == "merge"), # merge, noise, and maybe noise layers aren't written with heights
+                                                 tileTreetopPoints %>% filter(treetop == "noise"), 
+                                                 tileTreetopPoints %>% filter(treetop == "maybe noise"))
+    #tileByHeightClass %>% summarize(treetops = sum(treetops), mergePoints = sum(mergePoints), noisePoints = sum(noisePoints), maybeNoisePoints = sum(maybeNoisePoints))
+    if (tileCrs$units_gdal == "foot")
+    {
+      # get_treetop_eligible_maxima() converts to metric, needs to converted back for correct write on English CRSes
+      # Could also change CRSes to metric but convention is to flow input CRS.
+      tileTreetopsToWrite$height = 3.28084 * tileTreetopsToWrite$height
+      tileTreetopsToWrite$radius = round(3.28084 * tileTreetopsToWrite$radius, 3) # debatable but, for now, assume whole number preference in surface model cell size
+      tileTreetopsToWrite$dsmZ = 3.28084 * tileTreetopsToWrite$dsmZ # debatable if DSM and CMM elevations need to flow, but they're flown for now
+      tileTreetopsToWrite$cmmZ = 3.28084 * tileTreetopsToWrite$cmmZ
+    }
+    
+    tileMergePointsToWrite = tileTreetopPoints %>% filter(treetop == "merge") %>% rename(id = treeID, clusterID = mergeClusterID) %>%
+      group_by(mergeClusterNumber) %>%
+      mutate(clusterID = min(id)) %>%
+      ungroup() %>%
+      select(id, clusterID) #, mergeClusterNumber)
+    tileNoisePointsToWrite = tileTreetopPoints %>% filter(treetop == "noise") %>% rename(id = treeID) %>% select(id)
+    tileMaybeNoisePointsToWrite = tileTreetopPoints %>% filter(treetop == "maybe noise") %>% select(treeID) %>% rename(id = treeID)
+    
+    st_write(tileTreetopsToWrite, tileForestTreetopsPath, layer = "treetops", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    st_write(tileMergePointsToWrite, tileForestTreetopsPath, layer = "merge points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    st_write(tileNoisePointsToWrite, tileForestTreetopsPath, layer = "noise points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    if (nrow(tileMaybeNoisePointsToWrite) > 0)
+    {
+      # debatable whether to write an empty layer or omit the layer entirely, for now complete omission is used
+      st_write(tileMaybeNoisePointsToWrite, tileForestTreetopsPath, layer = "maybe noise points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    }
+    
+    progressBar()
+    return(tileByHeightClass)
+  }, .options = furrr_options(seed = TRUE)))
+})
 
 warnings()
-cat(paste0("treetop clustered random forest classification ran for ", format(Sys.time() - jobStartTime), "."))
+cat(paste0("treetop clustered random forest classification ran for ", format(Sys.time() - treetopStartTime), "."))
 
-
-## join stand IDs to random forest treetops
-if (treetopOptions$setTreetopStandIDs)
-{
-  handlers(global = TRUE)
-  handlers("cli")
-  plan(multisession, workers = 0.5 * future::availableCores()) # no gain for form selection with vfold_cv() but effective for best fit searches and classifying treetops in tiles
-  
-  stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", quiet = TRUE, layer = "unified stands 2016"),
-                            make_compound_crs(6557, 8228)) %>% # keep in sync with same code in decision boundary.R
-    select(standID2016)
-  
-  treetopTilePaths = list.files(treetopsPathRandomForest, "\\.gpkg$", full = TRUE)
-  with_progress({
-    future_map(treetopTilePaths, function(treetopTilePath)
-    {
-      tileTreetops = st_join(st_read(treetopTilePath, quiet = TRUE, layer = "treetops"), stands2016, left = TRUE)
-      st_write(tileTreetops, treetopTilePath, delete_dsn = FALSE, delete_layer = TRUE)
-    })
-  }, .options = furrr_options(seed = TRUE))
-}
+forestTreetops %>% 
+  summarize(tiles = length(unique(tile)), stands = length(unique(standID2016)), maxHeightInM = max(heightClassInM), 
+            elliottTreetops1m = sum(if_else(is.na(standID2016) | (standID2016 >= 4000), 0, treetops)),
+            elliottTreetops5m = sum(if_else(is.na(standID2016) | (standID2016 >= 4000) | (heightClassInM < 5), 0, treetops)), 
+            totalTreetops1m = sum(treetops), totalTreetops5m = sum(if_else(heightClassInM >= 5, treetops, 0)))
+#writexl::write_xlsx(forestTreetops, file.path(forestTreetopsPath, "standsByHeightClass.xlsx")) # 7.5 MB
+#forestTreetops %>% filter(heightClassInM > 85) %>% arrange(desc(heightClassInM))

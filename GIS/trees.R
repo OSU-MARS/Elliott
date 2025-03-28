@@ -563,30 +563,14 @@ if (treetopOptions$includeInvestigatory)
 }
 
 
-## ring indices for ring DSM (net normalized prominence) treetop classification
 if (treetopOptions$includeInvestigatory)
 {
-  distance = crossing(x = seq(-10, 10), y = seq(-10, 10)) %>% 
-    mutate(distance = sqrt(x^2 + y^2),
-           ring = round(distance, 0),
-           angle = if_else(y >= 0, 0, 360) + 180 / pi * atan2(y, x),
-           octant = 45 * if_else(angle <= 360 - 0.5 * 45, round(angle / 45), 0)) %>%
-    filter(distance < 10.5) %>%
-    relocate(ring) %>%
-    arrange(ring, y, x)
-  ggplot(distance) +
-    geom_raster(aes(x = x, y = y, fill = as.factor(ring))) +
-    geom_text(aes(x = x, y = y, label = ring), size = 3) +
-    coord_equal() +
-    labs(x = "x", y = "y", fill = "ring") +
-    scale_fill_viridis_d()
+  # octants from Figure 3 of results dataset.R
   ggplot(distance) +
     geom_raster(aes(x = x, y = y, fill = as.factor(octant))) +
     geom_text(aes(x = x, y = y, label = octant), size = 3) +
     coord_equal() +
     labs(x = "x", y = "y", fill = "octant")
-  
-  #write_xlsx(distance %>% filter(ring > 0), "trees/segmentation/rings.xlsx")
 }
 
 ## stand distribution

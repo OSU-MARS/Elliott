@@ -67,7 +67,9 @@ Woodstock/
 Elliott*.qgz
 Elliott.Rproj
 **/*.jpg
+**/*.jpeg
 **/*.png
 **/*.rdata
+**/*.svg
 .Rhistory
 .Rproj.user/
