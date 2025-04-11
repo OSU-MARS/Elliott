@@ -8,6 +8,22 @@ get_local_maxima_histogram = function(treetopData)
            mutate(maximaInHeightClass = sum(maxima)))
 }
 
+get_treetop_displacement_histogram = function(treetopDisplacement)
+{
+  return(treetopDisplacement %>% 
+           group_by(dsmHeightClass) %>%
+           mutate(treetopsInHeightClass = n()) %>%
+           group_by(dsmHeightClass, displacementClassXY) %>%
+           mutate(treetopsInDisplacementClassXY = n(),
+                  probabilityXY = treetopsInDisplacementClassXY / treetopsInHeightClass) %>%
+           group_by(dsmHeightClass, displacementClassHeight) %>%
+           mutate(treetopsInDisplacementClassHeight = n(),
+                  probabilityHeight = treetopsInDisplacementClassHeight / treetopsInHeightClass) %>%
+           group_by(dsmHeightClass, displacementClassXY, displacementClassHeight) %>%
+           slice(1) %>%
+           select(-tile, -treeID, -dsmX, -dsmY, -dsmHeight, -any_of(c("chmX", "chmY", "chmHeight", "cmmX", "cmmY", "cmmHeight")), -displacementXY, -displacementHeight))
+}
+
 get_treetop_probability = function(treetopData)
 {
   return(treetopData %>% mutate(heightClass = round(height)) %>%
@@ -15,40 +31,77 @@ get_treetop_probability = function(treetopData)
            summarize(probability = sum(((treetop == "yes") | (treetop == "merge")) & as.logical(isTreetopRadius)) / n(), .groups = "drop"))
 }
 
-plot_local_maxima_distribution = function(localMaximaHistogram, plotLetter = plotLetters[2], plotTitle = "class distribution")
+plot_height_displacement = function(treetopDisplacement, treetopDisplacementProbability, plotTitle, colorLabel = "(e–h) change in\ntreetop position", fillLabel = "(b, d–h) treetop\nprobability")
+{
+  return(ggplot() +
+           geom_tile(aes(x = displacementClassHeight, y = dsmHeightClass, alpha = dsmHeightClass >= 5, fill = probabilityHeight), treetopDisplacementProbabilityCmm) +
+           geom_segment(aes(x = -3, y = 4.5, xend = 3, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
+           geom_smooth(aes(x = displacementClassHeight, y = dsmHeightClass, color = "mean displacement\nfrom DSM"), treetopDisplacementCmm, formula = y ~ s(x, bs = "tp"), method = "gam", linewidth = 0.5, orientation = "y", fill = "transparent") +
+           coord_fixed(ratio = 0.25, xlim = c(-3, 3), ylim = c(0, 90)) +
+           guides(fill = "none") +
+           labs(x = "displacement, m", y = NULL, color = colorLabel, alpha = NULL, fill = fillLabel, title = plotTitle) +
+           scale_color_manual(breaks = c("mean displacement\nfrom DSM"), values = "green") +
+           scale_fill_viridis_c() +
+           scale_x_continuous(breaks = seq(-3, 3)))
+}
+
+plot_horizontal_displacement = function(treetopDisplacement, treetopDisplacementProbability, plotTitle, yLabel = "DSM height above ground, m", colorLabel = "(e–h) change in\ntreetop position", fillLabel = "(b, d–h) treetop\nprobability")
+{
+  return(ggplot() +
+           geom_tile(aes(x = displacementClassXY, y = dsmHeightClass, alpha = dsmHeightClass >= 5, fill = probabilityXY), treetopDisplacementProbability) +
+           geom_segment(aes(x = 0, y = 4.5, xend = 3, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
+           geom_smooth(aes(x = displacementClassXY, y = dsmHeightClass, color = "mean displacement\nfrom DSM"), treetopDisplacement, formula = y ~ s(x, bs = "tp"), method = "gam", linewidth = 0.5, orientation = "y", fill = "transparent") +
+           coord_fixed(ratio = 0.25, xlim = c(0, 3), ylim = c(0, 90)) +
+           guides(fill = "none") +
+           labs(x = "displacement, m", y = yLabel, alpha = NULL, color = colorLabel, fill = fillLabel, title = plotTitle) +
+           scale_color_manual(breaks = c("mean displacement\nfrom DSM"), values = "green") +
+           scale_fill_viridis_c() +
+           scale_x_continuous(breaks = seq(0, 3)))  
+}
+
+plot_local_maxima_distribution = function(localMaximaHistogram, plotLetter = plotLetters[2], plotTitle = "class distribution", fillLabel = "(a, b) local maxima\nclassification")
 {
   return(ggplot() +
            geom_col(aes(x = maxima / maximaInHeightClass, y = heightClass, alpha = heightClass >= 5, fill = treetop, group = heightClass), localMaximaHistogram, orientation = "y", width = 1) +
            geom_segment(aes(x = 0, y = 4.5, xend = 1, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
            coord_cartesian(xlim = c(0, NA), ylim = c(0, 90)) +
-           labs(x = "probability", y = NULL, alpha = NULL, fill = "local maxima\nclassification", title = paste(plotLetter, plotTitle)) +
+           labs(x = "probability", y = NULL, alpha = NULL, fill = fillLabel, title = paste(plotLetter, plotTitle)) +
            scale_fill_manual(breaks = c("yes", "merge", "noise", "maybe noise", "no"), labels = c("single point treetop", "merge point", "residual noise", "processing artifact", "other"), values = c("purple", "green3", "red", "dodgerblue3", "grey90")) +
            scale_x_continuous(labels = scales::percent) +
-           theme(axis.title.x = element_text(vjust = 0.3)))
+           theme(axis.title.x = element_text(vjust = 0.75)))
 }
 
-plot_local_maxima_density = function(localMaximaHistogram, plotLetter = paste("   ", plotLetters[1]), plotTitle = "DSM local maxima density", yLabel = "height above ground, m")
+plot_local_maxima_density = function(localMaximaHistogram, plotLetter = paste("   ", plotLetters[1]), plotTitle = "DSM local maxima density", yLabel = "height above ground, m", fillLabel = "(a, b) local maxima\nclassification")
 {
   return(ggplot() +
            geom_col(aes(x = maxima / totalTileAreaHa, y = heightClass, alpha = heightClass >= 5, fill = treetop, group = heightClass), localMaximaHistogram, orientation = "y", width = 1) + # geom_col() does not stack reliably if width exceeds height class size
            geom_segment(aes(x = 0, y = 4.5, xend = 40, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
-           labs(x = bquote("local maxima ha"^-1), y = yLabel, alpha = NULL, fill = "local maxima\nclassification", title = paste(plotLetter, plotTitle)) +
+           labs(x = bquote("local maxima ha"^-1), y = yLabel, alpha = NULL, fill = fillLabel, title = paste(plotLetter, plotTitle)) +
            coord_cartesian(xlim = c(0, 40), ylim = c(0, 90)) +
            scale_fill_manual(breaks = c("yes", "merge", "noise", "maybe noise", "no"), labels = c("single point treetop", "merge point", "residual noise", "processing artifact", "other"), values = c("purple", "green3", "red", "dodgerblue3", "grey90")) +
            scale_x_continuous(labels = scales::comma))
 }
 
-plot_treetop_probability = function(treetopProbability, fAtH = function(h) { return(0.42644864 + 0.03226514 * h^1.02543385) }, plotLetter = paste("  ", plotLetters[4]), plotTitle = "DSM treetop distribution")
+plot_treetop_probability = function(treetopProbability, fAtH = function(h) { return(0.42644864 + 0.03226514 * h^1.02543385) }, aspectRatio = 0.3, plotLetter = plotLetters[4], plotTitle = "DSM treetop distribution", colorLabel = "(d) decision boundary", fillLabel = "(d) treetop probability")
 {
   return(ggplot() +
-           geom_tile(aes(x = radius, y = heightClass, alpha = heightClass >= 5, fill = probability), treetopProbabilityDsm %>% filter(heightClass >= minimumHeightClass)) + # near zero probabilities @ 1 m look like no data grey at 0.5 alpha
+           geom_tile(aes(x = radius, y = heightClass, alpha = heightClass >= 5, fill = probability), treetopProbability %>% filter(heightClass >= minimumHeightClass)) + # near zero probabilities @ 1 m look like no data grey at 0.5 alpha
            geom_line(aes(x = radius, y = height, color = "DSM"), tibble(height = seq(0, 90), radius = fAtH(height))) +
            geom_segment(aes(x = 0, y = 4.5, xend = 5, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
-           coord_fixed(ratio = 0.5, xlim = c(0, NA), ylim = c(0, 90)) +
-           labs(x = "dominance radius, m", y = NULL, alpha = NULL, color = "decision boundary", fill = "treetop probability", title = paste(plotLetter, plotTitle)) + # alignment hack for more consistent tile positioning
+           coord_fixed(ratio = aspectRatio, xlim = c(0, NA), ylim = c(0, 90)) +
+           labs(x = "dominance\nradius, m", y = NULL, alpha = NULL, color = colorLabel, fill = fillLabel, title = paste(plotLetter, plotTitle)) + # alignment hack for more consistent tile positioning
            scale_color_manual(breaks = c("DSM"), labels = c(bquote(f(h) == a[0] + a[1]*h^b[1])), values = c("cyan")) +
            scale_fill_viridis_c() + 
            theme(axis.title.x = element_text(vjust = -0.3)))
+}
+
+read_accepted_treetops = function(acceptedTreetopsPath, tileFileName)
+{
+  acceptedTreetops = st_read(file.path(acceptedTreetopsPath, tileFileName), layer = "treetops", quiet = TRUE)
+  acceptedTreetopsXyz = st_coordinates(acceptedTreetops)
+  return(st_drop_geometry(acceptedTreetops) %>% mutate(tile = str_extract(tileFileName, "(\\w+)[ ]*\\w*\\.gpkg$", group = TRUE),
+                                                       x = acceptedTreetopsXyz[, "X"],
+                                                       y = acceptedTreetopsXyz[, "Y"]))
 }
 
 unnest_binary_confusion_median = function(crossValidatedAccuracy)
@@ -100,23 +153,24 @@ unnest_quinary_confusion_median = function(crossValidatedAccuracy)
     group_by(repetition, fold) %>%
     mutate(fraction = n / sum(n)) %>%
     ungroup() %>%
-    mutate(prediction = forcats::fct_recode(factor(prediction, levels = c("yes", "merge", "no", "noise", "maybe noise")), treetop = "yes", `merge point` = "merge", `residual noise` = "noise", other = "no", `processing artifact` = "maybe noise"),
-           reference = forcats::fct_recode(factor(reference, levels = c("yes", "merge", "no", "noise", "maybe noise")), treetop = "yes", `merge point` = "merge", `residual noise` = "noise", other = "no", `processing artifact` = "maybe noise"))
+    mutate(prediction = forcats::fct_recode(factor(prediction, levels = c("yes", "merge", "no", "noise", "maybe noise")), `single treetop` = "yes", `merge point` = "merge", `residual noise` = "noise", other = "no", `processing artifact` = "maybe noise"),
+           reference = forcats::fct_recode(factor(reference, levels = c("yes", "merge", "no", "noise", "maybe noise")), `single treetop` = "yes", `merge point` = "merge", `residual noise` = "noise", other = "no", `processing artifact` = "maybe noise"))
   
   confusionMedian = confusion %>% group_by(prediction, reference) %>%
     summarize(fraction = median(fraction), .groups = "drop")
   return(confusionMedian)
 }
 
-acceptedTreetops46dsm = bind_rows(st_drop_geometry(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06840.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06840"),
-                                  st_drop_geometry(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06810"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
-                                  st_drop_geometry(st_read(file.path(acceptedTreetopsDsmPath, "s04230w06810.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04230w06810"))
-acceptedTreetops46chm = bind_rows(st_drop_geometry(st_read(file.path(acceptedTreetopsChmPath, "s04200w06840 chm.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06840"),
-                                  st_drop_geometry(st_read(file.path(acceptedTreetopsChmPath, "s04200w06810 chm.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06810"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
-                                  st_drop_geometry(st_read(file.path(acceptedTreetopsChmPath, "s04230w06810 chm.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04230w06810"))
-acceptedTreetops46cmm = bind_rows(st_drop_geometry(st_read(file.path(acceptedTreetopsCmmPath, "s04200w06840 cmm.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06840"),
-                                  st_drop_geometry(st_read(file.path(acceptedTreetopsCmmPath, "s04200w06810 cmm.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04200w06810"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
-                                  st_drop_geometry(st_read(file.path(acceptedTreetopsCmmPath, "s04230w06810 cmm.gpkg"), layer = "treetops", quiet = TRUE)) %>% mutate(tile = "s04230w06810"))
+acceptedTreetops46dsm = bind_rows(read_accepted_treetops(acceptedTreetopsDsmPath, "s04200w06840.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
+                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04230w06810.gpkg"))
+acceptedTreetops46chm = bind_rows(read_accepted_treetops(acceptedTreetopsChmPath, "s04200w06840 chm.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsChmPath, "s04200w06810 chm.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsChmPath, "s04230w06810 chm.gpkg"))
+acceptedTreetops46cmm = bind_rows(read_accepted_treetops(acceptedTreetopsCmmPath, "s04200w06840 cmm.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsCmmPath, "s04200w06810 cmm.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsCmmPath, "s04230w06810 cmm.gpkg"))
+
 
 chm46 = rast(file.path(dsmPath, "chm.vrt"))
 pointsOfInterest46 = bind_rows(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06840.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04200w06840"),
@@ -143,8 +197,8 @@ totalTileAreaHa = length(unique(treetopDataDsm$tile)) * (0.3048 * treetopOptions
 
 ## Figure 01: distribution of naturally regenerated and plantation stands + treetop dataset tiles
 # .jpegs sourced from Elliott.qgz layouts
-standStratification2022 = jpeg::readJPEG("GIS/Trees/2015-16 cruise/natural regen and plantation stands.jpeg")
-cruiseStands2016 = jpeg::readJPEG("GIS/Trees/2015-16 cruise/2015-16 cruise stands.jpeg")
+standStratification2022 = png::readPNG("GIS/Trees/2015-16 cruise/natural regen and plantation stands.png")
+cruiseStands2016 = png::readPNG("GIS/Trees/2015-16 cruise/2015-16 cruise stands.png")
 
 ggplot() +
   ggpubr::background_image(standStratification2022) +
@@ -154,9 +208,9 @@ ggplot() +
   ggpubr::background_image(cruiseStands2016) +
   coord_fixed(ratio = dim(cruiseStands2016)[1] / dim(cruiseStands2016)[2]) +
   labs(title = paste(plotLetters[2], "winter 2015–16 ground inventory and treetop dataset")) +
-plot_annotation(theme = theme(plot.margin = margin())) +
+plot_annotation(theme = theme(plot.margin = margin(t = -3, r = -3, b = -3, l = -2))) +
 plot_layout(nrow = 1)
-#ggsave("trees/segmentation/treetops/figures/Figure 01 stands.jpg", quality = 90, height = 11, width = 20, units = "cm", dpi = figureDpi)
+#ggsave("trees/segmentation/treetops/figures/Figure 01 stands.jpg", quality = 90, height = 11.7, width = 20, units = "cm", dpi = figureDpi)
 
 
 ## Figure 02: dataset tiles from QT Modeler
@@ -204,7 +258,7 @@ ggplot() +
 
 
 ## Figure 04: DSM, CHM, and CMM surface comparison
-# .jpegs sourced from Elliott ABA.qgz layouts
+# .jpegs from Elliott ABA.qgz layouts
 s04200w06810dsm = jpeg::readJPEG("trees/segmentation/treetops/figures/s04200w06810 DSM.jpeg")
 s04200w06810chm = jpeg::readJPEG("trees/segmentation/treetops/figures/s04200w06810 CHM.jpeg")
 s04200w06810cmm = jpeg::readJPEG("trees/segmentation/treetops/figures/s04200w06810 CMM.jpeg")
@@ -239,13 +293,14 @@ plot_local_maxima_density(localMaximaHistogramDsm) +
 plot_local_maxima_distribution(localMaximaHistogramDsm) +
 ggplot() +
   geom_col(aes(x = trees / totalTileAreaHa, y = heightClass, alpha = heightClass >= 5, fill = notes, group = heightClass), missingOrAmbiguousHistogramDsm, orientation = "y", width = 1) +
-  geom_segment(aes(x = 0, y = 4.5, xend = 1.5, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
+  geom_segment(aes(x = 0, y = 4.5, xend = 1, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   coord_cartesian(xlim = c(0, NA), ylim = c(0, 90)) +
-  labs(x = bquote("trees ha"^-1), y = NULL, alpha = NULL, fill = "missing and uncertain\ntrees", title = paste(plotLetters[3], "omissions")) +
+  labs(x = bquote("trees ha"^-1), y = NULL, alpha = NULL, fill = "(c) missing and uncertain\ntrees", title = paste(plotLetters[3], "omissions")) +
   scale_fill_manual(breaks = c("obscured by branch", "obscured by noise", "local maxima absent", "point cloud ambiguous"), values = c("forestgreen", "red", "cyan", "grey80")) +
-plot_treetop_probability(treetopProbabilityDsm) +
+  scale_x_continuous(breaks = seq(0, 1, by = 0.5), minor_breaks = c(0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9)) +
+plot_treetop_probability(treetopProbabilityDsm, aspectRatio = 0.32) +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(nrow = 1, widths = c(1, 0.7, 0.5, 0.6), guides = "collect") &
+plot_layout(nrow = 1, widths = c(1, 0.7, 0.4, 0.7), guides = "collect") &
   guides(alpha = "none") &
   scale_alpha_manual(breaks = c(TRUE, FALSE), values = c(1, 0.4)) &
   scale_y_continuous(breaks = seq(0, 90, by = 10), expand = c(0, 1))
@@ -259,16 +314,50 @@ localMaximaHistogramCmm = get_local_maxima_histogram(treetopDataCmm)
 treetopProbabilityChm = get_treetop_probability(treetopDataChm)
 treetopProbabilityCmm = get_treetop_probability(treetopDataCmm)
 
-plot_local_maxima_density(localMaximaHistogramChm, plotLetter = paste("   ", plotLetters[1]), plotTitle = "CHM distribution") +
-plot_treetop_probability(treetopProbabilityChm, fAtH = function(h) { return(0.51709010 + 0.11263928 * h^0.67990521) }, plotLetter = paste("  ", plotLetters[2]), plotTitle = "CHM treetops") +
-plot_local_maxima_density(localMaximaHistogramCmm, plotLetter = plotLetters[3], plotTitle = "CMM distribution", yLabel = NULL) +
-plot_treetop_probability(treetopProbabilityCmm, fAtH = function(h) { return(-0.22250373 + 0.05153255 * h^0.93888880) }, plotLetter = paste("  ", plotLetters[4]), plotTitle = "CMM treetops") +  
+treetopDisplacementChm = left_join(acceptedTreetops46dsm %>% select(tile, treeID, x, y, height) %>% rename(dsmX = x, dsmY = y, dsmHeight = height), 
+                                   acceptedTreetops46chm %>% select(tile, originatingTreeID, x, y, height) %>% rename(chmX = x, chmY = y, chmHeight = height), 
+                                   by = join_by(tile, treeID == originatingTreeID)) %>%
+  mutate(dsmHeightClass = round(0.3048 * dsmHeight),
+         displacementXY = 0.3048 * sqrt((dsmX - chmX)^2 + (dsmY - chmY)^2), 
+         displacementClassXY = 0.3048 * treetopOptions$dsmCellSize * round(displacementXY / (0.3048 * treetopOptions$dsmCellSize)),
+         displacementHeight = 0.3048 * (chmHeight - dsmHeight),
+         displacementClassHeight = 0.25 * round(displacementHeight / 0.25)) %>%
+  filter(displacementXY < 25, # exclude five tile crossovers
+         displacementXY < 5) # TODO: remove exclusion of two outliers after investigation
+treetopDisplacementCmm = left_join(acceptedTreetops46dsm %>% select(tile, treeID, x, y, height) %>% rename(dsmX = x, dsmY = y, dsmHeight = height), 
+                                   left_join(acceptedTreetops46cmm, 
+                                             treetopDataCmm %>% mutate(cmmHeight = height + cmmZ - dsmZ) %>% select(tile, id, cmmHeight), 
+                                             by = join_by(tile, treeID == id)) %>% 
+                                     select(tile, originatingTreeID, x, y, cmmHeight) %>% rename(cmmX = x, cmmY = y), 
+                                   by = join_by(tile, treeID == originatingTreeID)) %>%
+  mutate(dsmHeightClass = round(0.3048 * dsmHeight),
+         displacementXY = 0.3048 * sqrt((dsmX - cmmX)^2 + (dsmY - cmmY)^2), 
+         displacementClassXY = 0.3048 * treetopOptions$dsmCellSize * round(displacementXY / (0.3048 * treetopOptions$dsmCellSize)),
+         displacementHeight = (cmmHeight - 0.3048 * dsmHeight), # treetopData tibbles are converted to metric on read
+         displacementClassHeight = 0.25 * round(displacementHeight / 0.25)) %>%
+  filter(displacementXY < 5) # exclude four tile crossovers
+
+treetopDisplacementProbabilityChm = get_treetop_displacement_histogram(treetopDisplacementChm)
+treetopDisplacementProbabilityCmm = get_treetop_displacement_histogram(treetopDisplacementCmm)
+
+left_join(treetopDisplacementChm %>% mutate(heightClass = 10 * round(0.1 * 0.3048 * dsmHeight)) %>% group_by(heightClass) %>% summarize(chmDeltaXY = mean(displacementXY), chmDeltaHeight = mean(displacementHeight), chmDeltaXYQ50 = median(displacementXY), chmDeltaHeightQ50 = median(displacementHeight)),
+          treetopDisplacementCmm %>% mutate(heightClass = 10 * round(0.1 * 0.3048 * dsmHeight)) %>% group_by(heightClass) %>% summarize(cmmDeltaXY = mean(displacementXY), cmmDeltaHeight = mean(displacementHeight), cmmDeltaXYQ50 = median(displacementXY), cmmDeltaHeightQ50 = median(displacementHeight)),
+          by = join_by(heightClass))
+
+plot_local_maxima_density(localMaximaHistogramChm, plotLetter = paste("   ", plotLetters[1]), plotTitle = "CHM local maxima", fillLabel = "(a, c) local maxima\nclassification") +
+plot_treetop_probability(treetopProbabilityChm, fAtH = function(h) { return(0.51709010 + 0.11263928 * h^0.67990521) }, plotLetter = plotLetters[2], plotTitle = "CHM treetops", colorLabel = "(b, d) decision\nboundary", fillLabel = "(b, d–h) treetop\nprobability", aspectRatio = 0.32) +
+plot_local_maxima_density(localMaximaHistogramCmm, plotLetter = plotLetters[3], plotTitle = "CMM local maxima", yLabel = NULL, fillLabel = "(a, c) local maxima\nclassification") +
+plot_treetop_probability(treetopProbabilityCmm, fAtH = function(h) { return(-0.22250373 + 0.05153255 * h^0.93888880) }, plotLetter = plotLetters[4], plotTitle = "CMM treetops", colorLabel = "(b, d) decision\nboundary", fillLabel = "(b, d–h) treetop\nprobability", aspectRatio = 0.32) +  
+plot_horizontal_displacement(treetopDisplacementChm, treetopDisplacementProbabilityChm, paste("    ", plotLetters[5], "CHM treetop Δxy")) +
+plot_height_displacement(treetopDisplacementChm, treetopDisplacementProbabilityChm, paste(plotLetters[6], "CHM treetop Δh")) +
+plot_horizontal_displacement(treetopDisplacementCmm, treetopDisplacementProbabilityCmm, paste(" ", plotLetters[7], "CMM treetop Δxy"), yLabel = NULL) +
+plot_height_displacement(treetopDisplacementCmm, treetopDisplacementProbabilityCmm, paste(plotLetters[8], "CMM treetop Δh")) +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(nrow = 1, widths = c(1, 0.7, 1, 0.7), guides = "collect") &
+plot_layout(nrow = 2, widths = c(1, 0.7, 1, 0.7), heights = c(12, 8), guides = "collect") &
   guides(alpha = "none") &
   scale_alpha_manual(breaks = c(TRUE, FALSE), values = c(1, 0.4)) &
   scale_y_continuous(breaks = seq(0, 90, by = 10), expand = c(0, 1))
-#ggsave("trees/segmentation/treetops/figures/Figure 06 CHM and CMM distribution by height class.png", height = 17, width = 20, units = "cm", dpi = figureDpi)
+#ggsave("trees/segmentation/treetops/figures/Figure 06 CHM and CMM distribution by height class.png", height = 25, width = 20, units = "cm", dpi = figureDpi)
 
 
 ## Figure 07: treetop dataset density by height class
@@ -286,19 +375,19 @@ ggplot() +
   geom_col(aes(x = treetopsPerHectareDsm, y = heightClass, alpha = heightClass >= 5, fill = "DSM"), treetopsByHeight, orientation = "y", width = 1) +
   geom_segment(aes(x = 0, y = 4.5, xend = 25, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   coord_trans(x = scales::pseudo_log_trans(), xlim = c(0, 25), ylim = c(0, 90)) +
-  labs(x = bquote("treetops ha"^-1), y = "height above ground, m", alpha = NULL, color = NULL, fill = NULL, title = paste("    ", plotLetters[1], "DSM treetops")) +
+  labs(x = bquote("treetops ha"^-1), y = "height above ground, m", alpha = NULL, color = "fraction\nof DSM", fill = NULL, title = paste("    ", plotLetters[1], "DSM treetops")) +
   scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 20), minor_breaks = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 3, 4, 6, 7, 8, 9, 30)) +
 ggplot() +
   geom_col(aes(x = treetopsPerHectareChm, y = heightClass, alpha = heightClass >= 5, fill = "CHM"), treetopsByHeight, orientation = "y", width = 1) +
   geom_segment(aes(x = 0, y = 4.5, xend = 25, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   coord_trans(x = scales::pseudo_log_trans(), xlim = c(0, 25), ylim = c(0, 90)) +
-  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = NULL, fill = NULL, title = paste(plotLetters[2], "CHM treetops")) +
+  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = "fraction\nof DSM", fill = NULL, title = paste(plotLetters[2], "CHM treetops")) +
   scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 20), minor_breaks = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 3, 4, 6, 7, 8, 9, 30)) +
 ggplot() +
   geom_col(aes(x = treetopsPerHectareCmm, y = heightClass, alpha = heightClass >= 5, fill = "CMM"), treetopsByHeight, orientation = "y", width = 1) +
   geom_segment(aes(x = 0, y = 4.5, xend = 25, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   coord_trans(x = scales::pseudo_log_trans(), xlim = c(0, 25), ylim = c(0, 90)) +
-  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = NULL, fill = NULL, title = paste(plotLetters[3], "CMM treetops")) +
+  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = "fraction\nof DSM", fill = NULL, title = paste(plotLetters[3], "CMM treetops")) +
   scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 20), minor_breaks = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 3, 4, 6, 7, 8, 9, 30)) +
 ggplot() +
   geom_vline(xintercept = 1, color = "black", linewidth = 0.3) +
@@ -306,7 +395,7 @@ ggplot() +
   geom_line(aes(x = treetopsPerHectareCmm / treetopsPerHectareDsm, y = heightClass, alpha = heightClass >= 5, color = "CMM"), treetopsByHeight %>% filter(heightClass >= minimumHeightClass), orientation = "y") +
   geom_line(aes(x = treetopsPerHectareChm / treetopsPerHectareDsm, y = heightClass, alpha = heightClass >= 5, color = "CHM"), treetopsByHeight %>% filter(heightClass >= minimumHeightClass), orientation = "y") +
   coord_cartesian(xlim = c(0, 2), ylim = c(0, 90)) +
-  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = NULL, fill = NULL, title = paste(plotLetters[4], "fraction of DSM tops")) +
+  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = "fraction\nof DSM", fill = NULL, title = paste(plotLetters[4], "fraction of DSM tops")) +
   scale_x_continuous(labels = scales::percent) +
 ggplot() + 
   geom_vline(xintercept = 1, color = "black", linewidth = 0.3) +
@@ -314,7 +403,7 @@ ggplot() +
   geom_line(aes(x = treetopsPerHectareCmm / treetopsPerHectareDsm, y = heightClass, alpha = heightClass >= 5, color = "CMM"), treetopsByHeight %>% filter(heightClass >= minimumHeightClass), orientation = "y") +
   geom_line(aes(x = treetopsPerHectareChm / treetopsPerHectareDsm, y = heightClass, alpha = heightClass >= 5, color = "CHM"), treetopsByHeight %>% filter(heightClass >= minimumHeightClass), orientation = "y") +
   coord_cartesian(xlim = c(0.85, 1.15), ylim = c(0, 90)) +
-  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = NULL, fill = NULL, title = paste(plotLetters[5], "expanded view")) +
+  labs(x = bquote("treetops ha"^-1), y = NULL, alpha = NULL, color = "fraction\nof DSM", fill = NULL, title = paste(plotLetters[5], "expanded view")) +
   scale_x_continuous(breaks = seq(0.8, 1.2, by = 0.1), labels = scales::percent) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 1, widths = c(0.7, 0.7, 0.7, 1, 0.65), guides = "collect") &
@@ -339,51 +428,51 @@ radiusDsmConfusionMedian = unnest_binary_confusion_median(radiusDsmAccuracyPower
 radiusChmConfusionMedian = unnest_binary_confusion_median(radiusChmAccuracyPower)
 radiusCmmConfusionMedian = unnest_binary_confusion_median(radiusCmmAccuracyPower)
 
-medianErrorBySurface = bind_rows(rfDsmConfusionBinaryMedian %>% mutate(method = "DSM forest"),
-                                 radiusDsmConfusionMedian %>% mutate(method = "DSM radius"),
-                                 radiusChmConfusionMedian %>% mutate(method = "CHM radius"),
-                                 radiusCmmConfusionMedian %>% mutate(method = "CMM radius")) %>% 
-  mutate(surface = factor(method, levels = c("DSM forest", "DSM radius", "CHM radius", "CMM radius"))) %>%
+medianErrorByMethod = bind_rows(rfDsmConfusionBinaryMedian %>% mutate(method = "DSM forest"),
+                                radiusDsmConfusionMedian %>% mutate(method = "DSM radius"),
+                                radiusChmConfusionMedian %>% mutate(method = "CHM radius"),
+                                radiusCmmConfusionMedian %>% mutate(method = "CMM radius")) %>% 
+  mutate(method = factor(method, levels = c("DSM forest", "DSM radius", "CHM radius", "CMM radius"))) %>%
   filter(prediction != reference) %>% 
-  group_by(surface) %>%
-  summarize(overallErrorPct = 100 * sum(fraction), netTreeCountErrorPct = -100 * diff(fraction))
+  group_by(method) %>%
+  summarize(surfaceAccuracyPct = 100 * (1 - sum(fraction)), surfaceErrorPct = 100 * sum(fraction), netSurfaceTreeCountErrorPct = -100 * diff(fraction))
 
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusDsmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), rfDsmConfusionBinaryMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste("                    ", plotLetters[1], "DSM forest, merged"), subtitle = sprintf("                              %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "DSM forest")])) +
+  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste("                    ", plotLetters[1], "DSM forest, treetops only"), subtitle = sprintf("                              %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "DSM forest")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusDsmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusDsmConfusionMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[2], "DSM radius"), subtitle = sprintf("      %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "DSM radius")])) +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[2], "DSM radius"), subtitle = sprintf("      %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "DSM radius")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusChmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusChmConfusionMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[3], "CHM radius"), subtitle = sprintf("      %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "CHM radius")])) +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[3], "CHM radius"), subtitle = sprintf("      %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "CHM radius")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusCmmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusCmmConfusionMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[4], "CMM radius"), subtitle = sprintf("      %0.1f%% overall accuracy", 100 - medianErrorBySurface$overallErrorPct[which(medianErrorBySurface$surface == "CMM radius")])) +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[4], "CMM radius"), subtitle = sprintf("      %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "CMM radius")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = if_else(fraction > 0, fraction, NA_real_)), rfDsmConfusionQuinaryMedian) +
   geom_text(aes(x = reference, y = prediction, label = if_else(fraction > 0, sprintf(if_else(fraction > 0.005, "%.1f%%", "%.1g%%"), 100 * fraction), "0%"), color = fraction > 0.60), rfDsmConfusionQuinaryMedian, size = 2.5) +
-  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[5], "DSM forest, unmerged"), subtitle = sprintf("     %.1f%% overall accuracy", 100 * sum((rfDsmConfusionQuinaryMedian %>% filter(prediction == reference))$fraction))) +
-  scale_x_discrete(breaks = c("treetop", "merge point", "other", "residual noise", "processing artifact"), labels = c("treetop", "merge\npoint", "other", "residual\nnoise", "proc.\nartifact")) +
-  theme(legend.margin = margin(l = -105), plot.subtitle = element_text(hjust = 0.35), plot.title = element_text(hjust = 0.35)) +
-plot_annotation(theme = theme(plot.margin = margin(l = -60))) +
+  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[5], "DSM forest, all local maxima classes"), subtitle = sprintf("     %.1f%% on surface accuracy", 100 * sum((rfDsmConfusionQuinaryMedian %>% filter(prediction == reference))$fraction))) +
+  scale_x_discrete(breaks = c("single treetop", "merge point", "other", "residual noise", "processing artifact"), labels = c("single\ntreetop", "merge\npoint", "other", "residual\nnoise", "proc.\nartifact")) +
+  theme(legend.margin = margin(l = -125), plot.subtitle = element_text(hjust = 0.38), plot.title = element_text(hjust = 0.42)) +
+plot_annotation(theme = theme(plot.margin = margin(l = -60, r = -24))) +
 plot_layout(design = "ABCD
-EEEE", heights = c(2, 5)) &
+EEEE", heights = c(2, 4)) &
   coord_fixed(ratio = 1.03) & # coord_equal() visually appears stretched due to cell labels
   guides(color = "none") &
   scale_color_manual(breaks = c(TRUE, FALSE), values = c("white", "black")) &
   paletteer::scale_fill_paletteer_c("ggthemes::Blue-Teal", labels = scales::percent, limits = c(0, 1), na.value = "white") &
   scale_y_discrete(limits = rev) &
   theme(panel.grid.major = element_blank())
-#ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.png", height = 12, width = 20, units = "cm", dpi = figureDpi)
+#ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.png", height = 13, width = 20, units = "cm", dpi = figureDpi)
 #ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.svg", height = 12, width = 20, units = "cm", dpi = figureDpi)
 #ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.pdf", height = 12, width = 20, units = "cm", dpi = figureDpi)
 
@@ -409,19 +498,19 @@ accuracyDeltaByHeight = left_join(radiusDsmAccuracyPowerByHeight %>% rename(nRad
   summarize(deltaAccuracyMedian = median(randomForestAccuracy, na.rm = TRUE) - median(radiusAccuracy, na.rm = TRUE))
 
 ggplot() +
-  geom_violin(aes(x = overallAccuracy, y = heightClass, color = after_stat(count), group = heightClass, weight = meanN), radiusDsmAccuracyPowerByHeight, draw_quantiles = c(0.5), linewidth = 0.3, width = 1.75) +
-  geom_segment(aes(x = 0, y = 4.5, xend = 5, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
-  coord_cartesian(xlim = c(0, 1)) +
-  labs(x = "treetop detection\naccuracy", y = "height above ground, m", color = "local\nmaxima", title = paste("   ", plotLetters[1], "DSM radius")) +
-  scale_x_continuous(labels = scales::percent) +
-  theme(plot.title = element_text(vjust = 0.66)) +
-ggplot() +
   geom_violin(aes(x = treetopAccuracy, y = heightClass, color = after_stat(count), group = heightClass, weight = meanN), randomForestAccuracyByHeight, draw_quantiles = c(0.5), linewidth = 0.3, width = 1.75) +
   geom_segment(aes(x = 0, y = 4.5, xend = 5, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   guides(color = "none") +
   coord_cartesian(xlim = c(0, 1)) +
-  labs(x = "treetop detection\naccuracy", y = NULL, color = "local\nmaxima", title = paste(plotLetters[2], "DSM forest")) +
+  labs(x = "treetop detection\naccuracy", y = "height above ground, m", color = "local\nmaxima", title = paste("   ", plotLetters[1], "DSM forest")) +
   scale_x_continuous(labels = scales::percent) +
+ggplot() +
+  geom_violin(aes(x = overallAccuracy, y = heightClass, color = after_stat(count), group = heightClass, weight = meanN), radiusDsmAccuracyPowerByHeight, draw_quantiles = c(0.5), linewidth = 0.3, width = 1.75) +
+  geom_segment(aes(x = 0, y = 4.5, xend = 5, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
+  coord_cartesian(xlim = c(0, 1)) +
+  labs(x = "treetop detection\naccuracy", y = NULL, color = "local\nmaxima", title = paste(plotLetters[2], "DSM radius")) +
+  scale_x_continuous(labels = scales::percent) +
+  theme(plot.title = element_text(vjust = 0.66)) +
 ggplot() +
   geom_col(aes(x = auc, y = heightClass, alpha = heightClass >= 5, fill = n), aucByHeight, orientation = "y") +
   geom_segment(aes(x = 0, y = 4.5, xend = 1, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
@@ -447,18 +536,23 @@ plot_layout(nrow = 1, widths = c(0.95, 0.95, 0.8, 1), guides = "collect") &
 
 
 ## Figure 10: random forest variable selection and importance
-globalImportance = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 global importance.Rds")
-localImportance = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 local importance.Rds")
+globalImportance = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 global importance.Rds") %>%
+  mutate(label = if_else(label == "dominance radiance", "dominance radius", label), # work around past typo in treetops.R
+         label = if_else(label == "net prominence, normalized", "rings 1–5 net prominence, normalized", label),
+         label = if_else(label == "neighbor 1, 2, 3 height range, normalized", "neighbors 1–3 height range, normalized", label))
+localImportance = left_join(readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 local importance.Rds"),
+                            globalImportance %>% select(predictor, label),
+                            by = join_by(predictor))
 
 ggplot() +
   geom_raster(aes(x = "global", y = label, fill = importance), globalImportance) +
   labs(x = NULL, y = NULL, title = paste(plotLetters[1], "global permutation importance")) +
-  scale_y_discrete(limits = rev) +
+  scale_y_discrete(limits = rev(globalImportance$label)) +
 ggplot() +
-  geom_raster(aes(x = treetop, y = predictor, fill = importance), localImportance) +
+  geom_raster(aes(x = treetop, y = label, fill = importance), localImportance) +
   labs(x = NULL, y = NULL, title = paste(plotLetters[2], "local importance")) +
   scale_x_discrete(labels = c("single top", "merge point", "noise", "processing\nartifact", "other"), limits = c("yes", "merge", "noise", "maybe noise", "no")) +
-  scale_y_discrete(labels = NULL, limits = rev) +
+  scale_y_discrete(labels = NULL, limits = rev(globalImportance$label)) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 1, ncol = 2, guides = "collect") &
   coord_equal() &
@@ -529,6 +623,18 @@ stats46cmm = left_join(treetopDataCmm %>% group_by(tile, treetop) %>% summarize(
 stats46cmm
 #write_xlsx(stats46cmm, "trees/segmentation/treetops/treetop CMM dataset.xlsx")
 
+
+## summaries for abstract
+# overall accuracy
+left_join(medianErrorByMethod %>% mutate(surface = str_extract(method, "\\w\\w\\w")), 
+          bind_rows(stats46dsm %>% filter(tile == "total"), stats46chm %>% filter(tile == "total"), stats46cmm %>% filter(tile == "total")) %>% 
+            mutate(missedTreetops = max(treetops) - treetops + max(`obscured by branch` + `local maxima absent` + `obscured by noise`, na.rm = TRUE),
+                   missedTreetopsPct = 100 * missedTreetops / (treetops + missedTreetops)) %>%
+            select(surface, treetops, missedTreetops, missedTreetopsPct),
+          by = join_by(surface)) %>%
+  mutate(overallAccuracyPct = surfaceAccuracyPct - missedTreetopsPct)
+stems2021 %>% group_by(method) %>% # from Figure 11 in results inventory.R
+  summarize(stems = sum(stems)) %>% ungroup() %>% mutate(stemsPct = 100 * stems / max(stems))
 
 ## investigatory, prototypes
 if (treetopOptions$includeInvestigatory)

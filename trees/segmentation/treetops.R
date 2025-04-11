@@ -917,7 +917,7 @@ if (treetopOptions$includeSetup)
   # DSM dataset without surrounding local maxima
   datasetDsmStart = Sys.time() # 32s
   treetopDataDsm = s4268maximaDsm %>% filter(is.na(treetop) == FALSE) %>%
-    select(tile, treetop, height, radius, dsmZ, mergeClusterID) %>%
+    select(tile, treetop, height, radius, dsmZ, mergeClusterID, x, y) %>%
     mutate(treetop = factor(treetop, levels = c("yes", "merge", "noise", "maybe noise", "no"))) %>%
     group_by(tile, mergeClusterID) %>%
     mutate(isTreetopRadius = (treetop == "yes") | ((treetop == "merge") & (dsmZ == max(dsmZ))),
@@ -1168,7 +1168,7 @@ if (treetopOptions$fitRandomForest)
   
   predictorLabels = tibble(predictor = c("prominence2normalized", "prominence3normalized", "netProminenceNormalized", "radius", "height", "ring2variance", "prominence1normalized", "cmmSlope3", "prominence4normalized", "ring1variance", "ring3variance", "mean1delta",
                                          "prominence5normalized", "mean4delta", "mean2deltaNormalized", "mean3deltaNormalized", "slope5normalized", "netProminenceNeighbor1normalized", "ring4variance", "netProminenceNeighbor3normalized", "neighbor1distance", "neighborDistance20mean", "neighborDistance50mean", "rangeNeighbor3Normalized"),
-                           label = c("ring 2 prominence, normalized", "ring 3 prominence, normalized", "net prominence, normalized", "dominance radiance", "height", "ring 2 variance", "ring 1 prominence, normalized", "canopy maxima model slope", "ring 4 prominence, normalized", "ring 1 variance", "ring 3 variance", "ring 1 mean, relative",
+                           label = c("ring 2 prominence, normalized", "ring 3 prominence, normalized", "net prominence, normalized", "dominance radius", "height", "ring 2 variance", "ring 1 prominence, normalized", "canopy maxima model slope", "ring 4 prominence, normalized", "ring 1 variance", "ring 3 variance", "ring 1 mean, relative",
                                      "ring 5 prominence, normalized", "ring 4 mean, relative", "ring 2 mean, relative normalized", "ring 3 mean, relative normalized", "ring 5 slope", "neighbor 1 prominence, normalized", "ring 4 variance", "neighbor 3 prominence, normalized", "neighbor 1 distance", "neighborhood density, nearest 20 maxima", "neighborhood density, nearest 50 maxima", "neighbor 1, 2, 3 height range, normalized"))
   globalImportance = left_join(tibble::as_tibble_row(randomForestImportance$variable.importance) %>% # pivot_longer() since as_tibble_col() doesn't facilitate row names
                                   pivot_longer(everything(), names_to = "predictor", values_to = "importance"),
