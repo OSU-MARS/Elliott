@@ -194,7 +194,7 @@ ggplot() +
   coord_cartesian(xlim = c(0, NA), clip = "off") +
   labs(x = "millions of treetops", y = NULL, color = NULL, fill = NULL, title = paste("                        ", plotLetters[1], "individual tree inventory")) +
   scale_x_continuous(labels = scales::label_number(scale = 1E-6)) +
-  theme(plot.margin = margin(l = 5, r = 25), axis.title.x = element_text(vjust = 0.3)) +
+  theme(plot.margin = margin(l = 5, r = 25), axis.title.x = element_text(vjust = 0.55)) +
 ggplot() +
   geom_col(aes(x = stemsPerHectare, y = methodLabel, fill = isPlantation), stems2021 %>% filter(isPlantation == FALSE)) +
   #geom_errorbarh(aes(xmin = stemsPerHectare025, xmax = stemsPerHectare975, y = methodLabel), stems2021 %>% filter(isPlantation == FALSE), color = "grey30", height = 0.33, linewidth = 0.3) +
@@ -229,7 +229,7 @@ ggplot() +
   geom_line(aes(x = treetopsPerHectare, y = heightClassInM, alpha = heightClassInM >= 5, color = method, group = method), radius2021densityByHeight %>% filter(isPlantation == FALSE, treetopsPerHectare > 0), orientation = "y") +
   geom_line(aes(x = stemsPerHectare, y = heightClassInM, alpha = heightClassInM >= 5, color = "Organon grown\nground inventory"), combined2021densityByHeight %>% filter(isPlantation == FALSE, stemsPerHectare > 0), orientation = "y") +
   geom_line(aes(x = treetopsPerHectare, y = heightClassInM, alpha = heightClassInM >= 5, color = "DSM forest"), combined2021densityByHeight %>% filter(isPlantation == FALSE, treetopsPerHectare > 0), orientation = "y") +
-  labs(x = bquote("stems ha"^-1), y = "height above ground, m", alpha = NULL, color = NULL, fill = NULL, title = paste("    ", plotLetters[1], "naturally regenerated stand density")) +
+  labs(x = bquote("stems ha"^-1), y = "height above ground, m", alpha = NULL, color = NULL, fill = NULL, title = paste("    ", plotLetters[1], "natural regeneration")) +
 ggplot() +
   geom_ribbon(aes(xmin = stemsPerHectare025, xmax = stemsPerHectare975, y = heightClassInM, fill = "95% confidence"), combined2021densityByHeight %>% filter(isPlantation), alpha = 0.15) +
   geom_segment(aes(x = 0, y = 4.5, xend = 45, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
@@ -248,6 +248,7 @@ plot_layout(nrow = 1, guides = "collect") &
   #scale_x_continuous(breaks = c(0, 1, 2, 3, 5, 10, 20, 30, 50), minor_breaks = c(4, 6, 7, 8, 9, 40)) &
   scale_y_continuous(breaks = seq(0, 100, by = 10), expand = c(0, 1))
 #ggsave("trees/segmentation/treetops/figures/Figure 12 forest by height class.png", height = 17, width = 17, units = "cm", dpi = figureDpi)
+#ggsave("trees/segmentation/treetops/figures/Figure 12 forest by height class wide.png", height = 10, width = 13, units = "cm", dpi = figureDpi)
 
 
 if (treetopOptions$includeInvestigatory)

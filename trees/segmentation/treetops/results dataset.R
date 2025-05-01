@@ -437,44 +437,60 @@ medianErrorByMethod = bind_rows(rfDsmConfusionBinaryMedian %>% mutate(method = "
   group_by(method) %>%
   summarize(surfaceAccuracyPct = 100 * (1 - sum(fraction)), surfaceErrorPct = 100 * sum(fraction), netSurfaceTreeCountErrorPct = -100 * diff(fraction))
 
-ggplot() +
+includeRandomForestClasses = FALSE
+confusionPlot = ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusDsmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), rfDsmConfusionBinaryMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste("                    ", plotLetters[1], "DSM forest, treetops only"), subtitle = sprintf("                              %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "DSM forest")])) +
+  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste(if_else(includeRandomForestClasses, "                    ", "   "), plotLetters[1], "DSM forest", if_else(includeRandomForestClasses, "treetops only", "")), subtitle = sprintf(if_else(includeRandomForestClasses, "                              %0.1f%% on surface accuracy", "           %0.1f%% accuracy"), 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "DSM forest")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusDsmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusDsmConfusionMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[2], "DSM radius"), subtitle = sprintf("      %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "DSM radius")])) +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[2], "DSM radius"), subtitle = sprintf(paste0("      %0.1f%% ", if_else(includeRandomForestClasses, "on surface accuracy", "accuracy")), 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "DSM radius")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusChmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusChmConfusionMedian, size = 2.7) +
   guides(fill = "none") +
-  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[3], "CHM radius"), subtitle = sprintf("      %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "CHM radius")])) +
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[3], "CHM radius"), subtitle = sprintf(paste0("      %0.1f%% ", if_else(includeRandomForestClasses, "on surface accuracy", "accuracy")), 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "CHM radius")])) +
 ggplot() +
   geom_tile(aes(x = reference, y = prediction, fill = fraction), radiusCmmConfusionMedian) +
   geom_text(aes(x = reference, y = prediction, label = sprintf("%.1f%%", 100 * fraction), color = fraction > 0.60), radiusCmmConfusionMedian, size = 2.7) +
-  guides(fill = "none") +
-  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[4], "CMM radius"), subtitle = sprintf("      %0.1f%% on surface accuracy", 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "CMM radius")])) +
-ggplot() +
-  geom_tile(aes(x = reference, y = prediction, fill = if_else(fraction > 0, fraction, NA_real_)), rfDsmConfusionQuinaryMedian) +
-  geom_text(aes(x = reference, y = prediction, label = if_else(fraction > 0, sprintf(if_else(fraction > 0.005, "%.1f%%", "%.1g%%"), 100 * fraction), "0%"), color = fraction > 0.60), rfDsmConfusionQuinaryMedian, size = 2.5) +
-  labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[5], "DSM forest, all local maxima classes"), subtitle = sprintf("     %.1f%% on surface accuracy", 100 * sum((rfDsmConfusionQuinaryMedian %>% filter(prediction == reference))$fraction))) +
-  scale_x_discrete(breaks = c("single treetop", "merge point", "other", "residual noise", "processing artifact"), labels = c("single\ntreetop", "merge\npoint", "other", "residual\nnoise", "proc.\nartifact")) +
-  theme(legend.margin = margin(l = -125), plot.subtitle = element_text(hjust = 0.38), plot.title = element_text(hjust = 0.42)) +
-plot_annotation(theme = theme(plot.margin = margin(l = -60, r = -24))) +
-plot_layout(design = "ABCD
-EEEE", heights = c(2, 4)) &
-  coord_fixed(ratio = 1.03) & # coord_equal() visually appears stretched due to cell labels
-  guides(color = "none") &
-  scale_color_manual(breaks = c(TRUE, FALSE), values = c("white", "black")) &
-  paletteer::scale_fill_paletteer_c("ggthemes::Blue-Teal", labels = scales::percent, limits = c(0, 1), na.value = "white") &
-  scale_y_discrete(limits = rev) &
-  theme(panel.grid.major = element_blank())
-#ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.png", height = 13, width = 20, units = "cm", dpi = figureDpi)
-#ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.svg", height = 12, width = 20, units = "cm", dpi = figureDpi)
-#ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.pdf", height = 12, width = 20, units = "cm", dpi = figureDpi)
+  labs(x = "actual class", y = NULL, color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[4], "CMM radius"), subtitle = sprintf(paste0("      %0.1f%% ", if_else(includeRandomForestClasses, "on surface accuracy", "accuracy")), 100 - medianErrorByMethod$surfaceErrorPct[which(medianErrorByMethod$method == "CMM radius")]))
+if (includeRandomForestClasses) 
+{
+  confusionPlot +
+    guides(fill = "none") +
+    ggplot() +
+      geom_tile(aes(x = reference, y = prediction, fill = if_else(fraction > 0, fraction, NA_real_)), rfDsmConfusionQuinaryMedian) +
+      geom_text(aes(x = reference, y = prediction, label = if_else(fraction > 0, sprintf(if_else(fraction > 0.005, "%.1f%%", "%.1g%%"), 100 * fraction), "0%"), color = fraction > 0.60), rfDsmConfusionQuinaryMedian, size = 2.5) +
+      labs(x = "actual class", y = "predicted class", color = NULL, fill = "fraction of\nlocal maxima", title = paste(plotLetters[5], "DSM forest, all local maxima classes"), subtitle = sprintf("     %.1f%% on surface accuracy", 100 * sum((rfDsmConfusionQuinaryMedian %>% filter(prediction == reference))$fraction))) +
+      scale_x_discrete(breaks = c("single treetop", "merge point", "other", "residual noise", "processing artifact"), labels = c("single\ntreetop", "merge\npoint", "other", "residual\nnoise", "proc.\nartifact")) +
+      theme(legend.margin = margin(l = -125), plot.subtitle = element_text(hjust = 0.38), plot.title = element_text(hjust = 0.42)) +
+    plot_annotation(theme = theme(plot.margin = margin(l = -60, r = -24))) +
+    plot_layout(design = "ABCD
+    EEEE", heights = c(2, 4)) &
+      coord_fixed(ratio = 1.03) & # coord_equal() visually appears stretched due to cell labels
+      guides(color = "none") &
+      scale_color_manual(breaks = c(TRUE, FALSE), values = c("white", "black")) &
+      paletteer::scale_fill_paletteer_c("ggthemes::Blue-Teal", labels = scales::percent, limits = c(0, 1), na.value = "white") &
+      scale_y_discrete(limits = rev) &
+      theme(panel.grid.major = element_blank())
+  #ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.png", height = 13, width = 20, units = "cm", dpi = figureDpi)
+  #ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.svg", height = 12, width = 20, units = "cm", dpi = figureDpi)
+  #ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices.pdf", height = 12, width = 20, units = "cm", dpi = figureDpi)
+} else {
+  confusionPlot +
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(design = "ABCD") &
+      coord_fixed(ratio = 1.03) & # coord_equal() visually appears stretched due to cell labels
+      guides(color = "none") &
+      scale_color_manual(breaks = c(TRUE, FALSE), values = c("white", "black")) &
+      paletteer::scale_fill_paletteer_c("ggthemes::Blue-Teal", labels = scales::percent, limits = c(0, 1), na.value = "white") &
+      scale_y_discrete(limits = rev) &
+      theme(panel.grid.major = element_blank())
+  #ggsave("trees/segmentation/treetops/figures/Figure 08 median confusion matrices no rf classes.png", height = 5, width = 20, units = "cm", dpi = figureDpi)
+}
 
 
 ## Figure 09: DSM and random forest accuracy distribution by height
@@ -543,6 +559,16 @@ globalImportance = readRDS("trees/segmentation/treetops/random forest s4268 458k
 localImportance = left_join(readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3 local importance.Rds"),
                             globalImportance %>% select(predictor, label),
                             by = join_by(predictor))
+includeProcessingArtifacts = FALSE
+if (includeProcessingArtifacts)
+{
+  localImportanceLabels = c("single top", "merge point", "noise", "processing\nartifact", "other")
+  localImportanceLimits = c("yes", "merge", "noise", "maybe noise", "no")
+} else {
+  localImportance = localImportance %>% filter(treetop != "maybe noise")
+  localImportanceLabels = c("single top", "merge point", "noise", "other")
+  localImportanceLimits = c("yes", "merge", "noise", "no")
+}
 
 ggplot() +
   geom_raster(aes(x = "global", y = label, fill = importance), globalImportance) +
@@ -551,7 +577,7 @@ ggplot() +
 ggplot() +
   geom_raster(aes(x = treetop, y = label, fill = importance), localImportance) +
   labs(x = NULL, y = NULL, title = paste(plotLetters[2], "local importance")) +
-  scale_x_discrete(labels = c("single top", "merge point", "noise", "processing\nartifact", "other"), limits = c("yes", "merge", "noise", "maybe noise", "no")) +
+  scale_x_discrete(labels = localImportanceLabels, limits = localImportanceLimits) +
   scale_y_discrete(labels = NULL, limits = rev(globalImportance$label)) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 1, ncol = 2, guides = "collect") &
@@ -560,6 +586,7 @@ plot_layout(nrow = 1, ncol = 2, guides = "collect") &
   scale_fill_viridis_c(option = "plasma", limits = c(0, 100 + 1E-14)) &
   theme(axis.text.x = element_text(angle = 90, lineheight = 0.67, hjust = 1, vjust = 0.5), legend.title = element_text(size = 10))
 #ggsave("trees/segmentation/treetops/figures/Figure 10 DSM forest importance.png", height = 12, width = 12.5, units = "cm", dpi = figureDpi)
+#ggsave("trees/segmentation/treetops/figures/Figure 10 DSM forest importance no artifacts.png", height = 10, width = 12, units = "cm", dpi = figureDpi)
 
 # runtimes
 # Get-Dsm: 2,244,000,000 DSM cells from 561 tiles (49364.3 Mpoints) in 06:01: 1739.64 GB at 1.55 tiles/s (88.0 Mpoints/tile, 4.8 GB/s).

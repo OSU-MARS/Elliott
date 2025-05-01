@@ -22,7 +22,7 @@ organonStands = stands2022 %>%
          yardingFactor = if_else(RoadDistMedian > 0, 0.5 * RoadDistMean / RoadDistMedian, 0.5), # dimensionless
          slopeAbove100PercentFraction = SlopeAbove100PercentFraction) %>% # fraction
   rename(id = StandID, area = standArea, age = standAge2016, allocation = April2021_Allocation) %>%
-  select(id, area, siteIndex, age, slopeInPercent, forwardingRoad, forwardingUntethered, forwardingTethered, yardingFactor, plantingDensityPerHa, slopeAbove100PercentFraction)
+  select(id, area, siteIndex, age, slopeInPercent, forwardingRoad, forwardingUntethered, forwardingTethered, yardingFactor, isPlantation, plantingDensityPerHa, slopeAbove100PercentFraction)
 
 
 # Dubbing to proxy species supported by Organon SWO (supported codes are DF, WF, GF, PP, SP, IC, WH, RC, PY, PM, GC, TO, LO?, BM, WO, BO?, RA, WI):
@@ -46,18 +46,18 @@ organonTrees = trees2016 %>% filter(isLive, is.na(DBH) == FALSE) %>%
   group_by(speciesGroup) %>%
   mutate(expansionFactor = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, # trees per hectare
          imputedHeight = case_when(speciesGroup == "DF" ~ if_else(is.na(elevation) == FALSE, predict(psmeHeightFromDiameterPreferred$sharmaPartonBalPhysioRelDbh, .[cur_group_rows(), ]), predict(psmeHeightFromDiameterPreferred$sharmaPartonBalRelDbh, .[cur_group_rows(), ])),
-                                   speciesGroup == "RA" ~ if_else(is.na(elevation) == FALSE, predict(alruHeightFromDiameterPreferred$sharmaPartonBalPhysio, .[cur_group_rows(), ]), predict(alruHeightFromDiameterPreferred$sharmaPartonBal, .[cur_group_rows(), ])),
-                                   speciesGroup == "WH" ~ predict(tsheHeightFromDiameterPreferred$gamBalRelDbh, .[cur_group_rows(), ]),
+                                   speciesGroup == "RA" ~ if_else(is.na(elevation) == FALSE, predict(alruHeightFromDiameterPreferred$sharmaPartonPhysio, .[cur_group_rows(), ]), predict(alruHeightFromDiameterPreferred$gam, .[cur_group_rows(), ])),
+                                   speciesGroup == "WH" ~ if_else(is.na(elevation) == FALSE, predict(tsheHeightFromDiameterPreferred$chapmanRichardsBalPhysio, .[cur_group_rows(), ]), predict(tsheHeightFromDiameterPreferred$gam, .[cur_group_rows(), ])),
                                    speciesGroup == "BM" ~ predict(acmaHeightFromDiameterPreferred$sharmaParton, .[cur_group_rows(), ]),
                                    speciesGroup == "OM" ~ predict(umcaHeightFromDiameterPreferred$sharmaPartonPhysio, .[cur_group_rows(), ]),
                                    speciesGroup == "RC" ~ predict(thplHeightFromDiameterPreferred$sharmaPartonPhysio, .[cur_group_rows(), ]),
-                                   speciesGroup == "other" ~ predict(otherHeightFromDiameterPreferred$gamBal, .[cur_group_rows(), ]))) %>% # a few seconds, likely mainly due to GAM prediction
+                                   speciesGroup == "other" ~ if_else(is.na(elevation) == FALSE, predict(otherHeightFromDiameterPreferred$gamRelDbhPhysio, .[cur_group_rows(), ]), predict(otherHeightFromDiameterPreferred$gam, .[cur_group_rows(), ])))) %>% # a few seconds, likely mainly due to GAM prediction
   rename(stand = StandID, plot = PlotID, tag = TreeID, dbh = DBH, height = imputedHeight, codes = CompCode, heightToBrokenTop = Ht2) %>%
-  select(speciesGroup, stand, plot, tag, species, dbh, height, expansionFactor, codes, heightToBrokenTop) %>% # dbh in cm, heights in m, expansion factor in TPH
+  select(isPlantation, stand, plot, tag, speciesGroup, species, dbh, height, expansionFactor, codes, heightToBrokenTop) %>% # dbh in cm, heights in m, expansion factor in TPH
   ungroup() %>%
   arrange(stand, plot, tag)
 
-# sanity checks
+# check for out of range values in stand data, tree data, or tree height imputation
 organonStands %>% reframe(quantiles = c(0, 1), age = quantile(age, probs = quantiles, na.rm = TRUE), 
                                                siteIndex = quantile(siteIndex, probs = quantiles), 
                                                slopeInPercent = quantile(slopeInPercent, probs = quantiles), 
@@ -71,17 +71,19 @@ organonTrees %>% group_by(speciesGroup) %>%
   reframe(quantiles = c(0, 0.025, 0.5, 0.975, 1), dbh = quantile(dbh, probs = quantiles), height = quantile(height, probs = quantiles), EF = quantile(expansionFactor, probs = quantiles)) %>%
   pivot_wider(names_from = quantiles, values_from = c(dbh, height, EF))
 
+# write .xlsx for Get-CruisedStands
 intensiveStands = left_join(stands2022 %>% filter(April2021_Allocation == "Intensive"),
                             trees2016 %>% filter(isLive) %>% group_by(StandID) %>% summarize(measurePlots = measurePlotsInStand[1], uniqueNonReserveMeasureTrees = sum((is.na(DBH) == FALSE) & (CompCode != "RT"))),
                             by = "StandID") %>%
   filter(is.na(measurePlots) == FALSE, uniqueNonReserveMeasureTrees >= 20) # exclude uncruised stands and stands with too few measure trees to form meaningful prescription guidance
-
 intensiveStands %>% filter(uniqueNonReserveMeasureTrees < 20)
-intensiveStands$uniqueMeasureTrees[which(intensiveStands$StandID == 2445)]
 
 intensiveStandIDs = unique(intensiveStands$StandID)
-intensiveTrees = organonTrees %>% filter(stand %in% intensiveStandIDs) %>% select(-speciesGroup)
-#write_xlsx(list(stands = organonStands, trees = organonTrees %>% select(-speciesGroup), intensiveTrees = intensiveTrees), "trees/Organon/Elliott Organon cruise records 2015-16.xlsx")
+write_xlsx(list(stands = organonStands %>% select(-isPlantation), 
+                trees = organonTrees %>% select(-isPlantation, -speciesGroup),
+                plantationTrees = organonTrees %>% filter(isPlantation) %>% select(-isPlantation, -speciesGroup), 
+                intensiveTrees = organonTrees %>% filter(stand %in% intensiveStandIDs) %>% select(-isPlantation, -speciesGroup)), 
+           "trees/Organon/Elliott Organon cruise records 2015-16 v2.xlsx")
 
 
 ## exploratory plots
