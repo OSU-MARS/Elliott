@@ -6,11 +6,15 @@ library(ggplot2)
 library(furrr)
 library(magrittr)
 library(patchwork)
+library(progressr)
 library(rsample)
+library(stringr)
 library(terra)
 library(tidyr)
 library(readxl)
 
+options(cli.progress_format_iterator = "{cli::pb_bar} {cli::pb_percent} | {cli::pb_current} of {cli::pb_total} increments completed, {cli::pb_elapsed_clock} elapsed, {prettyunits::pretty_sec(as.numeric(cli::pb_eta_raw))} remaining",
+        future.globals.maxSize = 10 * 1024^3) # increase from default 500 MB to 1 GB for cross validation in aba.R
 theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
                              legend.background = element_rect(fill = alpha("white", 0.5)),
                              legend.margin = margin(),
@@ -22,8 +26,64 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
 
 abaOptions = tibble(folds = 2, repetitions = 2,
                     coniferDeciduousWeight = 5,
+                    dataPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County",
                     includeInvestigatory = FALSE, 
                     recalcAbaCellOccupancy = FALSE)
+
+get_aba_cell_norms = function(abaCellTreeLists, stands2022, stands2021organon, trees2021lidarByHeightClass)
+{
+  #abaCellTreeLists = abaCellTrees
+  #trees2021lidarByHeightClass = trees2021lidarByHeightClass
+
+  # TODO: need to find area of stands within the iLand simulation boundary
+  #startTime = Sys.time()
+  abaStands = left_join(abaCellTreeLists %>% mutate(heightClass = round(height)) %>% # ~4 s, match height classes in stands2021organon
+                          group_by(stand, heightClass) %>%
+                          summarize(treesConifer = sum(isConifer), treesHardwood = sum(isConifer == FALSE), .groups = "drop"),
+                        # for now, stands2022$isExternalBoundarySplit is not considered
+                        stands2022 %>% group_by(stand) %>% summarize(standArea = sum(standArea)),
+                        by = join_by(stand)) %>%
+    mutate(tphConifer = treesConifer / standArea, # trees per hectare
+           tphHardwood = treesHardwood / standArea)
+  #Sys.time() - startTime
+  #colSums(is.na(abaStands))
+  
+  standsAbaCruise = full_join(stands2021organon %>% filter(stand %in% unique(abaStands$stand)) %>% select(stand, heightClass, tphConifer, tphHardwood) %>% rename(tphConiferCruise = tphConifer, tphHardwoodCruise = tphHardwood),
+                              abaStands %>% filter(stand %in% unique(stands2021organon$stand)) %>% select(stand, standArea, heightClass, tphConifer, tphHardwood) %>% rename(tphConiferAba = tphConifer, tphHardwoodAba = tphHardwood), # exclude ABA data for uncruised stands
+                              by = join_by(stand, heightClass)) %>%
+    group_by(stand) %>%
+    mutate(standArea = replace_na(standArea, max(standArea, na.rm = TRUE)), # if a height class exists only in cruise data the row will have NA for stand area and ABA tph
+           tphConiferAba = replace_na(tphConiferAba, 0),
+           tphHardwoodAba = replace_na(tphHardwoodAba, 0),
+           tphConiferCruise = replace_na(tphConiferCruise, 0), # similarly, if a height class exists only in LiDAR data the cruise TPH will be NA
+           tphHardwoodCruise = replace_na(tphHardwoodCruise, 0)) %>%
+    ungroup()
+  #colSums(is.na(standsAbaCruise))
+  #standsAbaCruise %>% group_by(stand) %>% summarize(standArea = standArea[1], tphConiferCruise = sum(tphConiferCruise), tphHardwoodCruise = sum(tphHardwoodCruise), tphConiferAba = sum(tphConiferAba), tphHardwoodAba = sum(tphHardwoodAba))
+  #ggplot() + geom_histogram(aes(x = tph), stands2021organon %>% group_by(stand) %>% summarize(tphConifer = sum(tphConifer), tphHardwood = sum(tphHardwood)) %>% mutate(tph = tphConifer + tphHardwood))
+  
+  trees2021lidarReference = trees2021lidarByHeightClass %>% filter(stand %in% unique(standsAbaCruise$stand)) %>%
+    group_by(isConifer, heightClass) %>%
+    summarize(tph = sum(standArea * tph) / sum(standArea), .groups = "drop")
+  
+  standsAbaCruiseError = standsAbaCruise %>% group_by(heightClass) %>% 
+    summarize(tphConiferError = sum(standArea * (tphConiferAba - tphConiferCruise)) / sum(standArea),
+              tphConiferMad = sum(standArea * abs(tphConiferAba - tphConiferCruise)) / sum(standArea),
+              tphConiferMrd = sum(standArea * abs(tphConiferAba - tphConiferCruise) / (pmax(tphConiferAba, tphConiferCruise) + pmax(tphHardwoodAba, tphHardwoodCruise)), na.rm = TRUE) / sum(standArea), # na.rm needed since both ABA and cruise TPH can be zero
+              tphConiferRmse = sqrt(sum(standArea * (tphConiferAba - tphConiferCruise)^2) / sum(standArea)),
+              tphHardwoodError = sum(standArea * (tphHardwoodAba - tphHardwoodCruise)) / sum(standArea),
+              tphHardwoodMad = sum(standArea * abs(tphHardwoodAba - tphHardwoodCruise)) / sum(standArea),
+              tphHardwoodMrd = sum(standArea * abs(tphHardwoodAba - tphHardwoodCruise) / (pmax(tphConiferAba, tphConiferCruise) + pmax(tphHardwoodAba, tphHardwoodCruise)), na.rm = TRUE) / sum(standArea),
+              tphHardwoodRmse = sqrt(sum(standArea * (tphHardwoodAba - tphHardwoodCruise)^2) / sum(standArea)),
+              tphConiferAba = sum(standArea * tphConiferAba) / sum(standArea), # calculate totals last as this collapses vectors of stand data to scalars
+              tphConiferCruise = sum(standArea * tphConiferCruise) / sum(standArea),
+              tphHardwoodAba = sum(standArea * tphHardwoodAba) / sum(standArea),
+              tphHardwoodCruise = sum(standArea * tphHardwoodCruise) / sum(standArea))
+  #colSums(is.na(standsAbaCruiseError))
+  #colSums(standsAbaCruiseError)
+  #print(standsAbaCruise %>% filter(heightClass == 6) %>% select(-tphHardwoodCruise, -tphHardwoodAba) %>% mutate(error = tphConiferAba - tphConiferCruise, weightedError = standArea * abs(error) / sum(standArea), mae = sum(weightedError)) %>% relocate(stand, standArea), n = 200)
+  return(list(standsAbaCruise = standsAbaCruise, standsAbaCruiseError = standsAbaCruiseError, trees2021lidarReference = trees2021lidarReference))
+}
 
 get_aba_cell_plots = function(validationCells, validationCellsScaled, trainingPlotHeightsScaled, treeMatchBound = 8, lidarMetrics = c("pGround", "zQ10", "zQ20", "zQ30"))
 {
@@ -266,7 +326,7 @@ stands2022 = left_join(read_xlsx("GIS/Trees/2015-16 cruise.xlsx") %>% rename(sta
                        read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% select(StandID, ODSL_VEG_L) %>% rename(vegLabel = ODSL_VEG_L),
                        by = join_by(x$stand == y$StandID)) %>%
   mutate(vegStrata = if_else(vegLabel %in% c("1D1L", "1D2H", "1D2L", "1D3H", "1D4H", "1D5H", "DX1L", "DX2H", "DX2L", "DX34L", "DX3H", "DX4H", "DX5H"), vegLabel, "other")) # cruise strata for cross validation of missing tree imputation from cruise.R
-stands2016esf = as_tibble(vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg")) %>% filter(standID2016 %in% stands2022$stand == FALSE) %>% rename(stand = standID2016)
+stands2016esf = as_tibble(vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2022 property boundary split")) %>% filter(standID2016 %in% stands2022$stand == FALSE) %>% rename(stand = standID2016)
 stands2022 = bind_rows(stands2022, stands2016esf) # picks up areas of bordering stands
 
 trees2021organon = left_join(read_feather(file.path(getwd(), "trees/Organon/Elliott tree lists 2016-2116.feather"), mmap = FALSE) %>% select(-species), # TODO: should 2016 snags be joined? they don't flow through Organon but standing in 2016 won't all have fallen by 2021
@@ -352,18 +412,19 @@ plotMetrics2021 = as_tibble(vect(plotMetrics2021)) %>% # EPSG:6557 but geometry 
 
 plotHeights = left_join(plotHeights, plotMetrics2021, by = c("plot")) # join LiDAR metrics to Organon grown cruise data
 
-load("trees/height-diameter/data/trees DSM ring.Rdata") # LiDAR identified treetops from Get-Treetops and trees.R, a few seconds
-trees2021lidar = elliottTreesMod %>% # ~7.6 s, EPSG:6556; heights and elevations also in m
+elliottTreesReadStart = Sys.time() # ~29s, 9900X
+trees2021lidar = readRDS(file.path(abaOptions$dataPath, "treetops", "trees rf v1.Rds")) %>% # LiDAR identified treetops from Get-Treetops and trees.R
   mutate(abaGridX = floor(1/abaGrid$size * (x - abaGrid$originX)), # ABA grid origin and cell size from GIS/Trees/Elliott ABA grid 20 m.gpkg
          abaGridY = floor(1/20 * (y - abaGrid$originY))) %>%
-  rename(segmentationID = treeID) %>% # because treeID is changed to each detected treetop's height rank below
-  group_by(abaGridX, abaGridY) %>%
-  arrange(desc(height)) %>%
-  mutate(nCell = n(), treeID = row_number()) %>%
-  ungroup()
-rm(elliottTreesMod) # since no way to load a single variable in a .Rdata into a specific variable name
+    rename(segmentationID = treeID) %>% # because treeID is changed to each detected treetop's height rank below
+    group_by(abaGridX, abaGridY) %>%
+    arrange(desc(height)) %>%
+    mutate(nCell = n(), 
+           treeID = row_number()) %>%
+    ungroup()
+Sys.time() - elliottTreesReadStart
 
-trees2021lidarByHeightClass = trees2021lidar %>% # ~3 s
+trees2021lidarByHeightClass = trees2021lidar %>% # ~4 s
   rename(stand = standID2016) %>%
   mutate(heightClass = round(height), isConifer = species %in% c("PSME")) %>% 
   group_by(stand, isConifer, heightClass) %>%
@@ -372,7 +433,7 @@ trees2021lidarByHeightClass = trees2021lidar %>% # ~3 s
 
 if (abaOptions$recalcAbaCellOccupancy)
 {
-  startTime = Sys.time()
+  startTime = Sys.time() # ~60 s, 9900X
   abaCellTreesByStand = trees2021lidar %>% group_by(abaGridX, abaGridY, standID2016) %>% # 1.8 minutes
     summarize(isPlantation = isPlantation[1], nStand = n(), .groups = "drop_last") %>% 
     slice_max(nStand, n = 2, with_ties = FALSE) %>%
@@ -383,11 +444,18 @@ if (abaOptions$recalcAbaCellOccupancy)
   Sys.time() - startTime
   #abaCellTreesByStand %>% filter(is.na(stand2) == FALSE)
 
-  # 15,367 cells (1.5%) have zero treetops and are thus silently dropped out of the grid occupancy formed below
+  # a few cells have zero treetops and are thus silently dropped out of the grid occupancy formed below
   # These are typically canopy gaps with multiple treetops just out of cell.
-  startTime = Sys.time()
-  abaCellTrees = trees2021lidar %>% # ~49 minutes; 11.4 M treetops -> million row tibble
-    summarize(stands = length(unique(standID2016)), n = n(), species1 = species[1], height1 = height[1], 
+  # dataset     zero treetop cells
+  # 2023-12     15,367 (1.5%)
+  # 2025-05-06  6315 (0.63%)
+  #
+  # trees2021lidar %>% group_by(abaGridX, abaGridY) %>% summarize(treetops = n()) %>% group_by(treetops) %>% summarize(cells = n())
+  startTime = Sys.time() # 23 minutes, ~32 GB DDR,  11.7 M treetops -> 1.004 million row tibble (~50 minutes 5950X)
+  abaCellTrees = trees2021lidar %>% group_by(abaGridX, abaGridY) %>%
+    arrange(desc(height)) %>%
+    summarize(stands = length(unique(standID2016)), n = n(), 
+              species1 = species[1], height1 = height[1], 
               species2 = if_else(n() >= 2, species[2], NA_character_), height2 = if_else(n() >= 2, height[2], NA_real_),
               species3 = if_else(n() >= 3, species[3], NA_character_), height3 = if_else(n() >= 3, height[3], NA_real_),
               species4 = if_else(n() >= 4, species[4], NA_character_), height4 = if_else(n() >= 4, height[4], NA_real_),
@@ -409,16 +477,16 @@ if (abaOptions$recalcAbaCellOccupancy)
            isConifer10 = species10 %in% c("PSME"), isConifer11 = species11 %in% c("PSME"), isConifer12 = species12 %in% c("PSME"), 
            isConifer13 = species13 %in% c("PSME"), isConifer14 = species14 %in% c("PSME"), isConifer15 = species15 %in% c("PSME"))
   Sys.time() - startTime
-  
+
   abaCells = left_join(abaCellTreesByStand, abaCellTrees, by = c("abaGridX", "abaGridY")) %>%
     relocate(abaGridX, abaGridY, stands, n)
-  save(file = "trees/height-diameter/data/trees by cell.Rdata", abaCells)
+  saveRDS(abaCells, file = file.path(abaOptions$dataPath, "treetops", "trees by ABA cell rf v1.Rds")) # 83 MB
 } else {
-  load("trees/height-diameter/data/trees by cell.Rdata") # abaCells
+  abaCells = readRDS(file.path(abaOptions$dataPath, "treetops", "trees by ABA cell rf v1.Rds"))
 }
 
 abaMetrics = as.data.frame(project(rast("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/metrics/grid metrics 20 m.tif"), crs("epsg:6556"), threads = TRUE), xy = TRUE, na.rm = NA) # ~5 s
-names(abaMetrics)[47] = "intensityPground" # temporary workaround for C# typo
+names(abaMetrics)[47] = "intensityPground" # workaround for C# typo until grid metrics are recalculated
 abaMetrics %<>% mutate(abaGridX = floor(1/abaGrid$size * (x - abaGrid$originX)), 
                        abaGridY = floor(1/20 * (y - abaGrid$originY)),
                        across(starts_with(c("zM", "zQ")), ~0.3048 * .x), # convert mean-median-max and quantiles from feet to meters
@@ -767,4 +835,69 @@ if (abaOptions$includeInvestigatory)
       plot_layout(guides = "collect") &
       scale_fill_viridis_c(limits = c(1, 200), trans = "log10")
   }
+}
+
+
+## move non-NIR treetop tiles surrounding the Elliott to subdirectory
+# Makes the treetop footprint match the NIR utilizing classification space.
+if (abaOptions$includeSetup)
+{
+  library(stringr)
+  
+  surrounding1path = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles surrounding distance 1"
+  surroundingTileNames = str_remove(list.files(surrounding1path, "\\.las$"), "\\.las$")
+
+  crownTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/crowns rf v1"
+  surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif"))
+  moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif")))
+  surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif.aux.xml"))
+  moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif.aux.xml")))
+  
+  treetopTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1"
+  surroundingTreetopTiles = file.path(treetopTilePath, paste0(surroundingTileNames, ".gpkg"))
+  moveResult = file.rename(surroundingTreetopTiles, file.path(treetopTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".gpkg")))
+}
+
+## distribution of crown classification counts
+if (abaOptions$includeInvestigatory)
+{
+  library(sf)
+  
+  s04230w06810tops = st_read("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/treetops rf v1 s04230w06810.gpkg", quiet = TRUE) %>%
+    mutate(cells = Unclassified + Bare + BareShadow + BrownTree + GreyTree + Conifer + ConiferShadow + ConiferDeepShadow + Hardwood + HardwoodShadow + HardwoodDeepShadow)
+
+  ggplot() +
+    geom_bin_2d(aes(x = (BrownTree + GreyTree) / cells, y = (Conifer + 0.7 * ConiferShadow + 0.5 * ConiferDeepShadow + Hardwood + 0.7 * HardwoodShadow + 0.5 * HardwoodDeepShadow) / cells), st_drop_geometry(s04230w06810tops), binwidth = 0.02) +
+    labs(x = "snag fraction", y = "tree fraction") +
+  ggplot() +
+    geom_bin_2d(aes(x = (BrownTree + GreyTree) / cells, y = (Conifer + 0.7 * ConiferShadow + 0.5 * ConiferDeepShadow + Hardwood + 0.7 * HardwoodShadow + 0.5 * HardwoodDeepShadow) / cells), st_drop_geometry(s04230w06810tops), binwidth = 0.02) +
+    labs(x = "snag fraction", y = "tree fraction") +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout() &
+    scale_fill_viridis_c(trans = "log10")
+  
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 1, yend = 1), color = "grey70") +
+    geom_bin_2d(aes(x = (Conifer + 0.7 * ConiferShadow + 0.5 * ConiferDeepShadow) / cells, y = (Hardwood + 0.7 * HardwoodShadow + 0.5 * HardwoodDeepShadow) / cells), st_drop_geometry(s04230w06810tops) %>% filter((BrownTree + GreyTree) / cells < 0.2), binwidth = 0.02) +
+    labs(x = "conifer fraction", y = "hardwood fraction") +
+    scale_fill_viridis_c(trans = "log10")
+  
+  ggplot() +
+    geom_histogram(aes(x = (BrownTree + GreyTree)/ cells), st_drop_geometry(s04230w06810tops), binwidth = 0.02) +
+    labs(x = "snag fraction", y = "trees") +
+  ggplot() +
+    geom_histogram(aes(x = (Conifer + ConiferShadow + ConiferDeepShadow + Hardwood + HardwoodShadow + HardwoodDeepShadow)/ cells), st_drop_geometry(s04230w06810tops), binwidth = 0.02) +
+    labs(x = "tree fraction", y = "trees") +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout() &
+    coord_cartesian(xlim = c(0, NA), ylim = c(0, 500))
+    
+  s04230w06810means = s04230w06810tops %>% st_drop_geometry(s04230w06810tops) %>% group_by(cells) %>% summarize(Unclassified = mean(Unclassified), Bare = mean(Bare), BareShadow = mean(BareShadow), BrownTree = mean(BrownTree), GreyTree = mean(GreyTree), Conifer = mean(Conifer), ConiferShadow = mean(ConiferShadow), ConiferDeepShadow = mean(ConiferDeepShadow), Hardwood = mean(Hardwood), HardwoodShadow = mean(HardwoodShadow), HardwoodDeepShadow = mean(HardwoodDeepShadow))
+  ggplot() +
+    geom_col(aes(x = cells, y = meanCount / cells, fill = class, group = cells), s04230w06810means %>% pivot_longer(cols = -cells, names_to = "class", values_to = "meanCount")) +
+    #coord_trans(x = scales::pseudo_log_trans()) +
+    labs(x = "crown size, cells", y = "fraction of cells", fill = NULL) +
+    scale_fill_manual(breaks = c("Conifer", "ConiferShadow", "ConiferDeepShadow", "Hardwood", "HardwoodShadow", "HardwoodDeepShadow", "BrownTree", "GreyTree", "Bare", "BareShadow", "Unclassified"),
+                      values = c("#108c00", "#0f8000", "#0d7300", "#c00006", "#a60006", "#8c0005", "#cd530d", "#989898", "#d2bc7c", "#7f714b", "black"))
+    #scale_x_continuous(breaks = c(0, 1, 3, 10, 30, 100, 3000, 1000, 3000, 10000))
 }

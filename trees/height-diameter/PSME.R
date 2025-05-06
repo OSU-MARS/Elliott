@@ -852,7 +852,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightMixed & psmeOptions$fitH
 }
 
 
-## preferred forms identified (results.R, Figure 8)
+## preferred forms identified (results.R, Figure 8 and trees.R)
 if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & psmeOptions$fitDbhPrimary & psmeOptions$fitDbhNlrobAndFixedWeight)
 {
   psmeHeightFromDiameterPreferred = list(gam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 15, pc = gamConstraint), data = psme2016, constraint = psme2016gamConstraint, folds = 1, repetitions = 1))
@@ -870,6 +870,7 @@ if (psmeOptions$fitHeightPrimary & psmeOptions$fitHeightNlrobAndFixedWeight & ps
   psmeDiameterFromHeightPreferred$gamAbatPhysioRelHt = fit_gam("REML GAM ABA+T RelHt physio", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, elevation, sin(3.14159/180 * aspect), cos(3.14159/180 * aspect), topographicShelterIndex, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 496, pc = gamConstraint), data = psme2016physio, constraint = psme2016gamConstraint, folds = 1, repetitions = 1, nthreads = 4)
   psmeDiameterFromHeightPreferred$michaelisMentenReplace = fit_gsl_nls("Michaelis-Menten replace", DBH ~ (a1 + a1p * isPlantation) * (TotalHt - 1.37)^(b1 + b1p * isPlantation) / (a2 + a2p * isPlantation - (TotalHt - 1.37)^(b1 + b1p * isPlantation)), psme2016, start = list(a1 = 190, a1p = -118, a2 = 67.3, a2p = -38.3, b1 = 0.78, b1p = -0.08), folds = 1, repetitions = 1)
   psmeDiameterFromHeightPreferred$ruark = fit_gsl_nls("Ruark", DBH ~ a1*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016, start = list(a1 = 2.67, b1 = 0.813, b1p = -0.126, b2 = 0.0067, b2p = 0.0096), folds = 1, repetitions = 1)
+  psmeDiameterFromHeightPreferred$ruarkAbatPhysio = fit_gsl_nls("Ruark ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a3 * standBasalAreaApprox + a6 * cos(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp((b2 + b2p * isPlantation) * (TotalHt - 1.37)), psme2016physio, start = list(a1 = 2.5, a2 = -0.017, a3 = -0.004, a6 = -0.05, b1 = 0.93, b1p = -0.19, b2 = 0.002, b2p = 0.012), folds = 1, repetitions = 1)
   psmeDiameterFromHeightPreferred$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ (a1 + a1p * isPlantation)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), psme2016, start = list(a1 = 3.89, a1p = -0.922, b1 = 0.519, b2 = 0.111, b2p = 0.017), folds = 1, repetitions = 1)
   
   save(file = "trees/height-diameter/data/PSME preferred models.Rdata", psmeHeightFromDiameterPreferred, psmeDiameterFromHeightPreferred)

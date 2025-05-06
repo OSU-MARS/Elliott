@@ -121,8 +121,8 @@ if (classificationOptions$rebuildTrainingData)
 {
   trainingPolygons = vect(file.path(getwd(), "GIS/Trees/classification training polygons.gpkg"), layer = "hardwood-conifer training polygons") # manually designated ground truth polygons
 
-  dsm = rast(file.path(dataSourcePath, "DSM v3 beta", "dsm cmm3 chm aerialMean density.vrt"))
-  dsmSlopeAspect005 = rast(file.path(dataSourcePath, "DSM v3 beta", "slopeAspect", "slopeAspect.vrt"))
+  dsm = rast(file.path(dataSourcePath, "DSM v3", "dsm cmm3 chm aerialMean density.vrt"))
+  dsmSlopeAspect005 = rast(file.path(dataSourcePath, "DSM v3", "slopeAspect", "slopeAspect.vrt"))
   dtmSlope100 = rast(file.path(dataSourcePath, "bare earth slope Gaussian 10 m EPSG6557.tif")) %>%
     rename(slope100 = `bare earth slope Gaussian 10 m EPSG6557`)
   dtmAspectCos100 = rast(file.path(dataSourcePath, "bare earth cos(aspect) Gaussian 10 m EPSG6557.tif")) %>%

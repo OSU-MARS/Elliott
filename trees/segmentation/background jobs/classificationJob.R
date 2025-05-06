@@ -25,9 +25,9 @@ dataPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County"
 randomForestFit = readRDS(file.path(getwd(), sprintf("trees/segmentation/classificationRandomForest PCA12 iQ17hQ29csr 3800 %.1fm m9n25 cubic subclass.Rds", classificationOptions$gridMetricsResolution)))
 dataDestinationPath = file.path(dataPath, "classification", sprintf("PCA12 iQ17hQ29csr 3800 %.1fm m9n25 cubic subclass", classificationOptions$gridMetricsResolution))
 
-dsmSourcePath = file.path(dataPath, "DSM v3 beta")
-dsmSlopeAspectSourcePath = file.path(dataPath, "DSM v3 beta", "slopeAspect")
-dsmPointsSourcePath = file.path(dataPath, "DSM v3 beta", "nPoints")
+dsmSourcePath = file.path(dataPath, "DSM v3")
+dsmSlopeAspectSourcePath = file.path(dataPath, "DSM v3", "slopeAspect")
+dsmPointsSourcePath = file.path(dataPath, "DSM v3", "nPoints")
 dtmSourcePath = file.path(dataPath, "DTM")
 orthoimageSourcePath = file.path(dataPath, "orthoimage v3")
 tileNames = list.files(orthoimageSourcePath, "\\.tif$")

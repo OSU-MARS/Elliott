@@ -32,7 +32,7 @@ localMaximaFileNames = list.files(localMaximaPathV3, "\\.gpkg$")
 
 stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", quiet = TRUE, layer = "unified stands 2016"),
                           make_compound_crs(6557, 8228)) %>% # for DSM v3, keep in sync with same code in treetopJob.R
-                          # st_crs(6557)) %>% # for runs against DSM v3 beta
+                          # st_crs(6557)) %>% # for runs against DSM v3
   select(standID2016)
 treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3.Rds") 
 forestTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1"

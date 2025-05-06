@@ -1,114 +1,110 @@
 # assumes trees/area based/setup.R has been run
+handlers(global = TRUE)
+handlers("cli")
+# map() outperforms or is competitive with future_map() due to slow transferrence of data to workers
+#plan(multisession, workers = 4) # limit workers as each uses ~16 GB
 
-get_aba_cell_norms = function(abaCellTreeLists, stands2022, stands2021organon, trees2021lidarByHeightClass)
-{
-  #startTime = Sys.time()
-  abaStands = left_join(abaCellTreeLists %>% mutate(heightClass = round(height)) %>% # ~4 s, match height classes in stands2021organon
-                          group_by(stand, heightClass) %>%
-                          summarize(treesConifer = sum(isConifer), treesHardwood = sum(isConifer == FALSE), .groups = "drop"),
-                        stands2022 %>% select(stand, standArea),
-                        by = join_by(stand)) %>%
-    mutate(tphConifer = treesConifer / standArea, # trees per hectare
-           tphHardwood = treesHardwood / standArea)
-  #Sys.time() - startTime
-  #colSums(is.na(abaStands))
+## cross validation of missed tree imputation
+# Use vfold_cv() at stand level since group_vfold_cv() departs widely from balanced splits.
+splits = vfold_cv(stands2022 %>% filter(is.na(tph) == FALSE), v = 2, repeats = 25, strata = vegStrata) # cross validate only on cruised stands
+crossValidationStart = Sys.time() # 6.2 minutes, 9900X 2x25 @ 11.8 M trees
+with_progress({
+  progressBar = progressor(steps = nrow(splits))
+  abaCellErrors = splits %>% mutate(error = purrr::map(splits, function(fold)
+    {
+      #split = splits[1, ]
+      #trainingStands = analysis(split$splits[[1]])
+      #validationStands = assessment(split$splits[[1]])
+      trainingStands = analysis(fold)
+      validationStands = assessment(fold)
+      
+      trainingPlotHeightsScaled = plotHeightsScaled %>% filter(stand %in% trainingStands$stand)
+      validationCells = abaCells %>% filter(stand1 %in% validationStands$stand)
+      validationCellsScaled = abaCellsScaled %>% filter(stand1 %in% validationStands$stand)
+      
+      #startTime = Sys.time() # ~0.8 s for 2-fold cross validation
+      abaCellPlots = get_aba_cell_plots(validationCells, validationCellsScaled, trainingPlotHeightsScaled, treeMatchBound = 8, lidarMetrics = c("pGround", "zQ10", "zQ20", "zQ30"))
+      #Sys.time() - startTime
+      #startTime = Sys.time() # ~8 s 2-fold
+      abaCellTrees = get_tree_lists(abaCellPlots, plotTreeCounts, trees2021lidar)
+      #Sys.time() - startTime
+      #startTime = Sys.time() # ~0.7 s
+      abaCellNorms = get_aba_cell_norms(abaCellTrees, stands2022, stands2021organon, trees2021lidarByHeightClass)
+      #Sys.time() - startTime
   
-  standsAbaCruise = full_join(stands2021organon %>% filter(stand %in% unique(abaStands$stand)) %>% select(stand, heightClass, tphConifer, tphHardwood) %>% rename(tphConiferCruise = tphConifer, tphHardwoodCruise = tphHardwood),
-                              abaStands %>% filter(stand %in% unique(stands2021organon$stand)) %>% select(stand, standArea, heightClass, tphConifer, tphHardwood) %>% rename(tphConiferAba = tphConifer, tphHardwoodAba = tphHardwood), # exclude ABA data for uncruised stands
-                              by = join_by(stand, heightClass)) %>%
-    group_by(stand) %>%
-    mutate(standArea = replace_na(standArea, max(standArea, na.rm = TRUE)), # if a height class exists only in cruise data the row will have NA for stand area and ABA tph
-           tphConiferAba = replace_na(tphConiferAba, 0),
-           tphHardwoodAba = replace_na(tphHardwoodAba, 0),
-           tphConiferCruise = replace_na(tphConiferCruise, 0), # similarly, if a height class exists only in LiDAR data the cruise TPH will be NA
-           tphHardwoodCruise = replace_na(tphHardwoodCruise, 0)) %>%
-    ungroup()
-  #colSums(is.na(standsAbaCruise))
-  #standsAbaCruise %>% group_by(stand) %>% summarize(standArea = standArea[1], tphConiferCruise = sum(tphConiferCruise), tphHardwoodCruise = sum(tphHardwoodCruise), tphConiferAba = sum(tphConiferAba), tphHardwoodAba = sum(tphHardwoodAba))
-  #ggplot() + geom_histogram(aes(x = tph), stands2021organon %>% group_by(stand) %>% summarize(tphConifer = sum(tphConifer), tphHardwood = sum(tphHardwood)) %>% mutate(tph = tphConifer + tphHardwood))
-  
-  trees2021lidarReference = trees2021lidarByHeightClass %>% filter(stand %in% unique(standsAbaCruise$stand)) %>%
-    group_by(isConifer, heightClass) %>%
-    summarize(tph = sum(standArea * tph) / sum(standArea), .groups = "drop")
-  
-  standsAbaCruiseError = standsAbaCruise %>% group_by(heightClass) %>% 
-    summarize(tphConiferMad = sum(standArea * abs(tphConiferAba - tphConiferCruise)) / sum(standArea),
-              tphConiferMrd = sum(standArea * abs(tphConiferAba - tphConiferCruise) / (pmax(tphConiferAba, tphConiferCruise) + pmax(tphHardwoodAba, tphHardwoodCruise)), na.rm = TRUE) / sum(standArea), # na.rm needed since both ABA and cruise TPH can be zero
-              tphConiferRmse = sqrt(sum(standArea * (tphConiferAba - tphConiferCruise)^2) / sum(standArea)),
-              tphHardwoodMad = sum(standArea * abs(tphHardwoodAba - tphHardwoodCruise)) / sum(standArea),
-              tphHardwoodMrd = sum(standArea * abs(tphHardwoodAba - tphHardwoodCruise) / (pmax(tphConiferAba, tphConiferCruise) + pmax(tphHardwoodAba, tphHardwoodCruise)), na.rm = TRUE) / sum(standArea),
-              tphHardwoodRmse = sqrt(sum(standArea * (tphHardwoodAba - tphHardwoodCruise)^2) / sum(standArea)),
-              tphConiferAba = sum(standArea * tphConiferAba) / sum(standArea), # calculate totals last as this collapses vectors of stand data to scalars
-              tphConiferCruise = sum(standArea * tphConiferCruise) / sum(standArea),
-              tphHardwoodAba = sum(standArea * tphHardwoodAba) / sum(standArea),
-              tphHardwoodCruise = sum(standArea * tphHardwoodCruise) / sum(standArea))
-  #colSums(is.na(standsAbaCruiseError))
-  #colSums(standsAbaCruiseError)
-  #print(standsAbaCruise %>% filter(heightClass == 6) %>% select(-tphHardwoodCruise, -tphHardwoodAba) %>% mutate(error = tphConiferAba - tphConiferCruise, weightedError = standArea * abs(error) / sum(standArea), mae = sum(weightedError)) %>% relocate(stand, standArea), n = 200)
-  return(list(standsAbaCruise = standsAbaCruise, standsAbaCruiseError = standsAbaCruiseError, trees2021lidarReference = trees2021lidarReference))
-}
+      progressBar()
+      return(abaCellNorms)
+    })) %>% 
+    unnest_wider(error)
+})
+Sys.time() - crossValidationStart
 
-## cross-validated matching
-# use vfold_cv() at stand level since group_vfold_cv() departs widely from balanced splits
-# splitsAndFits = vfold_cv(plotHeightsScaled, v = 2, repeats = 1) %>% mutate(fit = future_map(splits, fitFunction))
-splits = vfold_cv(stands2022 %>% filter(is.na(tph) == FALSE), v = 2, repeats = 2, strata = vegStrata) # cross validate only on cruised stands
-
-split = splits[1, ]
-trainingStands = analysis(split$splits[[1]])
-validationStands = assessment(split$splits[[1]])
-
-trainingPlotHeightsScaled = plotHeightsScaled %>% filter(stand %in% trainingStands$stand)
-validationCells = abaCells %>% filter(stand1 %in% validationStands$stand)
-validationCellsScaled = abaCellsScaled %>% filter(stand1 %in% validationStands$stand)
-
-startTime = Sys.time() # ~0.8 s for 2-fold cross validation
-abaCellPlots = get_aba_cell_plots(validationCells, validationCellsScaled, trainingPlotHeightsScaled, treeMatchBound = 8, lidarMetrics = c("pGround", "zQ10", "zQ20", "zQ30"))
-Sys.time() - startTime
-startTime = Sys.time() # ~8 s 2-fold
-abaCellTrees = get_tree_lists(abaCellPlots, plotTreeCounts, trees2021lidar)
-Sys.time() - startTime
-startTime = Sys.time() # ~0.7 s
-abaCellNorms = get_aba_cell_norms(abaCellTrees, stands2022, stands2021organon, trees2021lidarByHeightClass)
-Sys.time() - startTime
+crossValidatedLidar = bind_rows(abaCellErrors$trees2021lidarReference) %>% group_by(isConifer, heightClass) %>% 
+  summarize(tph = mean(tph), .groups = "drop") %>% 
+  mutate(speciesGroup = if_else(isConifer, "conifer", "hardwood"))
+crossValidatedAbaImputation = bind_rows(abaCellNorms$standsAbaCruiseError) %>% 
+  select(heightClass, tphConiferAba, tphHardwoodAba) %>% 
+  group_by(heightClass) %>% 
+  summarize(tphConiferAba = mean(tphConiferAba), tphHardwoodAba = sum(tphHardwoodAba), .groups = "drop") %>% 
+  pivot_longer(cols = c("tphConiferAba", "tphHardwoodAba"), names_to = "speciesGroup", values_to = "tphAba") %>% 
+  mutate(speciesGroup = if_else(speciesGroup == "tphConiferAba", "conifer", "hardwood"))
+crossValidatedCruiseTph = bind_rows(abaCellNorms$standsAbaCruiseError) %>% 
+  select(heightClass, tphConiferCruise, tphHardwoodCruise) %>% 
+  group_by(heightClass) %>% 
+  summarize(tphConiferCruise = mean(tphConiferCruise), tphHardwoodCruise = sum(tphHardwoodCruise), .groups = "drop") %>% 
+  pivot_longer(cols = c("tphConiferCruise", "tphHardwoodCruise"), names_to = "speciesGroup", values_to = "tphCruise") %>% 
+  mutate(speciesGroup = if_else(speciesGroup == "tphConiferCruise", "conifer", "hardwood"))
+crossValidatedDifference = bind_rows(abaCellNorms$standsAbaCruiseError) %>% 
+  select(heightClass, tphConiferError, tphHardwoodError) %>% 
+  group_by(heightClass) %>% 
+  summarize(tphConiferError = mean(tphConiferError), tphHardwoodError = sum(tphHardwoodError), .groups = "drop") %>% 
+  pivot_longer(cols = c("tphConiferError", "tphHardwoodError"), names_to = "speciesGroup", values_to = "tphMad") %>% 
+  mutate(speciesGroup = if_else(speciesGroup == "tphConiferError", "conifer", "hardwood"))
 
 xBreaks = c(0, 0.3, 1, 3, 10, 30, 100) # c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)
 xMinorBreaks = c(0.1, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 2, 4, 5, 6, 7, 8, 9, 20, 40, 50, 60, 70, 80, 90) # c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90)
 ggplot() +
-  geom_col(aes(x = tph, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$trees2021lidarReference %>% mutate(speciesGroup = if_else(isConifer, "conifer", "hardwood")), orientation = "y") +
+  geom_col(aes(x = tph, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedLidar, orientation = "y") +
+  geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
-  labs(x = "mean trees per hectare", y = "tree height, m", fill = NULL, title = "a) LiDAR segmentation") +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(0, 90), ylim = c(0, 100)) +
+  labs(x = "trees per hectare", y = "tree height, m", alpha = NULL, fill = NULL, title = "a) LiDAR") +
   scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
-  geom_col(aes(x = tphAba, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferAba, tphHardwoodAba) %>% pivot_longer(cols = c("tphConiferAba", "tphHardwoodAba"), names_to = "speciesGroup", values_to = "tphAba") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferAba", "conifer", "hardwood")), orientation = "y") +
+  geom_col(aes(x = tphAba, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedAbaImputation, orientation = "y") +
+  geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
-  labs(x = "mean trees per hectare", y = "tree height, m", fill = NULL, title = "b) LiDAR plus missed trees") +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(0, 90), ylim = c(0, 100)) +
+  labs(x = "trees per hectare", y = NULL, alpha = NULL, fill = NULL, title = "b) LiDAR + imputation") +
   scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
-  geom_col(aes(x = tphCruise, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferCruise, tphHardwoodCruise) %>% pivot_longer(cols = c("tphConiferCruise", "tphHardwoodCruise"), names_to = "speciesGroup", values_to = "tphCruise") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferCruise", "conifer", "hardwood")), orientation = "y") +
+  geom_col(aes(x = tphCruise, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedCruiseTph, orientation = "y") +
+  geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
-  labs(x = "mean trees per hectare", y = "tree height, m", fill = NULL, title = "c) cruise estimate") +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(0, 90), ylim = c(0, 100)) +
+  labs(x = "trees per hectare", y = NULL, alpha = NULL, fill = NULL, title = "c) ground") +
   scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
-  geom_col(aes(x = tphMad, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferMad, tphHardwoodMad) %>% pivot_longer(cols = c("tphConiferMad", "tphHardwoodMad"), names_to = "speciesGroup", values_to = "tphMad") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferMad", "conifer", "hardwood")), orientation = "y") +
-  #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.1), xlim = c(0, 90), ylim = c(0, 100)) +
-  labs(x = "trees per hectare", y = "tree height, m", fill = NULL, title = "d) mean absolute difference") +
-  scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
-ggplot() +
-  geom_col(aes(x = tphMrd, y = heightClass, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferMrd, tphHardwoodMrd) %>% pivot_longer(cols = c("tphConiferMrd", "tphHardwoodMrd"), names_to = "speciesGroup", values_to = "tphMrd") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferMrd", "conifer", "hardwood")), orientation = "y") +
-  coord_cartesian(xlim = c(0, 1), ylim = c(0, 100)) +
+  geom_col(aes(x = tphMad, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedDifference, orientation = "y") +
+  geom_segment(aes(x = -90, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
+  #coord_cartesian(xlim = c(-45, 45), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(-90, 90), ylim = c(0, 100)) +
+  labs(x = "trees per hectare", y = NULL, alpha = NULL, fill = NULL, title = "d) LiDAR + imputation – ground") +
+  scale_x_continuous(breaks = c(-rev(tail(xBreaks, -1)), xBreaks), minor_breaks = c(-rev(tail(xMinorBreaks, -1)), xMinorBreaks), labels = c(-rev(tail(xBreaks, -1)), xBreaks)) +
+#ggplot() +
+#  geom_col(aes(x = tphMrd, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), abaCellNorms$standsAbaCruiseError %>% select(heightClass, tphConiferMrd, tphHardwoodMrd) %>% pivot_longer(cols = c("tphConiferMrd", "tphHardwoodMrd"), names_to = "speciesGroup", values_to = "tphMrd") %>% mutate(speciesGroup = if_else(speciesGroup == "tphConiferMrd", "conifer", "hardwood")), orientation = "y") +
+#  geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
+#  coord_cartesian(xlim = c(0, 1), ylim = c(0, 100)) +
+#  labs(x = "relative difference", y = NULL, fill = NULL, title = "e) relative difference") +
   #coord_trans(x = scales::transform_pseudo_log(sigma = 0.01), ylim = c(0, 100)) +
-  labs(x = "mean relative difference", y = NULL, fill = NULL, title = "e) relative difference") +
   #scale_x_continuous(breaks = c(0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2), minor_breaks = c(0.03, 0.04, 0.06, 0.07, 0.08, 0.09, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9), labels = scales::label_percent()) +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(nrow = 1, guides = "collect") &
+plot_layout(nrow = 1, guides = "collect", widths = c(1, 1, 1, 2)) &
+  guides(alpha = "none") &
+  scale_alpha_manual(breaks = c(TRUE, FALSE), values = c(1, 0.4)) &
   scale_fill_manual(breaks = c("conifer", "hardwood"), values = c("forestgreen", "green2")) &
-  scale_y_continuous(breaks = seq(0, 100, by = 10), expand = expansion(mult = 0.02, add = 0)) &
-  theme(axis.title = element_text(size = 8), plot.title = element_text(size = 8))
-#ggsave("trees/area based/figures/LiDAR+missed trees vs Organon grown ground cruise.png", height = 12, width = 26, units = "cm", dpi = 200)
+  scale_y_continuous(breaks = seq(0, 100, by = 10), expand = expansion(mult = 0.02, add = 0))
+#ggsave("trees/area based/figures/LiDAR + imputation 2x25.png", height = 10.9, width = 22, units = "cm", dpi = 200)
 
 # 11.4 M treetops detected in matched cells: 40,515 ha in matchable cells, 40,532 ha total ABA grid area
 # Elliott (including Hakki Ridge): 33727 ha -> 9.5 M LiDAR treetops, 20.7 M imputed treetops

@@ -9,13 +9,13 @@ $financial = Get-FinancialScenarios -Xlsx ([System.IO.Path]::Combine((Get-Locati
 
 # no management baseline: site indices from GIS
 $stands = Get-CruisedStands -Model OrganonSWO -Xlsx ([System.IO.Path]::Combine((Get-Location), "Elliott Organon cruise records 2015-16 v2.xlsx"))
-$simulationTime = Measure-Command { $standTrajectories = Get-StandTrajectories -Stands $stands -Years 150 }
+$simulationTime = Measure-Command { $standTrajectories = Get-StandTrajectories -Stands $stands -Years 100 }
 
 Write-StandTrajectories -Trajectories $standTrajectories -Financial $financial -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott stand trajectories 2016-2116.feather")) -NoCarbon
 #Write-StandTrajectories -Trajectories $standTrajectories -Financial $financial -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott stand trajectories 2016-2116.csv")) -NoCarbon
 
 Write-TreeList -Trajectories $standTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott tree lists 2016-2116.feather"))
-Write-TreeList -Trajectories $standTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott tree lists 2016-2116.csv"))
+#Write-TreeList -Trajectories $standTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott tree lists 2016-2116.csv"))
 
 
 # cruised plantations: LEV maximization
