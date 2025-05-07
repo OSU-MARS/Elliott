@@ -8,6 +8,7 @@ library(magrittr)
 library(patchwork)
 library(progressr)
 library(rsample)
+library(sf)
 library(stringr)
 library(terra)
 library(tidyr)
@@ -33,16 +34,17 @@ abaOptions = tibble(folds = 2, repetitions = 2,
 get_aba_cell_norms = function(abaCellTreeLists, stands2022, stands2021organon, trees2021lidarByHeightClass)
 {
   #abaCellTreeLists = abaCellTrees
-  #trees2021lidarByHeightClass = trees2021lidarByHeightClass
 
-  # TODO: need to find area of stands within the iLand simulation boundary
+  # TODO: need to calculate density with area of stands within the iLand simulation boundary rather than total area
+  # TODO: move simulation boundary or correct areas to extent of 510 core tiles
+  # TODO: align outer stand boundary to iLand simulation boundary
   #startTime = Sys.time()
   abaStands = left_join(abaCellTreeLists %>% mutate(heightClass = round(height)) %>% # ~4 s, match height classes in stands2021organon
                           group_by(stand, heightClass) %>%
                           summarize(treesConifer = sum(isConifer), treesHardwood = sum(isConifer == FALSE), .groups = "drop"),
                         # for now, stands2022$isExternalBoundarySplit is not considered
-                        stands2022 %>% group_by(stand) %>% summarize(standArea = sum(standArea)),
-                        by = join_by(stand)) %>%
+                        stands2022 %>% group_by(standID2016) %>% summarize(standArea = sum(standArea)),
+                        by = join_by(stand == standID2016)) %>%
     mutate(tphConifer = treesConifer / standArea, # trees per hectare
            tphHardwood = treesHardwood / standArea)
   #Sys.time() - startTime
@@ -101,6 +103,7 @@ get_aba_cell_plots = function(validationCells, validationCellsScaled, trainingPl
   # and then
   #   cells %>% filter(n >= treeMatchBound)
   # To limit code repetition, the filter clause is evaluated dynamically using rlang, though if { } else { } could also be used.
+  # TODO: does kNN matching on detected tree heights act to suppress imputation of taller trees obscured by branches?
   cellFilter1 = if (treeMatchBound > 1) { "n == 1" } else { "n >= 1" } # could optimize out n >= 1 check
   plotHeights1 = trainingPlotHeightsScaled %>% select(plot, pGround, all_of(lidarMetrics), isConifer1, height1)
   abaCells1 = validationCellsScaled %>% filter(!!rlang::parse_expr(cellFilter1)) %>% select(abaGridX, abaGridY, pGround, all_of(lidarMetrics), isConifer1, height1)
@@ -322,12 +325,15 @@ abaGrid = tibble(originX = 106020, originY = 190480, size = 20) %>% # m EPSG:655
 # stands defined on the Elliott State Research Forest in 2022 plus 
 #  1) adjacent stands defined on the Elliott State Forest in 2016
 #  2) adjacent stands on other ownerships
-stands2022 = left_join(read_xlsx("GIS/Trees/2015-16 cruise.xlsx") %>% rename(stand = standID2016),
-                       read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% select(StandID, ODSL_VEG_L) %>% rename(vegLabel = ODSL_VEG_L),
-                       by = join_by(x$stand == y$StandID)) %>%
-  mutate(vegStrata = if_else(vegLabel %in% c("1D1L", "1D2H", "1D2L", "1D3H", "1D4H", "1D5H", "DX1L", "DX2H", "DX2L", "DX34L", "DX3H", "DX4H", "DX5H"), vegLabel, "other")) # cruise strata for cross validation of missing tree imputation from cruise.R
-stands2016esf = as_tibble(vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2022 property boundary split")) %>% filter(standID2016 %in% stands2022$stand == FALSE) %>% rename(stand = standID2016)
-stands2022 = bind_rows(stands2022, stands2016esf) # picks up areas of bordering stands
+# TODO: audit for correct join of data
+stands2022 = left_join(as_tibble(st_drop_geometry(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2022 property boundary split", quiet = TRUE))),
+                       read_xlsx("GIS/Trees/2015-16 cruise with 2022 revisions.xlsx", sheet = "stands") %>% select(standID2016, measurePlotsInStand),
+                       by = join_by(standID2016)) %>%
+  group_by(standID2016) %>%
+  summarize(standArea = sum(standArea), standAge2016 = standAge2016[1], isPlantation = isPlantation[1], isBuffer = isBuffer[1], isForested = isForested[1], 
+            vegetationLabel = vegetationLabel [1], measurePlotsInStand = measurePlotsInStand[1]) %>%
+  ungroup() %>%
+  mutate(vegStrata = if_else(vegetationLabel %in% c("1D1L", "1D2H", "1D2L", "1D3H", "1D4H", "1D5H", "DX1L", "DX2H", "DX2L", "DX34L", "DX3H", "DX4H", "DX5H"), vegetationLabel, "other")) # cruise strata for cross validation of missing tree imputation from cruise.R
 
 trees2021organon = left_join(read_feather(file.path(getwd(), "trees/Organon/Elliott tree lists 2016-2116.feather"), mmap = FALSE) %>% select(-species), # TODO: should 2016 snags be joined? they don't flow through Organon but standing in 2016 won't all have fallen by 2021
                              read_xlsx("trees/Elliott final cruise records 2015-16.xlsx", sheet = "CRUISERECS") %>% rename(stand = StandID, plot = PlotID, tag = TreeID, species = Species) %>% select(stand, plot, tag, species),
@@ -348,8 +354,8 @@ stands2021organon = trees2021organon %>%
             tphDead = sum(deadExpansionFactor), .groups = "drop")
 
 plotTreeLists = left_join(trees2021organon,
-                          stands2022 %>% select(stand, vegStrata, isPlantation, measurePlotsInStand), 
-                          by = c("stand")) %>%
+                          stands2022 %>% select(standID2016, vegStrata, isPlantation, measurePlotsInStand), 
+                          by = join_by(stand == standID2016)) %>%
   mutate(species = forcats::fct_recode(factor(species), "POBA" = "BC", "ACMA" = "BM", "RHPU" = "CA", "Prunus" = "CH", "conifer" = "CX", "PSME" = "DF", "CHCH" = "GC", "ABGR" = "GF", "hardwood" = "HX", "PICO" = "LP", "FRLA" = "OA", "UMCA" = "OM", "CHLA" = "PC", "CONU" = "PD", "ARME" = "PM", "TABR" = "PY", "ALRU" = "RA", "THPL" = "RC", "PISI" = "SS", "NODE" = "TO", "TSHE" = "WH", "Salix" = "WI", "QUGA" = "WO", "other" = "XX"),
          treesPerCell = abaGrid$sizeHa * measurePlotsInStand * liveExpansionFactor, # expansion factors from Organon are stand-level; multiplying by the number of measure plots converts the expansion back to plot-level
          treesPerCell = if_else(treesPerCell < 1, 1, round(treesPerCell))) %>% # quantize number of trees per cell for uncount(); since these are 2016 plot measurements grown to 2021 by default at least one tree must be present on the plot to measure and thus at least one tree is present on the grid cell---this does not hold where a tree or snag falls or windsnaps but that data's not available, so assume 100% upright
@@ -412,6 +418,7 @@ plotMetrics2021 = as_tibble(vect(plotMetrics2021)) %>% # EPSG:6557 but geometry 
 
 plotHeights = left_join(plotHeights, plotMetrics2021, by = c("plot")) # join LiDAR metrics to Organon grown cruise data
 
+# TODO: audit stand area flow for accuracy with respect to isExternalBoundarySplit
 elliottTreesReadStart = Sys.time() # ~29s, 9900X
 trees2021lidar = readRDS(file.path(abaOptions$dataPath, "treetops", "trees rf v1.Rds")) %>% # LiDAR identified treetops from Get-Treetops and trees.R
   mutate(abaGridX = floor(1/abaGrid$size * (x - abaGrid$originX)), # ABA grid origin and cell size from GIS/Trees/Elliott ABA grid 20 m.gpkg

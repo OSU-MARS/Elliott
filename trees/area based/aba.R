@@ -6,7 +6,7 @@ handlers("cli")
 
 ## cross validation of missed tree imputation
 # Use vfold_cv() at stand level since group_vfold_cv() departs widely from balanced splits.
-splits = vfold_cv(stands2022 %>% filter(is.na(tph) == FALSE), v = 2, repeats = 25, strata = vegStrata) # cross validate only on cruised stands
+splits = vfold_cv(stands2022 %>% filter(is.na(measurePlotsInStand) == FALSE), v = 2, repeats = 25, strata = vegStrata) # cross validate only on cruised stands
 crossValidationStart = Sys.time() # 6.2 minutes, 9900X 2x25 @ 11.8 M trees
 with_progress({
   progressBar = progressor(steps = nrow(splits))
@@ -18,9 +18,9 @@ with_progress({
       trainingStands = analysis(fold)
       validationStands = assessment(fold)
       
-      trainingPlotHeightsScaled = plotHeightsScaled %>% filter(stand %in% trainingStands$stand)
-      validationCells = abaCells %>% filter(stand1 %in% validationStands$stand)
-      validationCellsScaled = abaCellsScaled %>% filter(stand1 %in% validationStands$stand)
+      trainingPlotHeightsScaled = plotHeightsScaled %>% filter(stand %in% trainingStands$standID2016)
+      validationCells = abaCells %>% filter(stand1 %in% validationStands$standID2016)
+      validationCellsScaled = abaCellsScaled %>% filter(stand1 %in% validationStands$standID2016)
       
       #startTime = Sys.time() # ~0.8 s for 2-fold cross validation
       abaCellPlots = get_aba_cell_plots(validationCells, validationCellsScaled, trainingPlotHeightsScaled, treeMatchBound = 8, lidarMetrics = c("pGround", "zQ10", "zQ20", "zQ30"))
@@ -61,34 +61,36 @@ crossValidatedDifference = bind_rows(abaCellNorms$standsAbaCruiseError) %>%
   pivot_longer(cols = c("tphConiferError", "tphHardwoodError"), names_to = "speciesGroup", values_to = "tphMad") %>% 
   mutate(speciesGroup = if_else(speciesGroup == "tphConiferError", "conifer", "hardwood"))
 
-xBreaks = c(0, 0.3, 1, 3, 10, 30, 100) # c(0, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20, 50, 100)
-xMinorBreaks = c(0.1, 0.2, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 2, 4, 5, 6, 7, 8, 9, 20, 40, 50, 60, 70, 80, 90) # c(0.3, 0.4, 0.6, 0.7, 0.8, 0.9, 3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90)
+tibble(lidarTph = sum(crossValidatedLidar$tph), lidarImputedTph = sum(crossValidatedAbaImputation$tphAba), cruiseTph = sum(crossValidatedCruiseTph$tphCruise), imputedPct = 100 * lidarImputedTph / cruiseTph)
+
+xBreaks = c(0, 1, 3, 10, 30, 100)
+xMinorBreaks = c(2, 4, 5, 6, 7, 8, 9, 20, 40, 50, 60, 70, 80, 90)
 ggplot() +
   geom_col(aes(x = tph, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedLidar, orientation = "y") +
   geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "trees per hectare", y = "tree height, m", alpha = NULL, fill = NULL, title = "a) LiDAR") +
   scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphAba, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedAbaImputation, orientation = "y") +
   geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "trees per hectare", y = NULL, alpha = NULL, fill = NULL, title = "b) LiDAR + imputation") +
   scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphCruise, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedCruiseTph, orientation = "y") +
   geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(0, 90), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(0, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 1), xlim = c(0, 90), ylim = c(0, 100)) +
   labs(x = "trees per hectare", y = NULL, alpha = NULL, fill = NULL, title = "c) ground") +
   scale_x_continuous(breaks = xBreaks, minor_breaks = xMinorBreaks, labels = xBreaks) +
 ggplot() +
   geom_col(aes(x = tphMad, y = heightClass, alpha = heightClass >= 5, fill = speciesGroup, group = speciesGroup), crossValidatedDifference, orientation = "y") +
   geom_segment(aes(x = -90, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
   #coord_cartesian(xlim = c(-45, 45), ylim = c(0, 100)) +
-  coord_trans(x = scales::transform_pseudo_log(sigma = 0.17), xlim = c(-90, 90), ylim = c(0, 100)) +
+  coord_trans(x = scales::transform_pseudo_log(sigma = 1), xlim = c(-90, 90), ylim = c(0, 100)) +
   labs(x = "trees per hectare", y = NULL, alpha = NULL, fill = NULL, title = "d) LiDAR + imputation – ground") +
   scale_x_continuous(breaks = c(-rev(tail(xBreaks, -1)), xBreaks), minor_breaks = c(-rev(tail(xMinorBreaks, -1)), xMinorBreaks), labels = c(-rev(tail(xBreaks, -1)), xBreaks)) +
 #ggplot() +
@@ -96,7 +98,7 @@ ggplot() +
 #  geom_segment(aes(x = 0, y = 4.5, xend = 90, yend = 4.5), color = "grey20", linetype = "dashed", linewidth = 0.2) +
 #  coord_cartesian(xlim = c(0, 1), ylim = c(0, 100)) +
 #  labs(x = "relative difference", y = NULL, fill = NULL, title = "e) relative difference") +
-  #coord_trans(x = scales::transform_pseudo_log(sigma = 0.01), ylim = c(0, 100)) +
+  #coord_trans(x = scales::transform_pseudo_log(sigma = 1), ylim = c(0, 100)) +
   #scale_x_continuous(breaks = c(0, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2), minor_breaks = c(0.03, 0.04, 0.06, 0.07, 0.08, 0.09, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9), labels = scales::label_percent()) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 1, guides = "collect", widths = c(1, 1, 1, 2)) &

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <model>
+    <settings>
+      <coordinateSystem>EPSG:6556</coordinateSystem>
+      <expressionLinearizationEnabled>true</expressionLinearizationEnabled>
+      <!-- disabled due to high computational cost -->
+      <regenerationEnabled>false</regenerationEnabled>
+      <maxComputeThreads>16</maxComputeThreads>
+      <randomSeed>0</randomSeed>
+      <simdWidth>128</simdWidth>
+    </settings>
+  </model>
+  <output>
+    <logging>
+      <heightGrid enabled="false" />
+      <lightGrid enabled="false" />
+    </logging>
+    <memory>
+      <resourceUnits>
+        <allTreeSpeciesStatistics enabled="true" />
+        <individualTrees enabled="false" />
+        <individualTreeSpeciesStatistics enabled="true" />
+        <threePG enabled="true" />
+      </resourceUnits>
+      <standTrajectories enabled="true" />
+      <initialTrajectoryLengthInYears>78</initialTrajectoryLengthInYears>
+    </memory>
+  </output>
+  <world>
+    <defaultSoil>
+      <!-- plant accessible nitrogen, kg/ha, and deposition, kg/ha-yr, crude defaults for central Oregon Coast Range -->
+      <annualNitrogenDeposition>5</annualNitrogenDeposition>
+      <availableNitrogen>2000</availableNitrogen>
+      <useDynamicAvailableNitrogen>false</useDynamicAvailableNitrogen> <!-- disabled for now due to N exhaustion -->
+      <!-- soil plant accessible depth and van Genuchten properties specified per resource unit -->
+      <!-- initial content of carbon and nitrogen pools, kg/ha, and annual decomposition rates (labile pool is litter, refractory pool is coarse woody debris) 
+           Values copied from Kalkalpen simply to allow ICBM/2 code to be exercised when dynamic nitrogen is enabled. -->
+      <youngLabileC>12375</youngLabileC>
+      <youngLabileN>652.1</youngLabileN>
+      <youngLabileDecompRate>0.227</youngLabileDecompRate>
+      <youngRefractoryC>33832</youngRefractoryC>
+      <youngRefractoryN>121.2</youngRefractoryN>
+      <youngRefractoryDecompRate>0.071</youngRefractoryDecompRate>
+      <organicMatterC>128666</organicMatterC>
+      <organicMatterN>83.68</organicMatterN>
+      <organicMatterDecompRate>0.011656</organicMatterDecompRate>
+      <humificationRate>0.2992</humificationRate>
+      <qb>5</qb> <!-- carbon-nitrogen ratio of soil microbes -->
+      <el>0.152</el> <!-- microbal efficiency in the labile pool, auxiliary parameter -->
+      <er>0.319</er> <!-- microbal efficiency in the refractory pool, auxiliary parameter -->
+      <qh>14.5</qh> <!-- carbon-nitrogen ratio of soil organic matter -->
+    </defaultSoil>
+    <geometry>
+      <latitude>43.57</latitude>
+    </geometry>
+    <initialization>
+      <resourceUnitFile>resource units 400 m buffer 200 m weather.feather</resourceUnitFile>
+      <treeFile>ESRF trees 2025-05-06.feather</treeFile>
+    </initialization>
+    <species>
+      <databaseFile>species_param_pnw.sqlite</databaseFile>
+      <co2response>
+        <p0>1</p0>
+        <baseConcentration>380</baseConcentration>
+        <compensationPoint>80</compensationPoint>
+        <beta0>0.3</beta0>
+      </co2response>
+      <lightResponse>
+        <shadeIntolerant>1-exp(-5.5*(lri-0.05))</shadeIntolerant>
+        <shadeTolerant>min(10*lri,max(0.1613*lri+0.7871,lri))</shadeTolerant>
+        <relativeHeightLriModifier>exp(ln(lri)/0.6*(1-0.4*relH))</relativeHeightLriModifier>
+      </lightResponse>
+      <nitrogenResponseClasses>
+        <class1k>-0.045</class1k>
+        <class1minimum>10</class1minimum>
+        <class2k>-0.055</class2k>
+        <class2minimum>25</class2minimum>
+        <class3k>-0.065</class3k>
+        <class3minimum>40</class3minimum>
+      </nitrogenResponseClasses>
+      <phenology>
+        <!-- id 0 is evergreen and populated by default -->
+        <!-- conifierous species without iLand support: Port-Orford-cedar, Pacific yew, lodgepole -->
+        <type id="1">
+          <!-- deciduous broadleaved: currently one class shared by both red alder and bigleaf maple -->
+          <!-- Copied from Kalkalpen example. Open question of what to specify for Pacific Northwest species. -->
+          <vpdMin>0.9</vpdMin>
+          <vpdMax>4.1</vpdMax>
+          <dayLengthMin>10</dayLengthMin>
+          <dayLengthMax>11</dayLengthMax>
+          <tempMin>-2</tempMin>
+          <tempMax>5</tempMax>
+        </type>
+        <!-- deciduous species without iLand support: Oregon myrtle, cascara buckthorn, bitter cherry, Pacific madrone, chinquapin, 
+             Pacific dogwood, tanoak, black cottonwood, willow, black cottonwood, willow, Oregon ash, Oregon white oak
+          -->
+      </phenology>
+    </species>
+    <weather>
+      <co2file>co2 ssp370.feather</co2file>
+      <weatherFile>weather 200 m 2011-2100 13GCMssp370.feather</weatherFile>
+      <startYear>2022</startYear>
+    </weather>
+  </world>
+</project>

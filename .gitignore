@@ -25,9 +25,9 @@ GIS/**/*.gdb
 GIS/**/*.hdf
 GIS/**/*.las
 GIS/**/*.qmd
-GIS/**/*.gpkg
-GIS/**/*.gpkg-shm
-GIS/**/*.gpkg-wal
+**/*.gpkg
+**/*.gpkg-shm
+**/*.gpkg-wal
 GIS/**/*.cpg
 GIS/**/*.dbf
 GIS/**/*.html
@@ -57,9 +57,18 @@ GIS/**/*.xml
 GIS/GRASS
 trees/Organon/*.feather
 
+# iLand
+# root directory is to capture project file and scripts
+# subdirectories are offline since they contain ~2 GB of data files
+# species parameters and light stamps do not need to be tracked as Pacific Northwest intensity profiles are checked into the iLand repo
+iLand/database/
+iLand/gis/
+iLand/init/
+iLand/lip/
+iLand/output/
+
 # offline directories
 doc/
-iLand/
 presentation/
 Woodstock/
 

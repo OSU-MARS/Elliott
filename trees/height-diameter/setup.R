@@ -1822,27 +1822,27 @@ if (htDiaOptions$includeInvestigatory)
   
   # export stand properties, including 2016 inventory where available
   # trees.R needs areas for all stands, so join cruised stands with all stands defined for 2016 inventory.
-  write_xlsx(list(stands = left_join(stands2022 %>% mutate(StandID = as.integer(StandID)) %>% select(StandID, standAge2016, standArea, isPlantation),
-                                     trees2016 %>% group_by(StandID) %>%
-                                       summarize(standAge2016 = standAge2016[1], 
-                                                 isPlantation = isPlantation[1], 
-                                                 standArea = standArea[1], 
-                                                 plotsInStand = plotsInStand[1], 
-                                                 measurePlotsInStand = measurePlotsInStand[1],
-                                                 tph = tph[1], 
-                                                 topHeight = topHeight[1], 
-                                                 qmd = qmd[1], 
-                                                 standBasalAreaPerHectare = standBasalAreaPerHectare[1], 
-                                                 standBasalAreaApprox = standBasalAreaApprox[1]) %>%
-                                       mutate(StandID = as.integer(StandID)),
-                                     by = "StandID") %>%
-                            mutate(standAge2016 = if_else(is.na(standAge2016.x), standAge2016.y, standAge2016.x),
-                                   standArea = if_else(is.na(standArea.x), standArea.y, standArea.x),
-                                   isPlantation = if_else(is.na(isPlantation.x), isPlantation.y, isPlantation.x)) %>%
-                            select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
-                            rename(standID2016 = StandID) %>%
-                            relocate(standID2016, standAge2016, standArea,	isPlantation)),
-             "GIS/Trees/2015-16 cruise.xlsx")
+  #write_xlsx(list(stands = left_join(stands2022 %>% mutate(StandID = as.integer(StandID)) %>% select(StandID, standAge2016, standArea, isPlantation),
+  #                                   trees2016 %>% group_by(StandID) %>%
+  #                                     summarize(standAge2016 = standAge2016[1], 
+  #                                               isPlantation = isPlantation[1], 
+  #                                               standArea = standArea[1], 
+  #                                               plotsInStand = plotsInStand[1], 
+  #                                               measurePlotsInStand = measurePlotsInStand[1],
+  #                                               tph = tph[1], 
+  #                                               topHeight = topHeight[1], 
+  #                                               qmd = qmd[1], 
+  #                                               standBasalAreaPerHectare = standBasalAreaPerHectare[1], 
+  #                                               standBasalAreaApprox = standBasalAreaApprox[1]) %>%
+  #                                     mutate(StandID = as.integer(StandID)),
+  #                                   by = "StandID") %>%
+  #                          mutate(standAge2016 = if_else(is.na(standAge2016.x), standAge2016.y, standAge2016.x),
+  #                                 standArea = if_else(is.na(standArea.x), standArea.y, standArea.x),
+  #                                 isPlantation = if_else(is.na(isPlantation.x), isPlantation.y, isPlantation.x)) %>%
+  #                          select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
+  #                          rename(standID2016 = StandID) %>%
+  #                          relocate(standID2016, standAge2016, standArea,	isPlantation)),
+  #           "GIS/Trees/2015-16 cruise.xlsx")
 }
 
 
@@ -1966,9 +1966,6 @@ if (htDiaOptions$includeInvestigatory)
   plot_annotation(theme = theme(plot.margin = margin())) +
   plot_layout() &
     coord_cartesian(ylim = c(0, 10))
-  
-  # tree counts by stand
-  treeCountsByStand2016 = trees2016 %>% group_by(StandID) %>% summarize(
   
   # distribution of count and measure trees by stand
   treesByStand2016 = trees2016 %>% group_by(StandID) %>% summarize(count = sum((PlotType == "CO") * TreeCount), 

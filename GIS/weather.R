@@ -8,11 +8,11 @@ library(lubridate)
 library(patchwork)
 library(readr)
 library(stringr)
-library(terra)
+library(sf)
 library(tibble)
 library(tidyr)
 
-theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.5),
+theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
                              legend.background = element_rect(fill = alpha("white", 0.5)),
                              legend.margin = margin(),
                              panel.border = element_blank()))
@@ -115,21 +115,15 @@ for (weatherCellSize in c("100 m", "200 m", "400 m", "800 m", "4 km"))
   write_feather(monthlyArrow, paste0("iLand/database/weather ", weatherCellSize, " 2011-2100 13GCMssp370.feather"))
 }
 
-#library(fst)
-#write_fst(monthlyWeather, paste0("iLand/database/weather ", weatherCellSize, " 2011-2100 13GCMssp370.fst"))
 
 ## translate resource unit .csv exported from QGIS to iLand resource unit .csv and .feather as a function of weather
 # cell size
 maxBufferDistance = 400
 maxBufferDistanceName = if_else(maxBufferDistance < 1000, paste(maxBufferDistance, "m"), paste(0.001 * maxBufferDistance, "km"))
-resourceUnitColumnTypes = cols(name = "c", name4km = "c", name800m = "c", name400m = "c", name200m = "c", .default = "d")
-for (weatherCellSize in c("4 km", "800 m", "400 m", "200 m", "100 m"))
+for (weatherCellSize in c("200 m")) # c("4 km", "800 m", "400 m", "200 m", "100 m")
 {
-  #start = Sys.time() # using geospatial file formats is slow as of terra 1.5-34 (https://github.com/rspatial/terra/issues/745)
-  #resourceUnits = as_tibble(vect("GIS/iLand/grid 100 m.gpkg")) # 6.8 s total, 1.3 s vect() => 5.5 s as_tibble()
-  #resourceUnits = as_tibble(vect("GIS/iLand/grid 100 m.fgb")) # 7.8 s total, 2.1 s vect() => 5.7 s as_tibble()
-  #(elapsed = Sys.time() - start)
-  resourceUnits = read_csv("GIS/iLand/grid 100 m.csv", col_types = resourceUnitColumnTypes) %>% # 0.17 seconds
+  resourceUnitLoadStart = Sys.time() # 1.3 s, 9900X
+  resourceUnits = st_drop_geometry(st_read("iLand/gis/iLand grids.gpkg", layer = "100m", quiet = TRUE)) %>%
     filter(bufferDist <= maxBufferDistance) %>%
     mutate(centerX = 0.5 * (left + right), # m
            centerY = 0.5 * (top + bottom), # m
@@ -212,10 +206,12 @@ for (weatherCellSize in c("4 km", "800 m", "400 m", "200 m", "100 m"))
            # soilYoungRefractoryN = ,
            ) %>%
     arrange(centerY, centerX)
-  if (weatherCellSize == "4 km")
-  {
-    write_csv(resourceUnits, paste0("iLand/gis/resource units ", maxBufferDistanceName, " buffer ", weatherCellSize, " weather.csv"))
-  }
+  Sys.time() - resourceUnitLoadStart
+  
+  #if (weatherCellSize == "4 km")
+  #{
+  #  write_csv(resourceUnits, paste0("iLand/gis/resource units ", maxBufferDistanceName, " buffer ", weatherCellSize, " weather.csv"))
+  #}
   resourceUnitsArrow = arrow_table(resourceUnits, schema = schema(id = uint32(), 
                                                                   centerX = float32(), centerY = float32(), 
                                                                   weatherID = string(),
