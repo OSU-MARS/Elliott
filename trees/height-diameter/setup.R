@@ -24,82 +24,90 @@ library(tidyr)
 library(WeightedROC)
 library(writexl)
 
-theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3),
-                             legend.background = element_rect(fill = alpha("white", 0.5)),
-                             legend.margin = margin(),
-                             legend.key.height = unit(0.85, "line"),
-                             legend.spacing.y = unit(0, "line"),
+
+####### ----- FUNCTIONS ------ ######
+
+
+#theme set() is a function from ggplot, it is used to customize plot aesthetics
+#theme_bw() sets the background to white with black grid lines
+#and the theme() functions define the various elements within the theme.
+theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), #makes the axis lines thinner, the default is 0.5
+                             legend.background = element_rect(fill = alpha("white", 0.5)),# background, transparency 50% white.
+                             legend.margin = margin(), #default margin
+                             legend.key.height = unit(0.85, "line"), #legend box vertical spacing 0.85 line unit
+                             legend.spacing.y = unit(0, "line"), #remove vertical spacing between legen items
                              legend.title = element_text(size = 10),
                              panel.border = element_blank(), 
-                             plot.title = element_text(size = 10)))
+                             plot.title = element_text(size = 10))) #+ theme(axis.title.y = element_text(angle = 0, vjust = 0.5)) #rotate and justification of Y axis label, usually not required
+
 htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
-                      includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts
+                      includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts #it is like telling R that I do not want the code for plots/investigatory statistics to be run (coded somewhere below, if I set this as FALSE)
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
-#plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
-plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
+plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+#plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
 
-append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_)
+append_model_results = function(loadedResults, modelList, responseVariable, fitSet = "primary", fixedWeight = NA_real_) #fitSet and fixedWeight are like constantsa and we need to input rest of the arguments only
 {
-  return(bind_rows(loadedResults,
-                   bind_rows(lapply(modelList, get_list_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>%
-                     mutate(responseVariable = responseVariable)))
+  return(bind_rows(loadedResults, #stack the results from lapply and loadedResults, loadedResults is probably an initialized tibble or a tibble with same dimension as the tibble output from lapply()
+                   bind_rows(lapply(modelList, get_list_stats, fitSet = fitSet, fixedWeight = fixedWeight)) %>% #lappy: applies a given function to all elements in the list or vector. check the general syntax for a detailed information
+                     mutate(responseVariable = responseVariable))) #add a column "responseVariable" to the stacked results including both loadedResults and lapply()
 }
 
-check_plot_results = function(results)
+check_plot_results = function(results) #it is a function of "results"
 {
   numberOfBins = 30 # specify default to suppress messages about binwidth
   ggplot(results) +
     geom_histogram(aes(x = bias, fill = responseVariable), bins = numberOfBins) +
     labs(x = "bias, m or cm") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = mab, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAB, m or cm") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = mapb, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAB, %") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = mae, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAE, m or cm") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = mape, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAE, %") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = nse, fill = responseVariable), bins = numberOfBins) +
     labs(x = "model efficiency") +
     scale_x_continuous(trans = scales::pseudo_log_trans()) +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = rmse, fill = responseVariable), bins = numberOfBins) +
     labs(x = "RMSE, m or cm") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = rmspe, fill = responseVariable), bins = numberOfBins) +
     labs(x = "RMSE, %") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = aic, fill = responseVariable), bins = numberOfBins) +
     labs(x = "AIC") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = aict, fill = responseVariable), bins = numberOfBins) +
     labs(x = "AIC, ~t") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = bic, fill = responseVariable), bins = numberOfBins) +
     labs(x = "BIC") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = bict, fill = responseVariable), bins = numberOfBins) +
     labs(x = "BIC, ~t") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = meanAbsolutePlantationEffect, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAPE, m or cm") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = meanAbsolutePercentPlantationEffect, fill = responseVariable), bins = numberOfBins) +
     labs(x = "MAPE, %") +
-  ggplot(results) +
+    ggplot(results) +
     geom_histogram(aes(x = fitTimeInS, fill = responseVariable), bins = numberOfBins) +
     labs(x = "fit time, s") +
     scale_x_log10() +
-  guide_area() +
+    guide_area() +
     theme(legend.justification = c(1, 0), legend.position.inside = c(0.9, 0.1)) +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(guides = "collect") &
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(guides = "collect") &
     labs(y = "model fits", fill = NULL) &
     scale_fill_discrete(breaks = c("height", "DBH"))
 }
@@ -115,16 +123,16 @@ confint_nlrob = function(regression, level = 0.99, df = df.residual(regression),
     stop("Either regression$weights is not set or trainingWeights was not specified.")
   }
   squaredDeviation = sum(trainingWeights * regression$rweights * residuals(regression)^2) / df.residual(regression)
-  gradient = regression$m$gradient()
+  gradient = regression$m$gradient() #regression$m contains model information, so this code is going inside regression model information and taking derivative of residuals with respect to parameters.
   levels = c((1 - level)/2, 1 - (1 - level)/2)
-  parameterValues = regression$m$getPars()
-  confidenceInterval = parameterValues + sqrt(diag(squaredDeviation * solve(t(gradient) %*% gradient))) %o% qt(p = levels, df = df)
-  colnames(confidenceInterval) = sprintf("%g%%", 100*levels)
-  rownames(confidenceInterval) = names(parameterValues)
+  parameterValues = regression$m$getPars() #value of parameter estimates from teh regression model
+  confidenceInterval = parameterValues + sqrt(diag(squaredDeviation * solve(t(gradient) %*% gradient))) %o% qt(p = levels, df = df) #matrix method for confidence interval calculation %*% is matrix multiplication and %o% is outer product (not the same as scalar/dot product)
+  colnames(confidenceInterval) = sprintf("%g%%", 100*levels) #%g%% defines the format of printing; print "%" after  100*levels value in the column name
+  rownames(confidenceInterval) = names(parameterValues) #gives names of parameter values stored in the summary stat of a model
   return(confidenceInterval)
 }
 
-create_model_stats = function(name, fittingMethod = "unknown", fitSet = NA_character_, fixedWeight = NA_real_)
+create_model_stats = function(name, fittingMethod = "unknown", fitSet = NA_character_, fixedWeight = NA_real_) #initializing a tibble for storing model stats later
 {
   if (is.null(name) | is.na(fittingMethod))
   {
@@ -151,29 +159,29 @@ create_model_stats = function(name, fittingMethod = "unknown", fitSet = NA_chara
 # future_map() sometimes works but doesn't reliably pass smooth parameters like constraints
 fit_gam = function(name, formula, data, constraint = c(), family = gaussian(), folds = htDiaOptions$folds, repetitions = htDiaOptions$repetitions, returnModel = folds * repetitions <= htDiaOptions$retainModelThreshold, bam = FALSE, mixed = FALSE, nthreads = 1, significant = TRUE, tDegreesOfFreedom = 8)
 {
-  if (bam & mixed)
+  if (bam & mixed) #here bam=FALSE, mixed=FALSE, are defaults, if we enter both as true, stop it and print the warning message. if we choose bam() we cannot use mixed effects
   {
-    stop("bam() does not support fixed effects. One of fit_gam()'s bam or mixed arguments can be true but not both.")
+    stop("bam() does not support fixed effects. One of fit_gam()'s bam or mixed arguments can be true but not both.") #I think, in the print string, the word "fixed" should be replaced by "mixed".
   }
-  if (mixed & (nthreads > 1))
+  if (mixed & (nthreads > 1))#if mixed is true, it will call gamm() instead of bam() or gam() which does not support multi thread functionality
   {
-    stop("gamm() does not support nthreads.")
+    stop("gamm() does not support nthreads.") #if all these conditions are passed thorugh, then do the next step
   }
   
-  responseVariable = formula[2] # displays as TotalHt or DBH but compares at TotalHt() or DBH()
-  message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using ", if_else(mixed, "gamm", if_else(bam, "bam", "gam")), "()..."))
-  progressBar = progressor(steps = folds * repetitions)
+  responseVariable = formula[2] # displays as TotalHt or DBH but compares at TotalHt() or DBH() #the formula (equation) is indexed, so formula[1] give you operator sign ~,formula[2]=LHS of equation, formula[3]=RHS of equation.
+  message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using ", if_else(mixed, "gamm", if_else(bam, "bam", "gam")), "()...")) #paste this message for each iteration of the running code.#If mixed = TRUE, use "gamm",Else if bam = TRUE, use "bam" Else use "gam", check syntax of ifelse() if necessary
+  progressBar = progressor(steps = folds * repetitions) #design of progress bar
   
-  # work around https://github.com/HenrikBengtsson/globals/issues/87 to enable GAM fitting using future_map()
-  localFormula = local({ gamConstraint = constraint
-                         formula(paste(deparse(formula), collapse = " ")) })
-  if (responseVariable == "TotalHt()")
+  # work around https://github.com/HenrikBengtsson/globals/issues/87 to enable GAM fitting using future_map() #to make the constrains passable, it won't be possible 
+  localFormula = local({ gamConstraint = constraint #creating a local formula, that is basically the same as above.
+  formula(paste(deparse(formula), collapse = " ")) }) # to understand the syntax, see ?deparse() and ?paste() in r documentation #collapse=" " defines the separator/concatenator, in this case, the strings will be concatenated using the " " or space 
+  if (responseVariable == "TotalHt()") #lets continue the conditional statements after the local formula.
   {
     if (bam)
     {
       if ((folds == 1) & (repetitions == 1))
       {
-        startFit = Sys.time()
+        startFit = Sys.time() #tracking the model fitting time
         allFit = bam(formula = localFormula, data = data, family = family, method = "REML", select = TRUE, weights = dbhWeight, nthreads = nthreads)
         allFitStats = get_height_stats(name = name, model = allFit, trainingData = data, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
         allFitStats$fitTimeInS = get_elapsed_time(startFit)
@@ -302,7 +310,7 @@ fit_gnls = function(name, modelFormula, data, start, control = gnlsControl(maxIt
   responseVariable = modelFormula[2]
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using gnls()..."))
   progressBar = progressor(steps = folds * repetitions)
-
+  
   if (responseVariable == "TotalHt()")
   {
     startFit = Sys.time()
@@ -569,7 +577,7 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
   responseVariable = formula[2]
   message(paste0("Fitting ", name, " for ", folds, "x", repetitions, " ", responseVariable, " using nlrob()..."))
   progressBar = progressor(steps = folds * repetitions)
-
+  
   if (responseVariable == "TotalHt()")
   {
     startFit = Sys.time()
@@ -602,7 +610,7 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
     {
       stop("Expected response variable to be DBH.")
     }
-
+    
     startFit = Sys.time()
     allFit = nlrob(formula = formula, data = data, maxit = maxit, start = start, weights = heightWeight, control = control)
     if ((folds == 1) & (repetitions == 1))
@@ -627,7 +635,7 @@ fit_nlrob = function(name, formula, data, start, control = nls.control(maxiter =
       return(get_fit_return_value(model, modelStats, returnModel))
     }
   }
-
+  
   splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction))
   return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
@@ -681,7 +689,7 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   {
     warning(paste0(dbhModelStats$fitting, " ", formula(model)[2], " model using ", name, " is not converged."))
   }
-
+  
   if (is(model, "gamm"))
   {
     predictedDbh = predict(model$gam, validationData) 
@@ -713,7 +721,7 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
               plantationEffectPct = 100 * plantationEffect / meanDbh,
               .groups = "drop") %>%
     filter(n > 0)
-
+  
   nObservations = sum(trainingData$TreeCount)
   if (is(model, "gam"))
   {
@@ -733,7 +741,7 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   standardDeviation = sqrt(1/residualDegreesOfFreedom * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
   logLikelihoodGaussian = sum(validationData$TreeCount * dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
   logLikelihoodT = sum(validationData$TreeCount * dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
-
+  
   heightDiameterRatio = validationData$TotalHt / (0.01 * predictedDbh)
   speciesLimits = get_species_limits(validationData)
   validationTreeCountTotal = sum(validationData$TreeCount)
@@ -817,7 +825,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   {
     warning(paste0(heightModelStats$fitting, " ", formula(model)[2], " model using ", name, " is not converged."))
   }
-
+  
   dbhClassSize = 10 # cm
   if (is(model, "gamm"))
   {
@@ -854,7 +862,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
               plantationEffectPct = 100 * plantationEffect / meanHeight,
               .groups = "drop") %>%
     filter(n > 0)
-
+  
   nObservations = sum(trainingData$TreeCount)
   if (is(model, "gam"))
   {
@@ -894,7 +902,7 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   heightModelStats$rmse = sqrt(sum(validationData$TreeCount * validationResiduals^2) / validationTreeCountTotal)
   heightModelStats$rmspe = 100 * sqrt(sum(validationData$TreeCount * (validationResiduals / validationData$TotalHt)^2) / validationTreeCountTotal)
   heightModelStats$significant = significant
-
+  
   naturalRegenIndices = which(validationData$isPlantation == FALSE)
   heightNaturalRegen = validationData$TotalHt[naturalRegenIndices]
   predictedHeightNaturalRegen = predictedHeight[naturalRegenIndices]
@@ -954,12 +962,12 @@ get_list_coefficients = function(modelCrossValidationListOrStatsTibble, fitSet =
   {
     # cross validation tibble
     coefficients = bind_rows(lapply(modelCrossValidationListOrStatsTibble$fit, function(fit) 
-      { 
-        return(fit$stats$coefficients %>% 
-                 mutate(name = fit$stats$name,
-                        fitting = fit$stats$fitting,
-                        significant = fit$stats$significant))
-      })) %>%
+    { 
+      return(fit$stats$coefficients %>% 
+               mutate(name = fit$stats$name,
+                      fitting = fit$stats$fitting,
+                      significant = fit$stats$significant))
+    })) %>%
       mutate(repetition = as.numeric(str_replace(modelCrossValidationListOrStatsTibble$id, "Repeat", "")), 
              fold = as.numeric(str_replace(modelCrossValidationListOrStatsTibble$id2, "Fold", "")))
   } else if (is(modelCrossValidationListOrStatsTibble, "tbl_df"))
@@ -985,7 +993,7 @@ get_list_coefficients = function(modelCrossValidationListOrStatsTibble, fitSet =
   fixedWeightArgument = fixedWeight
   coefficients %<>% mutate(fitSet = fitSetArgument,
                            fixedWeight = fixedWeightArgument) %>%
-   relocate(fitSet, fixedWeight, name, repetition, fold)
+    relocate(fitSet, fixedWeight, name, repetition, fold)
   return(coefficients)
 }
 
@@ -1050,7 +1058,7 @@ get_model_coefficients = function(model)
       coefficients = tibble(!!!set_names(model$coefficients, names(model$coefficients)))
     }
   }
-
+  
   if ("(Intercept)" %in% names(coefficients))
   {
     coefficients %<>% rename(a0 = `(Intercept)`)
@@ -1158,7 +1166,7 @@ get_prediction_stats = function(name, responseVariable, trainingData, predicted,
   standardDeviation = sqrt(1/residualDegreesOfFreedom * sum(validationWeights * validationResiduals^2)) / sqrt(validationWeights)
   logLikelihoodGaussian = sum(validationData$TreeCount * dnorm(validationResiduals, sd = standardDeviation, log = TRUE))
   logLikelihoodT = sum(validationData$TreeCount * dt(validationResiduals / standardDeviation, df = tDegreesOfFreedom, log = TRUE) - log(standardDeviation))
-
+  
   speciesLimits = get_species_limits(validationData)
   validationTreeCountTotal = sum(validationData$TreeCount)
   modelStats$aic = -2*logLikelihoodGaussian + 2 * effectiveDegreesOfFreedom # calculate AIC and BIC manually because nlrob objects implement weighting differently from nls and gslnls
@@ -1321,87 +1329,87 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
   if (omitMab)
   {
     aucBank = ggplot() +
-        geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
-        labs(fill = fillLabel) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
-        new_scale_fill() +
-        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
-        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
-        labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-        #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-        scale_y_discrete(limits = rev)
+      geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
+      labs(fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
+      new_scale_fill() +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
+      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
+      labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      scale_y_discrete(limits = rev)
     letterOffset = 1
   } else {
     aucBank = ggplot() +
-        geom_raster(aes(x = species, y = name, fill = aucMab), aucs) +
-        labs(fill = fillLabel) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
-        new_scale_fill() +
-        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant))), aucs) +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
-        labs(title = bquote(.(plotLetters[1])~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-        #labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-        scale_y_discrete(limits = rev) +
+      geom_raster(aes(x = species, y = name, fill = aucMab), aucs) +
+      labs(fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
+      new_scale_fill() +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMab), NA_real_, significant))), aucs) +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
+      labs(title = bquote(.(plotLetters[1])~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[1]))~"MAB"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      scale_y_discrete(limits = rev) +
       ggplot() +
-        geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
-        labs(fill = fillLabel) +
-        scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
-        new_scale_fill() +
-        geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
-        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMaeRank <= 2, aucMaeRank <= 2)), fill = "transparent") +
-        scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-        labs(title = bquote(.(plotLetters[2])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-        #labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-        scale_y_discrete(labels = NULL, limits = rev)
+      geom_raster(aes(x = species, y = name, fill = aucMae), aucs) +
+      labs(fill = fillLabel) +
+      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
+      new_scale_fill() +
+      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
+      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMaeRank <= 2, aucMaeRank <= 2)), fill = "transparent") +
+      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+      labs(title = bquote(.(plotLetters[2])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      #labs(title = bquote(bold(.(plotLetters[2]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+      scale_y_discrete(labels = NULL, limits = rev)
     letterOffset = 2
   }
-
+  
   aucBank = aucBank +
     ggplot() +
-      geom_raster(aes(x = species, y = name, fill = aucRmse), aucs) +
-      labs(fill = fillLabel) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
-      new_scale_fill() +
-      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant))), aucs) +
-      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucRmseRank <= 2, aucRmseRank <= 2)), fill = "transparent") +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-      labs(title = bquote(.(plotLetters[letterOffset + 1])~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-      #labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-      scale_y_discrete(labels = NULL, limits = rev) +
+    geom_raster(aes(x = species, y = name, fill = aucRmse), aucs) +
+    labs(fill = fillLabel) +
+    scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
+    new_scale_fill() +
+    geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucRmse), NA_real_, significant))), aucs) +
+    geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucRmseRank <= 2, aucRmseRank <= 2)), fill = "transparent") +
+    scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+    labs(title = bquote(.(plotLetters[letterOffset + 1])~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+    #labs(title = bquote(bold(.(plotLetters[letterOffset + 1]))~"RMSE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+    scale_y_discrete(labels = NULL, limits = rev) +
     ggplot() +
-      geom_raster(aes(x = species, y = name, fill = aucDeltaAicN), aucs) +
-      labs(fill = fillLabel) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
-      new_scale_fill() +
-      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant))), aucs) +
-      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucDeltaAicNRank <= 2, aucDeltaAicNRank <= 2)), fill = "transparent") +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-      labs(title = bquote(.(plotLetters[letterOffset + 2])~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-      #labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-      scale_y_discrete(labels = NULL, limits = rev) +
+    geom_raster(aes(x = species, y = name, fill = aucDeltaAicN), aucs) +
+    labs(fill = fillLabel) +
+    scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
+    new_scale_fill() +
+    geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucDeltaAicN), NA_real_, significant))), aucs) +
+    geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucDeltaAicNRank <= 2, aucDeltaAicNRank <= 2)), fill = "transparent") +
+    scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+    labs(title = bquote(.(plotLetters[letterOffset + 2])~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+    #labs(title = bquote(bold(.(plotLetters[letterOffset + 2]))~"ΔAICn"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+    scale_y_discrete(labels = NULL, limits = rev) +
     ggplot() +
-      geom_raster(aes(x = species, y = name, fill = aucNse), aucs) +
-      labs(fill = fillLabel) +
-      scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
-      new_scale_fill() +
-      geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant))), aucs) +
-      geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucNseRank <= 2, aucNseRank <= 2)), fill = "transparent") +
-      scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
-      labs(title = bquote(.(plotLetters[letterOffset + 3])~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-      #labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
-      scale_y_discrete(labels = NULL, limits = rev) +
+    geom_raster(aes(x = species, y = name, fill = aucNse), aucs) +
+    labs(fill = fillLabel) +
+    scale_fill_scico(palette = "bam", limits = c(0, 1), guide = guide_colorbar(order = 1, theme = aucColorbarTheme)) +
+    new_scale_fill() +
+    geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucNse), NA_real_, significant))), aucs) +
+    geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucNseRank <= 2, aucNseRank <= 2)), fill = "transparent") +
+    scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), na.value = "red2", guide = guide_legend(order = 2)) +
+    labs(title = bquote(.(plotLetters[letterOffset + 3])~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+    #labs(title = bquote(bold(.(plotLetters[letterOffset + 3]))~"model efficiency"), x = NULL, y = NULL, color = NULL, fill = NULL) +
+    scale_y_discrete(labels = NULL, limits = rev) +
     plot_annotation(theme = theme(plot.margin =  margin())) +
     plot_layout(nrow = 1, guides = "collect") &
-      guides(color = guide_legend(override.aes = list(linewidth = 0.5)), linewidth = "none") &
-      scale_color_manual(breaks = c(FALSE, TRUE), labels = c("preferred\ngeneralization", "preferred\nbase form"), values = c("dodgerblue", "grey25")) &
-      scale_linewidth_manual(breaks = c(FALSE, TRUE), values = c(0.3, 0.2)) &
-      scale_x_discrete(limits = xLimits) &
-      #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
-      theme(axis.text.x = element_text(angle = 90, size = 10, hjust = 1, vjust = 0.5), axis.text.y = element_text(size = 10),
-            legend.position = "bottom", legend.spacing.y = unit(0.4, "line"), legend.justification = c(legendHjustification, 0.5), legend.title = element_text(size = 11),
-            panel.grid = element_blank(), plot.margin = margin(r = plotRightMargin), plot.title = element_text(margin = margin(b = 0.5)))
+    guides(color = guide_legend(override.aes = list(linewidth = 0.5)), linewidth = "none") &
+    scale_color_manual(breaks = c(FALSE, TRUE), labels = c("preferred\ngeneralization", "preferred\nbase form"), values = c("dodgerblue", "grey25")) &
+    scale_linewidth_manual(breaks = c(FALSE, TRUE), values = c(0.3, 0.2)) &
+    scale_x_discrete(limits = xLimits) &
+    #scale_x_discrete(labels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), limits = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")) &
+    theme(axis.text.x = element_text(angle = 90, size = 10, hjust = 1, vjust = 0.5), axis.text.y = element_text(size = 10),
+          legend.position = "bottom", legend.spacing.y = unit(0.4, "line"), legend.justification = c(legendHjustification, 0.5), legend.title = element_text(size = 11),
+          panel.grid = element_blank(), plot.margin = margin(r = plotRightMargin), plot.title = element_text(margin = margin(b = 0.5)))
   
   return(aucBank)
 }
@@ -1414,7 +1422,7 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
   heightQuantiles = liveUnbrokenTrees %>% mutate(heightClass = 1 * (ceiling(TotalHt / 1) - 0.5)) %>% group_by(heightClass) %>%
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), dbh = quantile(DBH, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(DBH, na.rm = TRUE), .groups = "drop") %>%
     pivot_wider(names_from = quantiles, values_from = dbh)
-
+  
   distributionLegendPosition = "inside"
   treeLegendPosition = "inside"
   if (omitLegends)
@@ -1454,50 +1462,50 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
   
   exploratoryPlots = exploratoryPlots +
     ggplot(dbhQuantiles) +
-      geom_ribbon(aes(x = diameterClass, ymin = 100 * (q025 - mean) / mean^heightPower, ymax = 100 * (q975 - mean) / mean^heightPower, alpha = "95% probability"), fill = "forestgreen") +
-      geom_ribbon(aes(x = diameterClass, ymin = 100 * (q10 - mean) / mean^heightPower, ymax = 100 * (q90 - mean) / mean^heightPower, alpha = "80% probability"), fill = "forestgreen") +
-      geom_ribbon(aes(x = diameterClass, ymin = 100 * (q25 - mean) / mean^heightPower, ymax = 100 * (q75 - mean) / mean^heightPower, alpha = "50% probability"), fill = "forestgreen") +
-      geom_path(aes(x = diameterClass, y = 100 * (min - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      #geom_path(aes(x = diameterClass, y = 100 * (q10 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = diameterClass, y = 100 * (q20 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = diameterClass, y = 100 * (q30 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = diameterClass, y = 100 * (q40 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_segment(x = 0, xend = 185, y = 0, yend = 0, color = "forestgreen", linewidth = 0.4) +
-      geom_path(aes(x = diameterClass, y = 100 * (q60 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = diameterClass, y = 100 * (q70 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = diameterClass, y = 100 * (q80 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      #geom_path(aes(x = diameterClass, y = 100 * (q90 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = diameterClass, y = 100 * (max - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      coord_cartesian(xlim = c(0, 196), ylim = c(-50, 150)) +
-      scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
-      scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
-      scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-      labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[2] != "") { bquote(.(titleLetters[2])~.(speciesLabel)) } else { NULL }) +
-      #labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[2] != "") { bquote(bold(.(titleLetters[2]))~.(speciesLabel)) } else { NULL }) +
-      theme(legend.position = "none") +
+    geom_ribbon(aes(x = diameterClass, ymin = 100 * (q025 - mean) / mean^heightPower, ymax = 100 * (q975 - mean) / mean^heightPower, alpha = "95% probability"), fill = "forestgreen") +
+    geom_ribbon(aes(x = diameterClass, ymin = 100 * (q10 - mean) / mean^heightPower, ymax = 100 * (q90 - mean) / mean^heightPower, alpha = "80% probability"), fill = "forestgreen") +
+    geom_ribbon(aes(x = diameterClass, ymin = 100 * (q25 - mean) / mean^heightPower, ymax = 100 * (q75 - mean) / mean^heightPower, alpha = "50% probability"), fill = "forestgreen") +
+    geom_path(aes(x = diameterClass, y = 100 * (min - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+    #geom_path(aes(x = diameterClass, y = 100 * (q10 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = diameterClass, y = 100 * (q20 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = diameterClass, y = 100 * (q30 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = diameterClass, y = 100 * (q40 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_segment(x = 0, xend = 185, y = 0, yend = 0, color = "forestgreen", linewidth = 0.4) +
+    geom_path(aes(x = diameterClass, y = 100 * (q60 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = diameterClass, y = 100 * (q70 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = diameterClass, y = 100 * (q80 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    #geom_path(aes(x = diameterClass, y = 100 * (q90 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = diameterClass, y = 100 * (max - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+    coord_cartesian(xlim = c(0, 196), ylim = c(-50, 150)) +
+    scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
+    scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
+    scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
+    labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[2] != "") { bquote(.(titleLetters[2])~.(speciesLabel)) } else { NULL }) +
+    #labs(x = dbhXlabel, y = "departure from mean height, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[2] != "") { bquote(bold(.(titleLetters[2]))~.(speciesLabel)) } else { NULL }) +
+    theme(legend.position = "none") +
     ggplot(heightQuantiles) +
-      geom_ribbon(aes(x = heightClass, ymin = 100 * (q025 - mean) / mean^dbhPower, ymax = 100 * (q975 - mean) / mean^dbhPower, alpha = "95% probability"), fill = "burlywood4") +
-      geom_ribbon(aes(x = heightClass, ymin = 100 * (q10 - mean) / mean^dbhPower, ymax = 100 * (q90 - mean) / mean^dbhPower, alpha = "80% probability"), fill = "burlywood4") +
-      geom_ribbon(aes(x = heightClass, ymin = 100 * (q25 - mean) / mean^dbhPower, ymax = 100 * (q75 - mean) / mean^dbhPower, alpha = "50% probability"), fill = "burlywood4") +
-      geom_path(aes(x = heightClass, y = 100 * (min - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      #geom_path(aes(x = heightClass, y = 100 * (q10 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = heightClass, y = 100 * (q20 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = heightClass, y = 100 * (q30 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = heightClass, y = 100 * (q40 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_segment(x = 0, xend = 77.5, y = 0, yend = 0, color = "burlywood4", linewidth = 0.4) +
-      geom_path(aes(x = heightClass, y = 100 * (q60 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = heightClass, y = 100 * (q70 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
-      geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
-      guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
-      scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
-      scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
-      scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
-      labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[3] != "") { bquote(.(titleLetters[3])~.(speciesLabel)) } else { NULL }) +
-      #labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[3] != "") { bquote(bold(.(titleLetters[3]))~.(speciesLabel)) } else { NULL }) +
-      theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition, legend.position.inside = c(1, distributionLegendPositionY)) +
+    geom_ribbon(aes(x = heightClass, ymin = 100 * (q025 - mean) / mean^dbhPower, ymax = 100 * (q975 - mean) / mean^dbhPower, alpha = "95% probability"), fill = "burlywood4") +
+    geom_ribbon(aes(x = heightClass, ymin = 100 * (q10 - mean) / mean^dbhPower, ymax = 100 * (q90 - mean) / mean^dbhPower, alpha = "80% probability"), fill = "burlywood4") +
+    geom_ribbon(aes(x = heightClass, ymin = 100 * (q25 - mean) / mean^dbhPower, ymax = 100 * (q75 - mean) / mean^dbhPower, alpha = "50% probability"), fill = "burlywood4") +
+    geom_path(aes(x = heightClass, y = 100 * (min - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+    #geom_path(aes(x = heightClass, y = 100 * (q10 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = heightClass, y = 100 * (q20 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = heightClass, y = 100 * (q30 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = heightClass, y = 100 * (q40 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_segment(x = 0, xend = 77.5, y = 0, yend = 0, color = "burlywood4", linewidth = 0.4) +
+    geom_path(aes(x = heightClass, y = 100 * (q60 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = heightClass, y = 100 * (q70 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
+    geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
+    coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
+    guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
+    scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
+    scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
+    scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
+    labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[3] != "") { bquote(.(titleLetters[3])~.(speciesLabel)) } else { NULL }) +
+    #labs(x = heightXlabel, y = "departure from mean DBH, %", alpha = NULL, color = NULL, linetype = NULL, title = if (titleLetters[3] != "") { bquote(bold(.(titleLetters[3]))~.(speciesLabel)) } else { NULL }) +
+    theme(legend.justification = c(1, 1), legend.position = distributionLegendPosition, legend.position.inside = c(1, distributionLegendPositionY)) +
     plot_layout(nrow = 1, ncol = 3, widths = c(260, 200, 200))
   return(exploratoryPlots)
 }
@@ -1511,70 +1519,70 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
   heightColors = viridis::viridis_pal(option = "plasma", end = 0.9)(4)
   dbhColors = viridis::viridis_pal(end = 0.9)(4)
   qqPlot = ggplot() +
-      geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.4) +
-      geom_qq(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.8, geom = "line") +
-      annotate("text", x = -10.5, y = 160, label = paste0("'a) ", speciesName, " height, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
-      coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
-      labs(x = NULL, y = "sample quantile", color = NULL) +
-      scale_color_manual(values = heightColors) +
-      theme(legend.key.height = unit(0.8, "line"), legend.justification = c(1, 0), legend.position.inside = c(1, 0.03)) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.4) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.4) +
+    geom_qq(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.8, geom = "line") +
+    geom_qq(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.8, geom = "line") +
+    geom_qq(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.8, geom = "line") +
+    geom_qq(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.8, geom = "line") +
+    annotate("text", x = -10.5, y = 160, label = paste0("'a) ", speciesName, " height, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
+    coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
+    labs(x = NULL, y = "sample quantile", color = NULL) +
+    scale_color_manual(values = heightColors) +
+    theme(legend.key.height = unit(0.8, "line"), legend.justification = c(1, 0), legend.position.inside = c(1, 0.03)) +
     ggplot() +
-      geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.4) +
-      geom_qq_line(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.4) +
-      geom_qq(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.8, geom = "line") +
-      geom_qq(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.8, geom = "line") +
-      annotate("text", x = -10.5, y = 160, label = paste0("'b) ", speciesName, " DBH, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
-      coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
-      labs(x = NULL, y = NULL, color = NULL) +
-      scale_color_manual(values = dbhColors) +
-      theme(legend.key.height = unit(0.8, "line"),legend.justification = c(1, 0), legend.position.inside = c(1, 0.03)) +
+    geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4) +
+    geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4) +
+    geom_qq_line(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.4) +
+    geom_qq_line(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.4) +
+    geom_qq(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.8, geom = "line") +
+    geom_qq(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.8, geom = "line") +
+    geom_qq(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.8, geom = "line") +
+    geom_qq(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.8, geom = "line") +
+    annotate("text", x = -10.5, y = 160, label = paste0("'b) ", speciesName, " DBH, '*epsilon~'~'~'N(0, '*sigma*'²)'"), hjust = 0, parse = TRUE, size = 3.4) +
+    coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
+    labs(x = NULL, y = NULL, color = NULL) +
+    scale_color_manual(values = dbhColors) +
+    theme(legend.key.height = unit(0.8, "line"),legend.justification = c(1, 0), legend.position.inside = c(1, 0.03)) +
     ggplot() +
-      geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq_line(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq_line(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
-      geom_qq(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      geom_qq(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      geom_qq(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      geom_qq(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
-      annotate("text", x = -10.5, y = 160, label = paste0("'c) ", speciesName, " height, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
-      coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
-      labs(x = "theoretical quantile", y = "sample quantile", color = NULL) +
-      scale_color_manual(values = heightColors) +
-      theme(legend.justification = c(1, 0), legend.position = "none") +
+    geom_qq_line(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+    geom_qq_line(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.4, distribution = qt, dparams = list(df = tDegreesOfFreedom)) +
+    geom_qq(aes(sample = -residuals(diameterRegression1), color = diameterRegression1$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+    geom_qq(aes(sample = -residuals(diameterRegression2), color = diameterRegression2$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+    geom_qq(aes(sample = -residuals(diameterRegression3), color = diameterRegression3$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+    geom_qq(aes(sample = -residuals(diameterRegression4), color = diameterRegression4$name), alpha = 0.8, distribution = qt, dparams = list(df = tDegreesOfFreedom), geom = "line") +
+    annotate("text", x = -10.5, y = 160, label = paste0("'c) ", speciesName, " height, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
+    coord_cartesian(xlim = c(-10, 13), ylim = c(-110, 160)) +
+    labs(x = "theoretical quantile", y = "sample quantile", color = NULL) +
+    scale_color_manual(values = heightColors) +
+    theme(legend.justification = c(1, 0), legend.position = "none") +
     ggplot() + # qst()'s omega (scale) parameter can be left as 1 as its only effect is rotation, xi (location) can be left as zero as its only effect is a translation in theoretical quantile
-      geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq_line(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq_line(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
-      geom_qq(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      geom_qq(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      geom_qq(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      geom_qq(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
-      annotate("text", x = -10.5, y = 160, label = paste0("'d) ", speciesName, " DBH, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ", '*alpha*' = ", tSkew, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
-      coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
-      labs(x = "theoretical quantile", y = NULL, color = NULL) +
-      scale_color_manual(values = dbhColors) +
-      theme(legend.justification = c(1, 0), legend.position = "none") +
-      plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
-      plot_layout(nrow = 2, ncol = 2, widths = c(10 + 13, 10 + 16.5))
+    geom_qq_line(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+    geom_qq_line(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+    geom_qq_line(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+    geom_qq_line(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.4, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0)) +
+    geom_qq(aes(sample = -residuals(heightRegression1), color = heightRegression1$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+    geom_qq(aes(sample = -residuals(heightRegression2), color = heightRegression2$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+    geom_qq(aes(sample = -residuals(heightRegression3), color = heightRegression3$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+    geom_qq(aes(sample = -residuals(heightRegression4), color = heightRegression4$name), alpha = 0.8, distribution = sn::qst, dparams = list(nu = tDegreesOfFreedom, alpha = tSkew, omega = 1, xi = 0), geom = "line") +
+    annotate("text", x = -10.5, y = 160, label = paste0("'d) ", speciesName, " DBH, '*epsilon~'~'~'t(df = ", tDegreesOfFreedom, ", '*alpha*' = ", tSkew, ")'"), hjust = 0, parse = TRUE, size = 3.4) +
+    coord_cartesian(xlim = c(-10, 16.5), ylim = c(-110, 160)) +
+    labs(x = "theoretical quantile", y = NULL, color = NULL) +
+    scale_color_manual(values = dbhColors) +
+    theme(legend.justification = c(1, 0), legend.position = "none") +
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
+    plot_layout(nrow = 2, ncol = 2, widths = c(10 + 13, 10 + 16.5))
   return(qqPlot)
 }
 
 
 ## load data
 # Notable properties of cruise data loaded into trees2016
-#  - Plots are either count plots, where trees aren't measured, or count plots, where all trees and snags are measured
+#  - Plots are either count plots, where trees aren't measured, or measure plots, where all trees and snags are measured
 #    for DBH and a subset measured for height. Thus, all stems with heights (TotalHt if unbroke, Ht2 if broken) are 
 #    also have DBH measurements.
 #  - Trees are on CO (count) and IP (measure) plots. Count plots are variable radius and count trees by species. 
@@ -1584,34 +1592,91 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
 #  - Trees on variable radius measure plots generally have TreeCount = 1, as expected, but 462 records have TreeCount
 #    = 2. Since it's very unlikely two trees are on the same plot with the same DBH and, often, the same height, these
 #    records are assumed to be incorrect and the tree count is changed to one.
-stands2022 = read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% 
-  mutate(Cruised_Si = na_if(Cruised_Si, 0),
-         ODSL_Site_ = na_if(ODSL_Site_, 0),
-         siteSpecies = if_else(startsWith(ODSL_VEG_L, "1W") | startsWith(ODSL_VEG_L, "WX"), "hemlock", 
-                               if_else(startsWith(ODSL_VEG_L, "1H") | startsWith(ODSL_VEG_L, "HX"), "hardwood",
-                                       if_else(startsWith(ODSL_VEG_L, "OT"), "other",
-                                               "Douglas-fir"))),
-         standAge2016 = pmax(if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4), 0),
-         standArea = 0.404686 * GrossAc,  # ac to ha
+
+
+#stands2022 = read_xlsx("GIS/Planning/Elliott Stand Data Feb2022.xlsx") %>% 
+#mutate(Cruised_Si = na_if(Cruised_Si, 0),
+#ODSL_Site_ = na_if(ODSL_Site_, 0),
+#siteSpecies = if_else(startsWith(ODSL_VEG_L, "1W") | startsWith(ODSL_VEG_L, "WX"), "hemlock", 
+#if_else(startsWith(ODSL_VEG_L, "1H") | startsWith(ODSL_VEG_L, "HX"), "hardwood",
+#if_else(startsWith(ODSL_VEG_L, "OT"), "other",
+#"Douglas-fir"))),
+#standAge2016 = pmax(if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4), 0),
+#standArea = 0.404686 * GrossAc,  # ac to ha
+#isPlantation = standAge2016 < 70)
+
+#plots2016 = read_xlsx("GIS/Trees/2015-16 cruise/CruisePlots_All_20151211.xlsx") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
+
+#trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 2015-16.xlsx", sheet = "CRUISERECS"),
+#stands2022 %>% select(StandID, standAge2016, standArea, isPlantation),
+#by = c("StandID")),
+#plots2016 %>% select(STAND, PltInteger, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(PlotID = PltInteger),
+#by = c("PlotID")) %>%
+#mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
+#BHAge = na_if(BHAge, 0), # years
+#DBH = na_if(2.54 * DBH, 0), # inches to cm
+#Dia1 = na_if(2.54 * Dia1, 0),
+#CrownRatio = na_if(CrownRatio, 0),
+#Ht1 = na_if(0.3048 * Ht1, 0), # feet to m
+#Ht2 = na_if(0.3048 * Ht2, 0),
+#isConifer = Species %in% c("DF", "WH", "RC", "SS", "CX", "PC", "PY", "GF", "LP"),
+#isLive = (CompCode %in% c("D.", "SN")) == FALSE,
+#isLiveUnbroken = isLive & (CompCode != "BT"),
+#plotRadius = if_else(SamplingMethod == "BAF", 100 / 2.54 * 0.3048 / (12 * sqrt(SampleFactor / 10890)), 0.3048 * sqrt(43560 / (pi * SampleFactor))), # m
+#SampleFactor = 2.47105 * if_else(SamplingMethod == "BAF", 0.092903, 1) * SampleFactor, # convert BAF from ft²/ac to m²/ha and TPA to TPH, BAF conversion is BAF ft²/ac * 2.47105 ac/ha * 0.092903 m²/ft² = 0.229568 m²/ha / ft²/ac
+#TotalHt = na_if(0.3048 * TotalHt, 0),
+#TreeCount = if_else((PlotType == "IP") & (SamplingMethod == "BAF") & (TreeCount > 1), 1, TreeCount), # fix tree duplication per notes above
+#basalArea = 0.25 * pi * (0.01*DBH)^2, # m² 
+#breastHeight = 1.37, # m, used for offset in lm() height regressions
+#heightDiameterRatio = TotalHt / (0.01 * DBH), # (DBH conversion from cm to m)
+#imputedHeight = if_else(is.na(TotalHt) == FALSE, TotalHt, if_else(is.na(DBH) == FALSE, impute_height(Species, DBH, isPlantation), NA_real_)), # where possible, perform basic height imputation
+#treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea)) %>% # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
+#group_by(StandID) %>%
+
+######### --------- FUNCTIONS END -----------#####
+
+stands2022 = read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desktop\Winter 2025\FOR 599\Elliott_stands_2015-16.csv)")%>%
+  mutate(standAge2016=standAge2015+1,
          isPlantation = standAge2016 < 70)
+#%>% 
+#mutate(Cruised_Si = na_if(Cruised_Si, 0),
+#ODSL_Site_ = na_if(ODSL_Site_, 0),
+#siteSpecies = if_else(startsWith(ODSL_VEG_L, "1W") | startsWith(ODSL_VEG_L, "WX"), "hemlock", 
+#if_else(startsWith(ODSL_VEG_L, "1H") | startsWith(ODSL_VEG_L, "HX"), "hardwood",
+#if_else(startsWith(ODSL_VEG_L, "OT"), "other",
+#"Douglas-fir"))),
+#standAge2016 = pmax(if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4), 0),
+#standArea = 0.404686 * GrossAc,  # ac to ha
+#isPlantation = standAge2016 < 70)
+head(stands2022)
 
-plots2016 = read_xlsx("GIS/Trees/2015-16 cruise/CruisePlots_All_20151211.xlsx") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
-
-trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 2015-16.xlsx", sheet = "CRUISERECS"),
-                                stands2022 %>% select(StandID, standAge2016, standArea, isPlantation),
-                                by = c("StandID")),
-                      plots2016 %>% select(STAND, PltInteger, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(PlotID = PltInteger),
-                      by = c("PlotID")) %>%
-  mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
-         BHAge = na_if(BHAge, 0), # years
+plots2016 = read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desktop\Winter 2025\FOR 599\Elliott_timber_cruise_2015-16.csv)") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
+head(plots2016)
+#trees2016 = left_join(left_join(read.csv("Elliott_timber_cruise_2015-16.csv", sheet = "Elliott_timber_cruise_2015-16"),
+#stands2022 %>% select(standID, standAge2016, areaHa, isPlantation),
+# by = c("standID")),
+#plots2016 %>% select(standID, plotID, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(plotID = PltInteger),
+#by = c("plotID")) 
+trees2016 = left_join(read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desktop\Winter 2025\FOR 599\Elliott_timber_cruise_2015-16.csv)"),
+                      stands2022 %>% select(standID, standAge2016, areaHa, isPlantation),
+                      by = "standID") %>% # removed the second part of the join because it was not relevant
+  rename(Species=species,TotalHt=totalHt,TreeCount=treeCount,PlotID=plotID,StandID=standID,SamplingMethod=samplingMethod,CompCode=condition,CrownRatio=crownRatio,Ht1=taperHt,Dia1=taperDiameter,standArea=areaHa)%>% # renamed columns to match further analysis, this code was added to match variable names.
+  mutate(SamplingMethod = ifelse(SamplingMethod == "VRP", "BAF", SamplingMethod))%>%
+  mutate(speciesGroup = factor(if_else(Species %in% c("PSME", "ALRU2", "TSHE","ACMA3", "UMCA", "THPL"), Species, "other"), levels=c("PSME", "ALRU2", "TSHE","ACMA3", "UMCA", "THPL", "other"),labels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
+         #mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
+         PlotType=case_when(plotType=="count"~"CO", #convert plot type "count" and "measure" to "CO" and "IP" respectively
+                            plotType == "measure" ~ "IP",
+                            TRUE ~ NA_character_),
+         BHAge = na_if(breastHeightAge, 0), # years
          DBH = na_if(2.54 * DBH, 0), # inches to cm
          Dia1 = na_if(2.54 * Dia1, 0),
          CrownRatio = na_if(CrownRatio, 0),
          Ht1 = na_if(0.3048 * Ht1, 0), # feet to m
-         Ht2 = na_if(0.3048 * Ht2, 0),
-         isConifer = Species %in% c("DF", "WH", "RC", "SS", "CX", "PC", "PY", "GF", "LP"),
-         isLive = (CompCode %in% c("D.", "SN")) == FALSE,
-         isLiveUnbroken = isLive & (CompCode != "BT"),
+         Ht2 = na_if(0.3048 * htToBrokenTop, 0),
+         isConifer = Species %in% c("PSME", "TSHE", "THPL"),
+         isLive = (CompCode %in% c("deadStanding", "snag")) == FALSE,
+         isLiveUnbroken = isLive & (CompCode != "brokenTop"),
+         SampleFactor=0.229568, #added sample factor
          plotRadius = if_else(SamplingMethod == "BAF", 100 / 2.54 * 0.3048 / (12 * sqrt(SampleFactor / 10890)), 0.3048 * sqrt(43560 / (pi * SampleFactor))), # m
          SampleFactor = 2.47105 * if_else(SamplingMethod == "BAF", 0.092903, 1) * SampleFactor, # convert BAF from ft²/ac to m²/ha and TPA to TPH, BAF conversion is BAF ft²/ac * 2.47105 ac/ha * 0.092903 m²/ft² = 0.229568 m²/ha / ft²/ac
          TotalHt = na_if(0.3048 * TotalHt, 0),
@@ -1622,7 +1687,7 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          imputedHeight = if_else(is.na(TotalHt) == FALSE, TotalHt, if_else(is.na(DBH) == FALSE, impute_height(Species, DBH, isPlantation), NA_real_)), # where possible, perform basic height imputation
          treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea)) %>% # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
   group_by(StandID) %>%
-  arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>% # put largest diameter live trees first in each stand for calculating BAL (numbers sort before NA)
+  arrange(desc(isLiveUnbroken), desc(DBH), .by_group = TRUE) %>%# put largest diameter live trees first in each stand for calculating BAL (numbers sort before NA)
   mutate(plotsInStand = length(unique(PlotID)), # nested fixed radius and BAF plots share same plot ID
          standBasalAreaPerHectare = sum(isLive * treeBasalAreaPerHectare) / plotsInStand, # m²/ha
          basalAreaLarger = (cumsum(isLive * treeBasalAreaPerHectare) - treeBasalAreaPerHectare[1]) / plotsInStand, # m²/ha
@@ -1636,12 +1701,12 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
   # top height by tallest trees in stand, regardless of plot
   #arrange(desc(isLiveUnbroken), desc(TotalHt), .by_group = TRUE) %>% # put tallest live trees without broken tops first in each stand
   #mutate(topHeightTph = pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), # TPH total towards the H100 definition of top height, trees not measured for TotalHt are skipped
-  #       topHeightWeight = pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
-  #       topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), # m, tallest 100 trees per hectare
-  #       relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees (debatable if imputed heights should be included but, for now, trees not measured for height are left with NA relative height)
-  #       tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
-  #       tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>% 
-  # top height by estimating H100 on each plot and then averaging all plots (slower than pooling by stand)
+  #topHeightWeight = pmax((topHeightTph - lag(topHeightTph, default = 0)) / measureTreeTphContribution, 0), # clamp remaining fraction to [0, 1] to get individual trees' contributions to the top height average
+  #topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), # m, tallest 100 trees per hectare
+  #relativeHeight = TotalHt / topHeight, # individual trees' heights as a fraction of top height, may be greater than 1, especially for retention trees (debatable if imputed heights should be included but, for now, trees not measured for height are left with NA relative height)
+  #tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
+  #tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) #%>% 
+  #top height by estimating H100 on each plot and then averaging all plots (slower than pooling by stand)
   group_by(StandID, PlotID, isLiveUnbroken) %>%
   arrange(desc(TotalHt), .by_group = TRUE) %>% 
   mutate(topHeightTph = if_else(isLiveUnbroken, pmin(cumsum(if_else(is.na(TotalHt), 0, measureTreeTphContribution)), 100), NA_real_),
@@ -1658,20 +1723,21 @@ trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 20
          tallerApproxBasalArea = (cumsum(isLive * treeBasalAreaPerHectareApprox) - treeBasalAreaPerHectareApprox[1]) / plotsInStand,
          tallerTph = cumsum(isLiveUnbroken * SampleFactor * TreeCount * if_else(SamplingMethod == "BAF",  1 / basalArea, 1)) / plotsInStand) %>%
   ungroup()
+head(trees2016)
 
 heightClassBreaks = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>%
   group_by(speciesGroup) %>%
   group_modify(~{
-                  quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10))) # constrain maximum number of classes based on data availability: setting the max to n / (meanClassN*k) classes averages meanClassN samples per class in validation folds => primarily affects low n species: Oregon myrtle, western redcedar, and other
-                  return(tibble(heightBreaks = unique(ceiling(c(0, quantile(.$TotalHt, probs = quantileBreaks, na.rm = TRUE))))))
-                }) %>%
+    quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10))) # constrain maximum number of classes based on data availability: setting the max to n / (meanClassN*k) classes averages meanClassN samples per class in validation folds => primarily affects low n species: Oregon myrtle, western redcedar, and other
+    return(tibble(heightBreaks = unique(ceiling(c(0, quantile(.$TotalHt, probs = quantileBreaks, na.rm = TRUE))))))
+  }) %>%
   unstack(heightBreaks ~ speciesGroup) # list of height class breaks, named by species
 dbhClassBreaks = trees2016 %>% filter(isLiveUnbroken, DBH > 2.54 * 3.5) %>%
   group_by(speciesGroup) %>%
   group_modify(~{
-                  quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10) - 3))
-                  return(tibble(dbhBreaks = unique(c(2.5 * c(0, 1.5, 2.5, 3.5), 2.5 * ceiling(quantile(.$DBH, probs = quantileBreaks, na.rm = TRUE) / 2.5) + 0.5 * 2.5))))
-                }) %>%
+    quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10) - 3))
+    return(tibble(dbhBreaks = unique(c(2.5 * c(0, 1.5, 2.5, 3.5), 2.5 * ceiling(quantile(.$DBH, probs = quantileBreaks, na.rm = TRUE) / 2.5) + 0.5 * 2.5))))
+  }) %>%
   unstack(dbhBreaks ~ speciesGroup) # list of DBH class breaks, named by species
 
 trees2016 %<>% group_by(speciesGroup) %>%
@@ -1679,8 +1745,7 @@ trees2016 %<>% group_by(speciesGroup) %>%
          dbhClass = cut(DBH, breaks = dbhClassBreaks[[cur_group()$speciesGroup]], labels = 0.5 * (head(dbhClassBreaks[[cur_group()$speciesGroup]], -1) + tail(dbhClassBreaks[[cur_group()$speciesGroup]], -1)))) %>%
   ungroup()
 
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   # plots without spatial locations
   print(trees2016 %>% filter(is.na(elevation)) %>% group_by(PlotID) %>% summarize(trees = n(), .groups = "drop"), n = 51)
   # distribution of estimated stand basal areas
@@ -1691,7 +1756,7 @@ if (htDiaOptions$includeInvestigatory)
   #               remainingFraction = (treeTphContribution + remainingTph) / treeTphContribution,
   #               weight = if_else(remainingFraction >= 1, 1, if_else(remainingFraction > 0, remainingFraction, 0))),
   #      n = 40)
-
+  
   # check plots for calculated stand-level quantities: BA, TPH, QMD, H100
   standsFromTrees2016 = trees2016 %>% group_by(StandID) %>%
     summarize(plots = plotsInStand[1], measurePlots = measurePlotsInStand[1], meanTreesPerBafPlot = meanTreesPerBafPlot[1], meanTreesPerBafMeasurePlot = meanTreesPerBafMeasurePlot[1],
@@ -1707,29 +1772,29 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = plots, y = measurePlots), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
     coord_cartesian(xlim = c(0, 90)) +
     labs(x = "plots", y = "measure plots") +
-  ggplot() +
+    ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 120, yend = 120), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_point(aes(x = standBasalAreaPerHectare, y = standBasalAreaApprox), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
     coord_cartesian(xlim = c(0, 120)) +
     labs(x = bquote("basal area, m"^2*" ha"^-1), y = bquote("approximate basal area, m"^2*" ha"^-1)) +
-  ggplot() +
+    ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 10, yend = 10), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_point(aes(x = meanTreesPerBafPlot, y = meanTreesPerBafMeasurePlot), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
     #coord_cartesian(xlim = c(0, 120)) +
     labs(x = "mean trees per BAF plot", y = "mean trees per BAF measure plot") +
-  ggplot() +
+    ggplot() +
     geom_line(aes(x = tph, y = qmd, group = sdi), reinekeSdi, color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_point(aes(x = tph, y = qmd), standsFromTrees2016, alpha = 0.5, shape = 16) +
     coord_cartesian(xlim = c(50, 5000), ylim = c(5, 95)) +
     labs(x = "TPH", y = "QMD, cm") +
     scale_x_log10(breaks = c(50, 100, 200, 500, 1000, 5000), minor_breaks = c(60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 2000, 3000, 4000, 6000, 7000)) +
     scale_y_log10(breaks = c(5, 10, 20, 50, 100), minor_breaks = c(6, 7, 8, 9, 30, 40, 60, 70, 80, 90)) +
-  ggplot() +
+    ggplot() +
     geom_histogram(aes(y = topHeight), standsFromTrees2016, binwidth = 2) +
     labs(x = "stands", y = bquote("H"[100]*", m")) +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(nrow = 2, ncol = 3)
-
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 2, ncol = 3)
+  
   # check plots for tree-level properties derived from stand-level properties
   ggplot() +
     geom_segment(aes(x = 1.5, y = 0, xend = 1.5, yend = 3000), color = "grey80", linewidth = 0.3, linetype = "longdash") +
@@ -1738,27 +1803,27 @@ if (htDiaOptions$includeInvestigatory)
     labs(x = "relative height", y = "trees measured", fill = NULL) +
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
     theme(legend.justification = c(1, 1), legend.position.inside = c(1, 1)) +
-  ggplot() +
+    ggplot() +
     geom_segment(aes(x = 5.4, y = 0, xend = 5.4, yend = 3000), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_histogram(aes(x = relativeDiameter, fill = speciesGroup), trees2016, binwidth = 0.05, na.rm = TRUE) +
     coord_cartesian(xlim = c(0, 7.5), ylim = c(0, 2500)) +
     labs(x = "relative diameter", y = "trees measured", fill = NULL) +
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
     theme(legend.position = "none") +
-  ggplot() +
+    ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 125, yend = 125), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_point(aes(x = standBasalAreaPerHectare, y = basalAreaLarger, color = speciesGroup), trees2016, alpha = 0.2, shape = 16) +
     guides(color = "none") +
     labs(x = bquote("stand basal area, m"^2*" ha"^-1), y = bquote("basal area larger, m"^2*" ha"^-1), color = NULL) +
     scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
-  ggplot() +
+    ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 180, yend = 180), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_point(aes(x = standBasalAreaApprox, y = tallerApproxBasalArea, color = speciesGroup), trees2016, alpha = 0.2, shape = 16) +
     guides(color = "none") +
     labs(x = bquote("approximate stand basal area, m"^2*" ha"^-1), y = bquote("basal area taller, m"^2*" ha"^-1), color = NULL) +
     scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(nrow = 2, ncol = 2)
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 2, ncol = 2)
   
   # correlations among predictors
   predictorLabels = c("DBH", "height", "height:diameter", "stand age", "BA", "BAL", "ABA", "AAT", "elevation", "slope", "sin(aspect)", "cos(aspect)", "TSI", "H100", "RelHt", "QMD", "RelDbh")
@@ -1778,7 +1843,7 @@ if (htDiaOptions$includeInvestigatory)
     scale_y_discrete(limits = rev) +
     theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"))
   print(predictorCorrelation %>% filter(predictor1 %in% c("DBH", "height", "height:diameter", "BA", "ABA"), predictor2 %in% c("DBH", "height", "height:diameter")) %>%
-    pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
+          pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
   print(predictorCorrelation %>% filter(predictor1 %in% c("DBH"), predictor2 %in% c("BA", "ABA")) %>%
           pivot_wider(names_from = "predictor2", values_from = "correlation"), n = 21)
   
@@ -1822,33 +1887,55 @@ if (htDiaOptions$includeInvestigatory)
   
   # export stand properties, including 2016 inventory where available
   # trees.R needs areas for all stands, so join cruised stands with all stands defined for 2016 inventory.
-  #write_xlsx(list(stands = left_join(stands2022 %>% mutate(StandID = as.integer(StandID)) %>% select(StandID, standAge2016, standArea, isPlantation),
-  #                                   trees2016 %>% group_by(StandID) %>%
-  #                                     summarize(standAge2016 = standAge2016[1], 
-  #                                               isPlantation = isPlantation[1], 
-  #                                               standArea = standArea[1], 
-  #                                               plotsInStand = plotsInStand[1], 
-  #                                               measurePlotsInStand = measurePlotsInStand[1],
-  #                                               tph = tph[1], 
-  #                                               topHeight = topHeight[1], 
-  #                                               qmd = qmd[1], 
-  #                                               standBasalAreaPerHectare = standBasalAreaPerHectare[1], 
-  #                                               standBasalAreaApprox = standBasalAreaApprox[1]) %>%
-  #                                     mutate(StandID = as.integer(StandID)),
-  #                                   by = "StandID") %>%
-  #                          mutate(standAge2016 = if_else(is.na(standAge2016.x), standAge2016.y, standAge2016.x),
-  #                                 standArea = if_else(is.na(standArea.x), standArea.y, standArea.x),
-  #                                 isPlantation = if_else(is.na(isPlantation.x), isPlantation.y, isPlantation.x)) %>%
-  #                          select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
-  #                          rename(standID2016 = StandID) %>%
-  #                          relocate(standID2016, standAge2016, standArea,	isPlantation)),
-  #           "GIS/Trees/2015-16 cruise.xlsx")
+  # write_xlsx(list(stands = left_join(stands2022 %>% mutate(StandID = as.integer(StandID)) %>% select(StandID, standAge2016, standArea, isPlantation),
+  #                                    trees2016 %>% group_by(StandID) %>%
+  #                                      summarize(standAge2016 = standAge2016[1], 
+  #                                                isPlantation = isPlantation[1], 
+  #                                                standArea = standArea[1], 
+  #                                                plotsInStand = plotsInStand[1], 
+  #                                                measurePlotsInStand = measurePlotsInStand[1],
+  #                                                tph = tph[1], 
+  #                                                topHeight = topHeight[1], 
+  #                                                qmd = qmd[1], 
+  #                                                standBasalAreaPerHectare = standBasalAreaPerHectare[1], 
+  #                                                standBasalAreaApprox = standBasalAreaApprox[1]) %>%
+  #                                      mutate("StandID" = as.integer(StandID)),
+  #                                    by = "StandID") %>%
+  #                           mutate(standAge2016 = if_else(is.na(standAge2016.x), standAge2016.y, standAge2016.x),
+  #                                  standArea = if_else(is.na(standArea.x), standArea.y, standArea.x),
+  #                                  isPlantation = if_else(is.na(isPlantation.x), isPlantation.y, isPlantation.x)) %>%
+  #                           select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
+  #                           rename(standID2016 = StandID) %>%
+  #                           relocate(standID2016, standAge2016, standArea,	isPlantation)),
+  #            "C:/Users/hamala/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/2015-16 cruise.xlsx/2015-16 cruise.xlsx")
+  #            }
+  write_xlsx(list(stands = left_join(stands2022 %>%
+                                       rename (standArea=areaHa)%>% 
+                                       mutate(StandID = as.integer(standID)) %>%
+                                       select(StandID, standAge2016, standArea, isPlantation),trees2016 %>%group_by(StandID) %>%
+                                       summarize(standAge2016 = standAge2016[1], 
+                                                 isPlantation = isPlantation[1], 
+                                                 standArea = standArea[1], 
+                                                 plotsInStand = plotsInStand[1], 
+                                                 measurePlotsInStand = measurePlotsInStand[1],
+                                                 tph = tph[1], 
+                                                 topHeight = topHeight[1], 
+                                                 qmd = qmd[1], 
+                                                 standBasalAreaPerHectare = standBasalAreaPerHectare[1], 
+                                                 standBasalAreaApprox = standBasalAreaApprox[1]) %>%
+                                       mutate("StandID" = as.integer(StandID)),
+                                     by = "StandID") %>%
+                    mutate(standAge2016 = if_else(is.na(standAge2016.x), standAge2016.y, standAge2016.x),
+                           standArea = if_else(is.na(standArea.x), standArea.y, standArea.x),
+                           isPlantation = if_else(is.na(isPlantation.x), isPlantation.y, isPlantation.x)) %>%
+                    select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
+                    rename(standID2016 = StandID) %>%
+                    relocate(standID2016, standAge2016, standArea,	isPlantation)),
+             "C:/Users/hamala/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/2015-16 cruise.xlsx")
 }
 
-
 ## data tabulation and basic plotting
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   # Table 1
   trees2016summary = trees2016 %>%
     #group_by(Species) %>%
@@ -1857,7 +1944,7 @@ if (htDiaOptions$includeInvestigatory)
               stems = sum(TreeCount),
               live = sum(TreeCount * isLive),
               plantation = sum(TreeCount * isLive * isPlantation), 
-              retention = sum(TreeCount * isLive * (CompCode == "RT")), 
+              retention = sum(TreeCount * isLive * (CompCode == "retention")), 
               dbh = sum(TreeCount * isLive * (is.na(DBH) == FALSE), na.rm = TRUE), 
               height = sum(TreeCount * isLive * (is.na(TotalHt) == FALSE), na.rm = TRUE), 
               brokenTop = sum(TreeCount * isLive * (is.na(Ht2) == FALSE), na.rm = TRUE), 
@@ -1875,10 +1962,10 @@ if (htDiaOptions$includeInvestigatory)
     arrange(desc(stems)) %>%
     bind_rows(summarize(., across(where(is.numeric), ~if_else(is.integer(.x), max(.x), sum(.x))))) %>%
     mutate(speciesGroup = replace_na(as.character(speciesGroup), "total"))
-    #mutate(Species = replace_na(as.character(Species), "total"))
+  #mutate(Species = replace_na(as.character(Species), "total"))
   print(trees2016summary, n = 25)
   trees2016 %>% group_by(isConifer) %>% summarize(heightMeasureTrees = sum(TreeCount * isLive * (is.na(TotalHt) == FALSE)))
-
+  
   # plot data summary
   trees2016 %>%
     group_by(PlotID) %>%
@@ -1898,7 +1985,7 @@ if (htDiaOptions$includeInvestigatory)
               measureSnags = sum(TreeCount * (isLive == FALSE) * (DBH > 0), na.rm = TRUE), 
               countSnags = sum(TreeCount * (isLive == FALSE) * is.na(DBH)))
   # measured snags
-  print(trees2016 %>% filter(CompCode == "RT", isPlantation == FALSE) %>% select(StandID, Species, DBH, standAge2020), n = 35)
+  print(trees2016 %>% filter(CompCode == "retention", isPlantation == FALSE) %>%mutate(standAge2020=standAge2016+4) %>% select(StandID, Species, DBH, standAge2020), n = 35)
   # height tree counts by species group  
   trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>% 
     group_by(speciesGroup) %>% 
@@ -1914,31 +2001,49 @@ if (htDiaOptions$includeInvestigatory)
     geom_histogram(aes(y = 100 * Ht1 / TotalHt, x = 100 * ..count.. / sum(..count..)), binwidth = 1) +
     labs(x = "percentage of trees, %", y = "taper measurement's relative height, %")
   
-  ggplot(trees2016 %>% filter(CompCode == "OS", BHAge > 0) %>% group_by(StandID) %>% summarize(siteTrees = n())) +
+  ggplot(trees2016 %>% filter(CompCode == "siteTree", BHAge > 0) %>% group_by(StandID) %>% summarize(siteTrees = n())) + #assuming OS is referring to SiteTree
     geom_histogram(aes(x = siteTrees, y = 100 * ..count.. / sum(..count..)), binwidth = 1) +
     labs(x = "site trees", y = "percentage of stands") +
     scale_x_continuous(breaks = seq(1, 10)) +
     scale_y_continuous(breaks = seq(0, 100, by = 10))
   
   # ranges of predictor variables
-  print(liveUnbrokenTrees2016 %>% group_by(speciesGroup) %>% 
-    summarize(quantile = c(0, 0.5, 1), 
-              dbh = quantile(DBH, quantile, na.rm = TRUE),
-              height = quantile(TotalHt, quantile, na.rm = TRUE),
-              tph = quantile(tph, quantile, na.rm = TRUE),
-              ba = quantile(standBasalAreaPerHectare, quantile, na.rm = TRUE),
-              bal = quantile(basalAreaLarger, quantile, na.rm = TRUE),
-              aa = quantile(standBasalAreaApprox, quantile, na.rm = TRUE),
-              aat = quantile(tallerApproxBasalArea, quantile, na.rm = TRUE),
-              elevation = quantile(elevation, quantile, na.rm = TRUE),
-              slope = quantile(slope, quantile, na.rm = TRUE),
-              aspect = quantile(aspect, quantile, na.rm = TRUE),
-              tsi = quantile(topographicShelterIndex, quantile, na.rm = TRUE),
-              topHt = quantile(topHeight, quantile, na.rm = TRUE),
-              relHt = quantile(relativeHeight, quantile, na.rm = TRUE),
-              .groups = "drop"),
-    n = 25)
-  
+  # print(liveUnbrokenTrees2016 %>% group_by(speciesGroup) %>% 
+  #   summarize(quantile = c(0, 0.5, 1), 
+  #             dbh = quantile(DBH, quantile, na.rm = TRUE),
+  #             height = quantile(TotalHt, quantile, na.rm = TRUE),
+  #             tph = quantile(tph, quantile, na.rm = TRUE),
+  #             ba = quantile(standBasalAreaPerHectare, quantile, na.rm = TRUE),
+  #             bal = quantile(basalAreaLarger, quantile, na.rm = TRUE),
+  #             aa = quantile(standBasalAreaApprox, quantile, na.rm = TRUE),
+  #             aat = quantile(tallerApproxBasalArea, quantile, na.rm = TRUE),
+  #             elevation = quantile(elevation, quantile, na.rm = TRUE),
+  #             slope = quantile(slope, quantile, na.rm = TRUE),
+  #             aspect = quantile(aspect, quantile, na.rm = TRUE),
+  #             tsi = quantile(topographicShelterIndex, quantile, na.rm = TRUE),
+  #             topHt = quantile(topHeight, quantile, na.rm = TRUE),
+  #             relHt = quantile(relativeHeight, quantile, na.rm = TRUE),
+  #             .groups = "drop"),
+  #   n = 25)
+  # ranges of predictor variables
+  liveUnbrokenTrees2016<-trees2016 #assigned liveUnbrokenTrees2016 to trees2016 data frame assuming that this includes trees filtered by, isliveUnbroken and is.na(totalHt)=FALSE) 
+  print(liveUnbrokenTrees2016 %>% group_by(speciesGroup) %>%
+          summarize(quantile = c(0, 0.5, 1),
+                    dbh = quantile(DBH, quantile, na.rm = TRUE),
+                    height = quantile(TotalHt, quantile, na.rm = TRUE),
+                    tph = quantile(tph, quantile, na.rm = TRUE),
+                    ba = quantile(standBasalAreaPerHectare, quantile, na.rm = TRUE),
+                    bal = quantile(basalAreaLarger, quantile, na.rm = TRUE),
+                    aa = quantile(standBasalAreaApprox, quantile, na.rm = TRUE),
+                    aat = quantile(tallerApproxBasalArea, quantile, na.rm = TRUE),
+                    elevation = quantile(elevation, quantile, na.rm = TRUE),
+                    slope = quantile(slope, quantile, na.rm = TRUE),
+                    aspect = quantile(aspect, quantile, na.rm = TRUE),
+                    tsi = quantile(topographicShelterIndex, quantile, na.rm = TRUE),
+                    topHt = quantile(topHeight, quantile, na.rm = TRUE),
+                    relHt = quantile(relativeHeight, quantile, na.rm = TRUE),
+                    .groups = "drop"),
+        n = 25)
   ggplot(trees2016 %>% filter(isLiveUnbroken)) + # lower violin in pair is for plantations
     geom_violin(aes(x = relativeHeight, y = speciesGroup, color = speciesGroup), draw_quantiles = c(0.25, 0.5, 0.75), na.rm = TRUE) +
     coord_cartesian(xlim = c(0, 3)) +
@@ -1959,82 +2064,80 @@ if (htDiaOptions$includeInvestigatory)
     geom_bar(aes(x = as.numeric(levels(heightClass))[heightClass], y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), weight = n)) + # https://stackoverflow.com/questions/68227541/ggplot-geom-bar-plot-percentages-by-group-and-facet-wrap
     facet_wrap(vars(speciesGroup)) +
     labs(x = "unbroken height, m", y = "fraction of stems, %", title = "a) height classes") +
-  ggplot(trees2016classified) +
+    ggplot(trees2016classified) +
     geom_bar(aes(x = as.numeric(levels(dbhClass))[dbhClass], y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), weight = n)) +
     facet_wrap(vars(speciesGroup)) +
     labs(x = "DBH, cm", y = "fraction of stems, %", title = "b) DBH classes") +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout() &
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout() &
     coord_cartesian(ylim = c(0, 10))
   
-  # distribution of count and measure trees by stand
-  treesByStand2016 = trees2016 %>% group_by(StandID) %>% summarize(count = sum((PlotType == "CO") * TreeCount), 
-                                                                   dbhMeasureOnly = sum(((is.na(DBH) == FALSE) & (is.na(TotalHt) & is.na(Ht2))) * TreeCount), 
-                                                                   heightAndDbhMeasure = sum(((is.na(TotalHt) == FALSE) | (is.na(Ht2) == FALSE)) * TreeCount), .groups = "drop")
-  (standSamplingIntensity = treesByStand2016 %>%
-    reframe(quantiles = c(0.25, 0.75),
-            trees = quantile(count + dbhMeasureOnly + heightAndDbhMeasure, quantiles),
-            height = quantile(heightAndDbhMeasure, quantiles)))
-  ggplot() +
-    geom_histogram(aes(x = count), treesByStand2016, binwidth = 1) +
-    labs(x = "count trees", y = "stands") +
-  ggplot() +
-    geom_histogram(aes(x = dbhMeasureOnly), treesByStand2016, binwidth = 1) +
-    labs(x = "DBH measure trees", y = NULL) +
-  ggplot() +
-    geom_histogram(aes(x = heightAndDbhMeasure), treesByStand2016, binwidth = 1) +
-    labs(x = "height measure trees", y = NULL) +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout() &
-    coord_cartesian(xlim = c(0, 250), ylim = c(0, 35))
-    
   # sizes of trees and taper limits
   treeStemLimits = get_species_limits(trees2016)
   ggplot(trees2016) +
     geom_histogram(aes(x = TotalHt, y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), fill = speciesGroup), binwidth = 2, na.rm = TRUE) +
     facet_wrap(vars(speciesGroup)) +
     labs(x = "height, m", y = "percentage of trees") +
-  ggplot(trees2016) +
+    ggplot(trees2016) +
     geom_histogram(aes(x = DBH, y = 100 * after_stat(count / tapply(count, PANEL, sum)[PANEL]), fill = speciesGroup), binwidth = 2.5, na.rm = TRUE) +
     facet_wrap(vars(speciesGroup)) +
     labs(x = "DBH, cm", y = NULL) +
-  ggplot() +
+    ggplot() +
     geom_line(aes(x = DBH, y = heightDiameterRatioMin), treeStemLimits, color = "grey70", linetype = "longdash", na.rm = TRUE) +
     geom_point(aes(x = DBH, y = TotalHt / (0.01 * DBH), color = speciesGroup), trees2016, alpha = 0.1, na.rm = TRUE, shape = 16) +
     geom_line(aes(x = DBH, y = heightDiameterRatioMax), treeStemLimits, color = "grey70", linetype = "longdash", na.rm = TRUE) +
     facet_wrap(vars(speciesGroup)) +
     coord_cartesian(ylim = c(1, 400)) +
     labs(x = "DBH, cm", y = "height-diameter ratio") +
-  plot_layout(guides = "collect") &
+    plot_layout(guides = "collect") &
     guides(color = "none", fill = "none") &
     scale_color_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65"))
-
+  
+  # ## Figures A1-4: species level exploratory plots
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
+  # plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  # #ggsave("trees/height-diameter/figures/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
+  # 
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
+  # plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  # #ggsave("trees/height-diameter/figures/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
+  #   
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
+  # plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  # #ggsave("trees/height-diameter/figures/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
+  # 
+  # plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
+  # plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  # #ggsave("trees/height-diameter/figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  
   ## Figures A1-4: species level exploratory plots
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
-  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  #ggsave("trees/height-diameter/figures/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
+    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92) +
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
-  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  #ggsave("trees/height-diameter/figures/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
-    
+    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, ) +
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
+  
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
-  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  #ggsave("trees/height-diameter/figures/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
+    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, omitLegends = TRUE) +
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
-  plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  #ggsave("trees/height-diameter/figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
 }
 
 
 ## stand-level summaries and clustering
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   treesByStand2016 = trees2016 %>% 
     group_by(StandID) %>% 
     summarize(speciesGroup = names(sort(-table(speciesGroup)))[1], # one liner for mode of character vector (https://stackoverflow.com/questions/2547402/how-to-find-the-statistical-mode/8189441#8189441)
@@ -2056,20 +2159,20 @@ if (htDiaOptions$includeInvestigatory)
     geom_histogram(aes(x = measurePlots, fill = speciesGroup), binwidth = 1) + # 492 stands with 26 plots
     coord_cartesian(xlim = c(0, 45)) +
     labs(x = "measure plots", y = "number of stands", fill = "most\ncommon\nspecies") +
-  ggplot(treesByStand2016) +
+    ggplot(treesByStand2016) +
     geom_histogram(aes(x = trees, fill = speciesGroup), binwidth = 5) +
     coord_cartesian(xlim = c(0, 260), ylim = c(0, 170)) +
     labs(x = "trees counted", y = NULL, fill = "most\ncommon\nspecies") +
-  ggplot(treesByStand2016) +
+    ggplot(treesByStand2016) +
     geom_histogram(aes(x = dbh, fill = speciesGroup), binwidth = 5) +
     coord_cartesian(xlim = c(0, 260), ylim = c(0, 170)) +
     labs(x = "DBH measure trees", y = "number of stands", fill = "most\ncommon\nspecies") +
-  ggplot(treesByStand2016) +
+    ggplot(treesByStand2016) +
     geom_histogram(aes(x = height, fill = speciesGroup), binwidth = 5) +
     coord_cartesian(xlim = c(0, 260), ylim = c(0, 170)) +
     labs(x = "height measure trees", y = NULL, fill = "most\ncommon\nspecies") +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(nrow = 2, ncol = 2, guides = "collect") &
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 2, ncol = 2, guides = "collect") &
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
     theme(legend.spacing.y = unit(0.2, "line"))
   
@@ -2138,32 +2241,32 @@ if (htDiaOptions$includeInvestigatory)
     geom_histogram(aes(x = psmeTph), fill = "forestgreen", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "Douglas-fir TPH", y = "stands") +
-  ggplot(speciesCountByStand2016) +
+    ggplot(speciesCountByStand2016) +
     geom_histogram(aes(x = alruTph), fill = "red2", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "red alder TPH", y = "stands") +
-  ggplot(speciesCountByStand2016) +
+    ggplot(speciesCountByStand2016) +
     geom_histogram(aes(x = tsheTph), fill = "blue2", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "western hemlock TPH", y = "stands") +
-  ggplot(speciesCountByStand2016) +
+    ggplot(speciesCountByStand2016) +
     geom_histogram(aes(x = acmaTph), fill = "green3", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "bigleaf maple TPH", y = "stands") +
-  ggplot(speciesCountByStand2016) +
+    ggplot(speciesCountByStand2016) +
     geom_histogram(aes(x = umcaTph), fill = "mediumorchid", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "Oregon myrtle TPH", y = "stands") +
-  ggplot(speciesCountByStand2016) +
+    ggplot(speciesCountByStand2016) +
     geom_histogram(aes(x = thplTph), fill = "firebrick", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "western redcedar TPH", y = "stands") +
-  ggplot(speciesCountByStand2016) +
+    ggplot(speciesCountByStand2016) +
     geom_histogram(aes(x = otherTph), fill = "grey65", binwidth = 50) +
     coord_cartesian(xlim = c(0, 2000), ylim = c(0, 700)) +
     labs(x = "other species TPH", y = "stands") +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(nrow = 2, ncol = 4, guides = "collect")
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 2, ncol = 4, guides = "collect")
   # alternate TPH breakdown
   ggplot(speciesCountByStand2016) +
     geom_point(aes(x = totalTph - psmeTph, y = psmeTph, color = primarySpecies, shape = secondarySpecies), alpha = 0.5) +
@@ -2172,7 +2275,7 @@ if (htDiaOptions$includeInvestigatory)
     scale_color_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) +
     scale_shape_manual(breaks = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other"), values = c(15, 16, 17, 22, 21, 24, 25)) +
     theme(legend.spacing.y = unit(0.3, "line"))
-
+  
   # basic clustering of stand types
   # k-means and mean shift perform poorly here, presumably due to being asked to partition continuous data. Data visualization
   # here could use either scaled (normalized) or unscaled distances, the former emphasizing dissimilarity in species besides
@@ -2180,7 +2283,7 @@ if (htDiaOptions$includeInvestigatory)
   basalAreaDistances = dist(speciesCountByStand2016 %>% select(isPlantation, psmeBA, alruBA, tsheBA, acmaBA, umcaBA, thplBA, otherBA))
   standHierarchyBA = hclust(basalAreaDistances, method = "ward.D") # produces the most even area distribution among hclust()'s methods
   # ggdendro::ggdendrogram(standHierarchyBA)
-
+  
   speciesBasalAreaByCluster = speciesCountByStand2016 %>% mutate(clusterID = cutree(standHierarchyBA, k = 20)) %>%
     group_by(clusterID) %>%
     summarize(PSME = sum(standArea * psmeBA) / sum(standArea), # could also join clustersBA$centers
@@ -2206,7 +2309,7 @@ if (htDiaOptions$includeInvestigatory)
   
   # clustering
   speciesBasalAreaOneRowPerClusterSlice = speciesBasalAreaByCluster %>% group_by(clusterID) %>% slice(1)
-
+  
   ggplot() +
     geom_col(aes(x = area, y = clusterID, fill = isPlantation, group = fct_rev(isPlantation)), orientation = "y", speciesBasalAreaByCluster %>% mutate(naturalRegenArea = totalArea - plantationArea) %>% 
                select(clusterID, naturalRegenArea, plantationArea) %>%
@@ -2218,7 +2321,7 @@ if (htDiaOptions$includeInvestigatory)
     scale_fill_manual(breaks = c("natural regeneration", "plantation"), values = c("grey10", "grey35")) +
     scale_x_continuous(expand = c(0.012, 0)) +
     theme(legend.justification = c(1, 0), legend.position.inside = c(1, 0.02)) +
-  ggplot() +
+    ggplot() +
     geom_bar(aes(y = clusterID, fill = fct_rev(speciesGroup), weight = basalArea), speciesBasalAreaByCluster %>% select(-meanAge2016, -meanTopHeight, -starts_with("age"), -starts_with("topHeight")) %>%
                pivot_longer(cols = -c("clusterID", "meanTotalBasalArea", "plantationArea", "totalArea"), names_to = "speciesGroup", values_to = "basalArea") %>%
                mutate(speciesGroup = factor(speciesGroup, levels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other")))) +
@@ -2229,8 +2332,8 @@ if (htDiaOptions$includeInvestigatory)
     scale_x_continuous(expand = c(0.008, 0)) +
     scale_y_discrete(labels = NULL) +
     theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
-  plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
+    plot_annotation(theme = theme(plot.margin = margin())) +
+    plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
   #ggsave("trees/height-diameter/figures/Figure S90 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 250)
   
   # tree counts
@@ -2241,8 +2344,7 @@ if (htDiaOptions$includeInvestigatory)
 
 
 ## Douglas-fir site index regression: not enough data for other species
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   # site species  number of stands
   # PSME          412
   # hardwood      26
@@ -2268,7 +2370,7 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelLinear), color = planted), alpha = 0.3) +
     labs(x = "measured 50-year site index, feet", y = "linear model prediction, feet", color = NULL) +
     theme(legend.position = "none") +
-  ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
+    ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022), color = planted), alpha = 0.3) +
     labs(x = "measured 50-year site index, feet", y = "nonlinear model prediction, feet", color = "stand age") +
     scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
@@ -2278,25 +2380,25 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = Cruised_Si, y = -residuals(psmeSiteIndexModelLinear), color = planted), alpha = 0.3, shape = 16) +
     labs(x = "measured 50-year site index, feet", y = "linear model error, feet", color = NULL) +
     theme(legend.position = "none") +
-  ggplot(psmeStands2022) +
+    ggplot(psmeStands2022) +
     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022) - Cruised_Si, color = planted), alpha = 0.3, shape = 16) +
     labs(x = "measured 50-year site index, feet", y = "nonlinear model error, feet", color = "stand age") +
     scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
     theme(legend.justification = c(1, 1), legend.position.inside = c(0.98, 0.98))
   
   ggplot(psmeStands2022) + geom_point(aes(x = Elev_Mean, y = Cruised_Si), alpha = 0.3, shape = 16) +
-  ggplot(psmeStands2022) + geom_point(aes(x = SlopeMeanPercent, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-  ggplot(psmeStands2022) + geom_point(aes(x = AspectSin, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-  ggplot(psmeStands2022) + geom_point(aes(x = AspectCos, y = Cruised_Si), alpha = 0.3, shape = 16) +  labs(y = NULL) +
-  ggplot(psmeStands2022) + geom_point(aes(x = TPA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + 
-  ggplot(psmeStands2022) + geom_point(aes(x = BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-  ggplot(psmeStands2022) + geom_point(aes(x = QMD_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
-  ggplot(psmeStands2022) + geom_point(aes(x = BA_DF / BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-  ggplot(psmeStands2022) + geom_point(aes(x = PrecipNorm, y = Cruised_Si), alpha = 0.3, shape = 16) + 
-  ggplot(psmeStands2022) + geom_point(aes(x = AWS100, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-  ggplot(psmeStands2022) + geom_point(aes(x = QMD_DF, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
-  ggplot(psmeStands2022) + geom_point(aes(x = QMD_WH, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL)
-    
+    ggplot(psmeStands2022) + geom_point(aes(x = SlopeMeanPercent, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+    ggplot(psmeStands2022) + geom_point(aes(x = AspectSin, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+    ggplot(psmeStands2022) + geom_point(aes(x = AspectCos, y = Cruised_Si), alpha = 0.3, shape = 16) +  labs(y = NULL) +
+    ggplot(psmeStands2022) + geom_point(aes(x = TPA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + 
+    ggplot(psmeStands2022) + geom_point(aes(x = BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+    ggplot(psmeStands2022) + geom_point(aes(x = QMD_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
+    ggplot(psmeStands2022) + geom_point(aes(x = BA_DF / BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+    ggplot(psmeStands2022) + geom_point(aes(x = PrecipNorm, y = Cruised_Si), alpha = 0.3, shape = 16) + 
+    ggplot(psmeStands2022) + geom_point(aes(x = AWS100, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+    ggplot(psmeStands2022) + geom_point(aes(x = QMD_DF, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
+    ggplot(psmeStands2022) + geom_point(aes(x = QMD_WH, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL)
+  
   
   ## aggregate tree distribution plots
   liveUnbrokenTrees2016 = trees2016 %>% filter(isLiveUnbroken)
@@ -2307,7 +2409,7 @@ if (htDiaOptions$includeInvestigatory)
     scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
     scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
     theme(legend.position = "none") +
-  ggplot(liveUnbrokenTrees2016) +
+    ggplot(liveUnbrokenTrees2016) +
     geom_histogram(aes(x = 100 * ..count../sum(..count..), y = TotalHt, fill = speciesGroup, alpha = isPlantation), binwidth = 1, na.rm = TRUE) +
     coord_cartesian(xlim = c(0, 4.4)) +
     labs(x = "percentage of live stems measured", y = "height, m", alpha = NULL, fill = NULL) +
@@ -2316,10 +2418,9 @@ if (htDiaOptions$includeInvestigatory)
     theme(legend.justification = c(1, 1), legend.position.inside = c(1, 1), legend.spacing.y = unit(0.3, "line"))
 }
 
-  
+
 ## site index plots
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   ggplot(stands2022 %>% filter(Cruised_Si > 0)) +
     geom_point(aes(x = Age_2020, y = Cruised_Si, color = siteSpecies), alpha = 0.6, shape = 16) +
     labs(x = "stand age in 2020, years", y = "50-year site index measured in 2015-2016, feet", color = NULL) +
@@ -2356,8 +2457,7 @@ if (htDiaOptions$includeInvestigatory)
 
 
 ## stand tree pooling
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   # stand merge by plantation age
   # for now, proxy HX as Pacific dogwood (Cornus nuttalli)
   treesOfAge = trees2016 %>% filter(standAge2016 == 30, isLive, is.na(DBH) == FALSE) %>% 
@@ -2373,8 +2473,7 @@ if (htDiaOptions$includeInvestigatory)
 
 
 ## general variable importance
-if (htDiaOptions$includeInvestigatory)
-{
+if (htDiaOptions$includeInvestigatory) {
   library(VSURF)
   heightMeasureTrees = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE, is.na(elevation) == FALSE)
   heightVsurf = VSURF(TotalHt ~ ., heightMeasureTrees %>% select(TotalHt, Species, DBH, isPlantation, topHeight, qmd, relativeDiameter, standBasalAreaPerHectare, basalAreaLarger, standAge2016, elevation, slope, aspect, topographicShelterIndex), ncores = 8, parallel = TRUE, RFimplem = "ranger")
@@ -2392,3 +2491,4 @@ if (htDiaOptions$includeInvestigatory)
     guides(fill = "none") +
     labs(x = "normalized variable importance", y = NULL)
 }
+
