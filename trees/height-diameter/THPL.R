@@ -155,7 +155,7 @@ if (thplOptions$fitHeight) { #if the value in the column fitHeight of thplOption
   #   thplHeightFromDiameter$gamRelDbh = fit_gam("REML GAM RelDbh", TotalHt ~ s(DBH, relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint)
   #   thplHeightFromDiameter$gamRelDbhPhysio = fit_gam("REML GAM RelDbh physio", TotalHt ~ s(DBH, elevation, slope, topographicShelterIndex, relativeDiameter, bs = "ts", k = 57, by = as.factor(isPlantation), pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint)
   
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL TotalHt.Rdata", thplHeightFromDiameter, thplHeightFromDiameterNlrob, thplHeightFromDiameterGslNlsDefault)
+  save(file = "data/THPL TotalHt.Rdata", thplHeightFromDiameter, thplHeightFromDiameterNlrob, thplHeightFromDiameterGslNlsDefault)
 }
 if (htDiaOptions$includeInvestigatory)
 {
@@ -215,7 +215,7 @@ if (thplOptions$fitHeightGnls)
   thplHeightFromDiameterGnls$weibull = fit_gnls("Weibull GNLS", TotalHt ~ 1.37 + (a1 + a1p * isPlantation)*(1 - exp((b1 + b1p * isPlantation)*DBH^b2)), thpl2016, start = thplHeightFromDiameter$weibull$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001, maxIter = 250, nlsMaxIter = 50)) # corSymm() viable but dropped
   thplHeightFromDiameterGnls$weibullBal = fit_gnls("Weibull BA+L GNLS", TotalHt ~ 1.37 + (a1 + (a2 + a2p * isPlantation) * basalAreaLarger + (a3 + a3p * isPlantation) * standBasalAreaPerHectare) * (1 - exp(b1*DBH^b2)), thpl2016, start = thplHeightFromDiameter$weibullBal$fit[[1]]$m$getPars(), control = gnlsControl(nlsTol = 0.001)) # step halving at nlsTol = 1 with corSymm
   
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL TotalHt gnls.Rdata", thplHeightFromDiameterGnls)
+  save(file = "data/THPL TotalHt gnls.Rdata", thplHeightFromDiameterGnls)
 }
 if (htDiaOptions$includeInvestigatory)
 {
@@ -316,7 +316,7 @@ if (thplOptions$fitHeightMixed){ #fitting height diameter using mixed effect mod
   thplHeightFromDiameterMixed$gamm = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 8) + s(StandID, bs = "re"), data = thpl2016, mixed = TRUE)
   thplHeightFromDiameterMixed$gammBal = fit_gam("REML GAM BA+L", TotalHt ~ s(DBH, standBasalAreaPerHectare, basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 13) + s(StandID, bs = "re"), data = thpl2016, mixed = TRUE)
   
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL TotalHt mixed.Rdata", thplHeightFromDiameterMixed)
+  save(file = "data/THPL TotalHt mixed.Rdata", thplHeightFromDiameterMixed)
 }
 
 
@@ -432,7 +432,7 @@ if (thplOptions$fitDbh) {
   # thplDiameterFromHeight$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint)
   # thplDiameterFromHeight$gamRelHtPhysio = fit_gam("REML GAM RelHt physio", DBH ~ s(TotalHt, slope, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 57, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint) # drop elevation and aspect on AIC
   
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL DBH.Rdata", thplDiameterFromHeight, thplDiameterFromHeightNlrob, thplDiameterFromHeightGslNlsDefault)
+  save(file = "data/THPL DBH.Rdata", thplDiameterFromHeight, thplDiameterFromHeightNlrob, thplDiameterFromHeightGslNlsDefault)
 }
 if (htDiaOptions$includeInvestigatory) {
   print(thplDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
@@ -577,7 +577,7 @@ if (thplOptions$fitDbhMixed) {
   thplDiameterFromHeightMixed$gammAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16) + s(StandID, bs = "re"), data = thpl2016, mixed = TRUE)
   thplDiameterFromHeightMixed$gammRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 9) + s(StandID, bs = "re"), data = thpl2016, mixed = TRUE)
   
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL DBH mixed.Rdata", thplDiameterFromHeightMixed)
+  save(file = "data/THPL DBH mixed.Rdata", thplDiameterFromHeightMixed)
 }
 
 
@@ -623,7 +623,7 @@ if (thplOptions$fitHeight & thplOptions$fitHeightMixed & thplOptions$fitDbh & th
     mutate(species = "THPL")
   
   check_plot_results(thplResults)
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL results.Rdata", thplCoefficients, thplResults)
+  save(file = "data/THPL results.Rdata", thplCoefficients, thplResults)
 } else if (thplOptions$fitHeight & thplOptions$fitHeightMixed & thplOptions$fitDbh & thplOptions$fitDbhMixed)
 {
   if (exists("thplHeightFromDiameter") == FALSE) { load("trees/height-diameter/data/THPL TotalHt.Rdata") }
@@ -642,7 +642,7 @@ if (thplOptions$fitHeight & thplOptions$fitHeightMixed & thplOptions$fitDbh & th
     mutate(species = "THPL")
   
   check_plot_results(thplResults)
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL results.Rdata", thplCoefficients, thplResults)
+  save(file = "data/THPL results.Rdata", thplCoefficients, thplResults)
 }
 
 
@@ -670,7 +670,7 @@ if (thplOptions$fitHeight & thplOptions$fitDbh)
   thplDiameterFromHeightPreferred$gamPhysio = fit_gam("REML GAM physio", DBH ~ s(TotalHt, topographicShelterIndex, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
   thplDiameterFromHeightPreferred$gamRelHt = fit_gam("REML GAM RelHt", DBH ~ s(TotalHt, relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
   
-  save(file = "C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/THPL preferred models.Rdata", thplHeightFromDiameterPreferred, thplDiameterFromHeightPreferred)
+  save(file = "data/THPL preferred models.Rdata", thplHeightFromDiameterPreferred, thplDiameterFromHeightPreferred)
 }
 
 

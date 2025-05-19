@@ -1635,7 +1635,7 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
 
 ######### --------- FUNCTIONS END -----------#####
 
-stands2022 = read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desktop\Winter 2025\FOR 599\Elliott_stands_2015-16.csv)")%>%
+stands2022 = read.csv(r"(Elliott_stands_2015-16.csv)")%>%
   mutate(standAge2016=standAge2015+1,
          isPlantation = standAge2016 < 70)
 #%>% 
@@ -1650,14 +1650,14 @@ stands2022 = read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desk
 #isPlantation = standAge2016 < 70)
 head(stands2022)
 
-plots2016 = read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desktop\Winter 2025\FOR 599\Elliott_timber_cruise_2015-16.csv)") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
+plots2016 = read.csv(r"(Elliott_timber_cruise_2015-16.csv)") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
 head(plots2016)
 #trees2016 = left_join(left_join(read.csv("Elliott_timber_cruise_2015-16.csv", sheet = "Elliott_timber_cruise_2015-16"),
 #stands2022 %>% select(standID, standAge2016, areaHa, isPlantation),
 # by = c("standID")),
 #plots2016 %>% select(standID, plotID, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(plotID = PltInteger),
 #by = c("plotID")) 
-trees2016 = left_join(read.csv(r"(C:\Users\HAMALA\OneDrive - Oregon State University\Desktop\Winter 2025\FOR 599\Elliott_timber_cruise_2015-16.csv)"),
+trees2016 = left_join(read.csv(r"(Elliott_timber_cruise_2015-16.csv)"),
                       stands2022 %>% select(standID, standAge2016, areaHa, isPlantation),
                       by = "standID") %>% # removed the second part of the join because it was not relevant
   rename(Species=species,TotalHt=totalHt,TreeCount=treeCount,PlotID=plotID,StandID=standID,SamplingMethod=samplingMethod,CompCode=condition,CrownRatio=crownRatio,Ht1=taperHt,Dia1=taperDiameter,standArea=areaHa)%>% # renamed columns to match further analysis, this code was added to match variable names.
@@ -1907,7 +1907,7 @@ if (htDiaOptions$includeInvestigatory) {
   #                           select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
   #                           rename(standID2016 = StandID) %>%
   #                           relocate(standID2016, standAge2016, standArea,	isPlantation)),
-  #            "C:/Users/hamala/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/2015-16 cruise.xlsx/2015-16 cruise.xlsx")
+  #            "2015-16 cruise.xlsx")
   #            }
   write_xlsx(list(stands = left_join(stands2022 %>%
                                        rename (standArea=areaHa)%>% 
@@ -1931,7 +1931,7 @@ if (htDiaOptions$includeInvestigatory) {
                     select(-standArea.x, -standArea.y, -standAge2016.x, -standAge2016.y, -isPlantation.x, -isPlantation.y) %>%
                     rename(standID2016 = StandID) %>%
                     relocate(standID2016, standAge2016, standArea,	isPlantation)),
-             "C:/Users/hamala/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/2015-16 cruise.xlsx")
+             "2015-16 cruise.xlsx")
 }
 
 ## data tabulation and basic plotting
@@ -2118,21 +2118,21 @@ if (htDiaOptions$includeInvestigatory) {
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
     plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
+  ggsave("figures/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
     plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, ) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
+  ggsave("figures/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
     plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, omitLegends = TRUE) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
+  ggsave("figures/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("C:/Users/HAMALA/OneDrive - Oregon State University/Desktop/Winter 2025/FOR 599/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  ggsave("figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
 }
 
 
