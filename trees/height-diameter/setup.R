@@ -24,10 +24,6 @@ library(tidyr)
 library(WeightedROC)
 library(writexl)
 
-
-####### ----- FUNCTIONS ------ ######
-
-
 #theme set() is a function from ggplot, it is used to customize plot aesthetics
 #theme_bw() sets the background to white with black grid lines
 #and the theme() functions define the various elements within the theme.
@@ -42,7 +38,7 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), #makes t
 
 htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
-                      includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts #it is like telling R that I do not want the code for plots/investigatory statistics to be run (coded somewhere below, if I set this as FALSE)
+                      includeInvestigatory = TRUE, # default to excluding plotting and other add ons in species scripts #it is like telling R that I do not want the code for plots/investigatory statistics to be run (coded somewhere below, if I set this as FALSE)
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
 plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
 #plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
@@ -1605,7 +1601,23 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
 #standArea = 0.404686 * GrossAc,  # ac to ha
 #isPlantation = standAge2016 < 70)
 
+
+stands2022 = read.csv(r"(Elliott_stands_2015-16.csv)")%>%
+  mutate(standAge2016=standAge2015+1,
+         isPlantation = standAge2016 < 70)
+#%>% 
+#mutate(Cruised_Si = na_if(Cruised_Si, 0),
+#ODSL_Site_ = na_if(ODSL_Site_, 0),
+#siteSpecies = if_else(startsWith(ODSL_VEG_L, "1W") | startsWith(ODSL_VEG_L, "WX"), "hemlock", 
+#if_else(startsWith(ODSL_VEG_L, "1H") | startsWith(ODSL_VEG_L, "HX"), "hardwood",
+#if_else(startsWith(ODSL_VEG_L, "OT"), "other",
+#"Douglas-fir"))),
+#standAge2016 = pmax(if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4), 0),
+#standArea = 0.404686 * GrossAc,  # ac to ha
+#isPlantation = standAge2016 < 70)
+
 #plots2016 = read_xlsx("GIS/Trees/2015-16 cruise/CruisePlots_All_20151211.xlsx") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
+plots2016 = read.csv(r"(Elliott_timber_cruise_2015-16.csv)") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
 
 #trees2016 = left_join(left_join(read_xlsx("trees/Elliott final cruise records 2015-16.xlsx", sheet = "CRUISERECS"),
 #stands2022 %>% select(StandID, standAge2016, standArea, isPlantation),
@@ -1633,30 +1645,6 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
 #treeBasalAreaPerHectare = SampleFactor * TreeCount * if_else(SamplingMethod == "BAF", 1, basalArea)) %>% # m²/ha, measure plots have TreeCount = 1 for each tree, count plots have TreeCount = 0-41 depending on the number of trees present
 #group_by(StandID) %>%
 
-######### --------- FUNCTIONS END -----------#####
-
-stands2022 = read.csv(r"(Elliott_stands_2015-16.csv)")%>%
-  mutate(standAge2016=standAge2015+1,
-         isPlantation = standAge2016 < 70)
-#%>% 
-#mutate(Cruised_Si = na_if(Cruised_Si, 0),
-#ODSL_Site_ = na_if(ODSL_Site_, 0),
-#siteSpecies = if_else(startsWith(ODSL_VEG_L, "1W") | startsWith(ODSL_VEG_L, "WX"), "hemlock", 
-#if_else(startsWith(ODSL_VEG_L, "1H") | startsWith(ODSL_VEG_L, "HX"), "hardwood",
-#if_else(startsWith(ODSL_VEG_L, "OT"), "other",
-#"Douglas-fir"))),
-#standAge2016 = pmax(if_else((Age_2020 - 4) > (Age_2015 + 1), Age_2015 + 1, Age_2020 - 4), 0),
-#standArea = 0.404686 * GrossAc,  # ac to ha
-#isPlantation = standAge2016 < 70)
-head(stands2022)
-
-plots2016 = read.csv(r"(Elliott_timber_cruise_2015-16.csv)") # both 20151211 and 20160111 missing coordinates for 171 plots in stands 1661 and 2470
-head(plots2016)
-#trees2016 = left_join(left_join(read.csv("Elliott_timber_cruise_2015-16.csv", sheet = "Elliott_timber_cruise_2015-16"),
-#stands2022 %>% select(standID, standAge2016, areaHa, isPlantation),
-# by = c("standID")),
-#plots2016 %>% select(standID, plotID, elevation, slope, aspect, topographicShelterIndex, x, y) %>% rename(plotID = PltInteger),
-#by = c("plotID")) 
 trees2016 = left_join(read.csv(r"(Elliott_timber_cruise_2015-16.csv)"),
                       stands2022 %>% select(standID, standAge2016, areaHa, isPlantation),
                       by = "standID") %>% # removed the second part of the join because it was not relevant
@@ -1668,18 +1656,17 @@ trees2016 = left_join(read.csv(r"(Elliott_timber_cruise_2015-16.csv)"),
                             plotType == "measure" ~ "IP",
                             TRUE ~ NA_character_),
          BHAge = na_if(breastHeightAge, 0), # years
-         DBH = na_if(2.54 * DBH, 0), # inches to cm
-         Dia1 = na_if(2.54 * Dia1, 0),
+         DBH = na_if(DBH, 0), # dbh in cm
+         Dia1 = na_if(Dia1, 0),
          CrownRatio = na_if(CrownRatio, 0),
-         Ht1 = na_if(0.3048 * Ht1, 0), # feet to m
-         Ht2 = na_if(0.3048 * htToBrokenTop, 0),
+         Ht1 = na_if(Ht1, 0), # feet to m
+         Ht2 = na_if(htToBrokenTop, 0),
          isConifer = Species %in% c("PSME", "TSHE", "THPL"),
          isLive = (CompCode %in% c("deadStanding", "snag")) == FALSE,
          isLiveUnbroken = isLive & (CompCode != "brokenTop"),
-         SampleFactor = if_else(SamplingMethod == "BAF",2.47105 * 0.092903 * (baExpansionFactor / (0.005454 * DBH^2)),10000 / 300 * TreeCount), #for fixed radius plot of 0.03 ha, the sample factor is calculated as 10000 / 300 * treeCount, where 300 square meters corresponds to 0.0.ha
-         plotRadius = if_else(SamplingMethod == "BAF", 100 / 2.54 * 0.3048 / (12 * sqrt(SampleFactor / 10890)), 0.3048 * sqrt(43560 / (pi * SampleFactor))), # m
-         SampleFactor = 2.47105 * if_else(SamplingMethod == "BAF", 0.092903, 1) * SampleFactor, # convert BAF from ft²/ac to m²/ha and TPA to TPH, BAF conversion is BAF ft²/ac * 2.47105 ac/ha * 0.092903 m²/ft² = 0.229568 m²/ha / ft²/ac
-         TotalHt = na_if(0.3048 * TotalHt, 0),
+         SampleFactor = if_else(SamplingMethod == "BAF",baExpansionFactor / (pi * (DBH / 200)^2),10000 / 300), #for fixed radius plot of 0.03 ha, the sample factor is calculated as 10000 / 300 * treeCount, where 300 square meters corresponds to 0.03ha
+         plotRadius = if_else(SamplingMethod == "BAF",sqrt(baExpansionFactor / (pi * SampleFactor)) * 2,sqrt((10000 / SampleFactor) / pi)),
+         TotalHt = na_if(TotalHt, 0),
          TreeCount = if_else((PlotType == "IP") & (SamplingMethod == "BAF") & (TreeCount > 1), 1, TreeCount), # fix tree duplication per notes above
          basalArea = 0.25 * pi * (0.01*DBH)^2, # m² 
          breastHeight = 1.37, # m, used for offset in lm() height regressions
@@ -2334,7 +2321,7 @@ if (htDiaOptions$includeInvestigatory) {
     theme(legend.key.height = unit(1, "line"), legend.key.width = unit(1, "line")) +
     plot_annotation(theme = theme(plot.margin = margin())) +
     plot_layout(nrow = 1, ncol = 2, widths = c(0.4, 0.6))
-  #ggsave("trees/height-diameter/figures/Figure S90 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 250)
+  ggsave("figures/Figure S90 Elliott stand clusters.png", height = 10.5, width = 22, units = "cm", dpi = 250)
   
   # tree counts
   trees2016 %>% group_by(StandID) %>% summarize(standArea = standArea[1], tph = tph[1]) %>%
@@ -2344,116 +2331,116 @@ if (htDiaOptions$includeInvestigatory) {
 
 
 ## Douglas-fir site index regression: not enough data for other species
-if (htDiaOptions$includeInvestigatory) {
-  # site species  number of stands
-  # PSME          412
-  # hardwood      26
-  # hemlock       6
-  # other         5
-  psmeStands2022 = stands2022 %>% filter(is.na(Cruised_Si) == FALSE, siteSpecies == "Douglas-fir") %>%
-    mutate(Elev_MeanSquared = Elev_Mean^2, SlopeMeanPercent = 100 * tan(pi/180 * SlopeMean), SlopeMeanSquared = SlopeMean^2, SlopeMeanPercentSquared = SlopeMeanPercent^2, AWS100squared = AWS100^2, planted = Age_2020 < 100)
-  
-  psmeSiteIndexPredictorSubsets = regsubsets(x = as.matrix(psmeStands2022 %>% select(Elev_Mean, Elev_MeanSquared, SlopeMeanPercent, SlopeMeanPercentSquared, AspectMean, AspectSin, AspectCos, 
-                                                                                     PrecipNorm, AWS025, AWS050, AWS100, AWS100squared, AWS150, planted, X, Y,
-                                                                                     Age_2015, TPA_Total, BA_Total, QMD_Total, BFperAcre_, BA_DF, QMD_DF, LeafRetnDF, BA_WH, QMD_WH, Shape_Area)),
-                                             y = psmeStands2022$Cruised_Si)
-  plot(psmeSiteIndexPredictorSubsets)
-  
-  #psmeSiteIndexModelLinear = lm(Cruised_Si ~ Elev_Mean + Elev_MeanSquared + SlopeMeanPercent + SlopeMeanPercentSquared + AspectSin + AspectCos + PrecipNorm + AWS100 + TPA_Total + BA_Total + QMD_Total + QMD_DF + LeafRetnDF + planted, psmeStands2022)
-  #psmeSiteIndexModelLinear = lm(Cruised_Si ~ Elev_MeanSquared + SlopeMeanPercent + SlopeMeanPercentSquared + AspectSin + AspectCos + AWS100 + planted, psmeStands2022)
-  psmeSiteIndexModelLinear = lm(Cruised_Si ~ Elev_MeanSquared + SlopeMeanPercentSquared + QMD_DF + planted, psmeStands2022)
-  summary(psmeSiteIndexModelLinear)
-  psmeSiteIndexModelNonlinear = gsl_nls(Cruised_Si ~ b0 + b1*Elev_Mean^b2 + b3*SlopeMeanPercent^b4 + b5*planted, psmeStands2022, start = list(b0 = 120, b1 = -1E-6, b2 = 2, b3 = -2E-3, b4 = 5, b5 = 20), control = gsl_nls_control(maxiter = 250))
-  c(linear = AIC(psmeSiteIndexModelLinear), nonlinear = AIC(psmeSiteIndexModelNonlinear))
-  
-  ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
-    geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelLinear), color = planted), alpha = 0.3) +
-    labs(x = "measured 50-year site index, feet", y = "linear model prediction, feet", color = NULL) +
-    theme(legend.position = "none") +
-    ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
-    geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022), color = planted), alpha = 0.3) +
-    labs(x = "measured 50-year site index, feet", y = "nonlinear model prediction, feet", color = "stand age") +
-    scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
-    theme(legend.justification = c(1, 0), legend.position.inside = c(0.98, 0.02))
-  
-  ggplot(psmeStands2022) +
-    geom_point(aes(x = Cruised_Si, y = -residuals(psmeSiteIndexModelLinear), color = planted), alpha = 0.3, shape = 16) +
-    labs(x = "measured 50-year site index, feet", y = "linear model error, feet", color = NULL) +
-    theme(legend.position = "none") +
-    ggplot(psmeStands2022) +
-    geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022) - Cruised_Si, color = planted), alpha = 0.3, shape = 16) +
-    labs(x = "measured 50-year site index, feet", y = "nonlinear model error, feet", color = "stand age") +
-    scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
-    theme(legend.justification = c(1, 1), legend.position.inside = c(0.98, 0.98))
-  
-  ggplot(psmeStands2022) + geom_point(aes(x = Elev_Mean, y = Cruised_Si), alpha = 0.3, shape = 16) +
-    ggplot(psmeStands2022) + geom_point(aes(x = SlopeMeanPercent, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-    ggplot(psmeStands2022) + geom_point(aes(x = AspectSin, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-    ggplot(psmeStands2022) + geom_point(aes(x = AspectCos, y = Cruised_Si), alpha = 0.3, shape = 16) +  labs(y = NULL) +
-    ggplot(psmeStands2022) + geom_point(aes(x = TPA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + 
-    ggplot(psmeStands2022) + geom_point(aes(x = BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-    ggplot(psmeStands2022) + geom_point(aes(x = QMD_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
-    ggplot(psmeStands2022) + geom_point(aes(x = BA_DF / BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-    ggplot(psmeStands2022) + geom_point(aes(x = PrecipNorm, y = Cruised_Si), alpha = 0.3, shape = 16) + 
-    ggplot(psmeStands2022) + geom_point(aes(x = AWS100, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
-    ggplot(psmeStands2022) + geom_point(aes(x = QMD_DF, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
-    ggplot(psmeStands2022) + geom_point(aes(x = QMD_WH, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL)
-  
-  
-  ## aggregate tree distribution plots
-  liveUnbrokenTrees2016 = trees2016 %>% filter(isLiveUnbroken)
-  ggplot(liveUnbrokenTrees2016) +
-    geom_histogram(aes(x = DBH, y = 100 * ..count../sum(..count..), fill = speciesGroup, alpha = isPlantation), binwidth = 2.5, na.rm = TRUE) +
-    coord_cartesian(ylim = c(0, 4.4)) +
-    labs(x = "DBH, cm", y = "percentage of live, unbroken stems measured", alpha = NULL, fill = NULL) +
-    scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
-    scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
-    theme(legend.position = "none") +
-    ggplot(liveUnbrokenTrees2016) +
-    geom_histogram(aes(x = 100 * ..count../sum(..count..), y = TotalHt, fill = speciesGroup, alpha = isPlantation), binwidth = 1, na.rm = TRUE) +
-    coord_cartesian(xlim = c(0, 4.4)) +
-    labs(x = "percentage of live stems measured", y = "height, m", alpha = NULL, fill = NULL) +
-    scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
-    scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
-    theme(legend.justification = c(1, 1), legend.position.inside = c(1, 1), legend.spacing.y = unit(0.3, "line"))
-}
-
-
-## site index plots
-if (htDiaOptions$includeInvestigatory) {
-  ggplot(stands2022 %>% filter(Cruised_Si > 0)) +
-    geom_point(aes(x = Age_2020, y = Cruised_Si, color = siteSpecies), alpha = 0.6, shape = 16) +
-    labs(x = "stand age in 2020, years", y = "50-year site index measured in 2015-2016, feet", color = NULL) +
-    guides(color = guide_legend(override.aes = list(alpha = 0.8))) +
-    scale_color_manual(breaks = c("Douglas-fir", "hemlock", "hardwood", "other"), values = c("green4", "blue2", "gold1", "purple1")) +
-    theme(legend.justification = c(1, 0), legend.position.inside = c(0.98, 0.02))
-  
-  ggplot() +
-    geom_hline(yintercept = 75, color = "grey70", linetype = "longdash") +
-    geom_hline(yintercept = 95, color = "grey70", linetype = "longdash") +
-    geom_hline(yintercept = 115, color = "grey70", linetype = "longdash") +
-    geom_hline(yintercept = 135, color = "grey70", linetype = "longdash") +
-    geom_histogram(aes(y = Cruised_Si, weight = GrossAc), stands2022 %>% filter(Age_2020 < 100, Cruised_Si > 0, siteSpecies == "Douglas-fir"), binwidth = 1, color = "white", fill = "green4") +
-    annotate("text", x = 1150, y = 145, label = "I", color = "grey70", size = 3) +
-    annotate("text", x = 1150, y = 125, label = "II", color = "grey70", size = 3) +
-    annotate("text", x = 1150, y = 105, label = "III", color = "grey70", size = 3) +
-    annotate("text", x = 1150, y = 85, label = "IV", color = "grey70", size = 3) +
-    annotate("text", x = 1150, y = 65, label = "V", color = "grey70", size = 3) +
-    labs(x = "acres of Douglas-fir majority stands cruised winter 2015-2016", y = "Douglas-fir 50-year site index, feet", color = NULL) +
-    scale_x_continuous(breaks = seq(0, 2000, by = 250)) +
-    scale_y_continuous(breaks = seq(0, 200, by = 10))
-  
-  ggplot() +
-    geom_histogram(aes(x = 100 * ..count../sum(..count..), y = siteClass, weight = GrossAc), 
-                   stands2022 %>% filter(Age_2020 < 100, Cruised_Si > 0, siteSpecies == "Douglas-fir") %>% mutate(siteClass = factor(if_else(Cruised_Si >= 135, 1, if_else(Cruised_Si >= 115, 2, if_else(Cruised_Si >= 95, 3, if_else(Cruised_Si >= 75, 4, 5)))), levels = seq(5, 1, by = -1), labels = c("V", "IV", "III", "II", "I"))),
-                   fill = "green4", stat = "count") +
-    labs(x = "percentage of Douglas-fir majority stand area cruised in 2015-2016", y = "Douglas-fir 50-year site class", color = NULL) +
-    scale_x_continuous(breaks = seq(0, 100, by = 10))
-  
-  ggplot(stands2022 %>% filter(siteSpecies == "Douglas-fir")) +
-    geom_histogram(aes(x = Age_2020, y = ..density..), binwidth = 5, fill = "green4") +
-    labs(x = "stand age in 2020, years", y = "probability", color = NULL)
-}
+# if (htDiaOptions$includeInvestigatory) {
+#   # site species  number of stands
+#   # PSME          412
+#   # hardwood      26
+#   # hemlock       6
+#   # other         5
+#   psmeStands2022 = stands2022 %>% filter(is.na(Cruised_Si) == FALSE, siteSpecies == "Douglas-fir") %>%
+#     mutate(Elev_MeanSquared = Elev_Mean^2, SlopeMeanPercent = 100 * tan(pi/180 * SlopeMean), SlopeMeanSquared = SlopeMean^2, SlopeMeanPercentSquared = SlopeMeanPercent^2, AWS100squared = AWS100^2, planted = Age_2020 < 100)
+#   
+#   psmeSiteIndexPredictorSubsets = regsubsets(x = as.matrix(psmeStands2022 %>% select(Elev_Mean, Elev_MeanSquared, SlopeMeanPercent, SlopeMeanPercentSquared, AspectMean, AspectSin, AspectCos, 
+#                                                                                      PrecipNorm, AWS025, AWS050, AWS100, AWS100squared, AWS150, planted, X, Y,
+#                                                                                      Age_2015, TPA_Total, BA_Total, QMD_Total, BFperAcre_, BA_DF, QMD_DF, LeafRetnDF, BA_WH, QMD_WH, Shape_Area)),
+#                                              y = psmeStands2022$Cruised_Si)
+#   plot(psmeSiteIndexPredictorSubsets)
+#   
+#   #psmeSiteIndexModelLinear = lm(Cruised_Si ~ Elev_Mean + Elev_MeanSquared + SlopeMeanPercent + SlopeMeanPercentSquared + AspectSin + AspectCos + PrecipNorm + AWS100 + TPA_Total + BA_Total + QMD_Total + QMD_DF + LeafRetnDF + planted, psmeStands2022)
+#   #psmeSiteIndexModelLinear = lm(Cruised_Si ~ Elev_MeanSquared + SlopeMeanPercent + SlopeMeanPercentSquared + AspectSin + AspectCos + AWS100 + planted, psmeStands2022)
+#   psmeSiteIndexModelLinear = lm(Cruised_Si ~ Elev_MeanSquared + SlopeMeanPercentSquared + QMD_DF + planted, psmeStands2022)
+#   summary(psmeSiteIndexModelLinear)
+#   psmeSiteIndexModelNonlinear = gsl_nls(Cruised_Si ~ b0 + b1*Elev_Mean^b2 + b3*SlopeMeanPercent^b4 + b5*planted, psmeStands2022, start = list(b0 = 120, b1 = -1E-6, b2 = 2, b3 = -2E-3, b4 = 5, b5 = 20), control = gsl_nls_control(maxiter = 250))
+#   c(linear = AIC(psmeSiteIndexModelLinear), nonlinear = AIC(psmeSiteIndexModelNonlinear))
+#   
+#   ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
+#     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelLinear), color = planted), alpha = 0.3) +
+#     labs(x = "measured 50-year site index, feet", y = "linear model prediction, feet", color = NULL) +
+#     theme(legend.position = "none") +
+#     ggplot(psmeStands2022) + geom_abline(slope = 1, intercept = 0, color = "grey70", linetype = "longdash") + 
+#     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022), color = planted), alpha = 0.3) +
+#     labs(x = "measured 50-year site index, feet", y = "nonlinear model prediction, feet", color = "stand age") +
+#     scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
+#     theme(legend.justification = c(1, 0), legend.position.inside = c(0.98, 0.02))
+#   
+#   ggplot(psmeStands2022) +
+#     geom_point(aes(x = Cruised_Si, y = -residuals(psmeSiteIndexModelLinear), color = planted), alpha = 0.3, shape = 16) +
+#     labs(x = "measured 50-year site index, feet", y = "linear model error, feet", color = NULL) +
+#     theme(legend.position = "none") +
+#     ggplot(psmeStands2022) +
+#     geom_point(aes(x = Cruised_Si, y = predict(psmeSiteIndexModelNonlinear, psmeStands2022) - Cruised_Si, color = planted), alpha = 0.3, shape = 16) +
+#     labs(x = "measured 50-year site index, feet", y = "nonlinear model error, feet", color = "stand age") +
+#     scale_color_discrete(breaks = c(FALSE, TRUE), labels = c("≥100 years", "<100 years")) +
+#     theme(legend.justification = c(1, 1), legend.position.inside = c(0.98, 0.98))
+#   
+#   ggplot(psmeStands2022) + geom_point(aes(x = Elev_Mean, y = Cruised_Si), alpha = 0.3, shape = 16) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = SlopeMeanPercent, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = AspectSin, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = AspectCos, y = Cruised_Si), alpha = 0.3, shape = 16) +  labs(y = NULL) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = TPA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + 
+#     ggplot(psmeStands2022) + geom_point(aes(x = BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = QMD_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
+#     ggplot(psmeStands2022) + geom_point(aes(x = BA_DF / BA_Total, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = PrecipNorm, y = Cruised_Si), alpha = 0.3, shape = 16) + 
+#     ggplot(psmeStands2022) + geom_point(aes(x = AWS100, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) +
+#     ggplot(psmeStands2022) + geom_point(aes(x = QMD_DF, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL) + 
+#     ggplot(psmeStands2022) + geom_point(aes(x = QMD_WH, y = Cruised_Si), alpha = 0.3, shape = 16) + labs(y = NULL)
+#   
+#   
+#   ## aggregate tree distribution plots
+#   liveUnbrokenTrees2016 = trees2016 %>% filter(isLiveUnbroken)
+#   ggplot(liveUnbrokenTrees2016) +
+#     geom_histogram(aes(x = DBH, y = 100 * ..count../sum(..count..), fill = speciesGroup, alpha = isPlantation), binwidth = 2.5, na.rm = TRUE) +
+#     coord_cartesian(ylim = c(0, 4.4)) +
+#     labs(x = "DBH, cm", y = "percentage of live, unbroken stems measured", alpha = NULL, fill = NULL) +
+#     scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
+#     scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
+#     theme(legend.position = "none") +
+#     ggplot(liveUnbrokenTrees2016) +
+#     geom_histogram(aes(x = 100 * ..count../sum(..count..), y = TotalHt, fill = speciesGroup, alpha = isPlantation), binwidth = 1, na.rm = TRUE) +
+#     coord_cartesian(xlim = c(0, 4.4)) +
+#     labs(x = "percentage of live stems measured", y = "height, m", alpha = NULL, fill = NULL) +
+#     scale_alpha_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c(1, 0.7)) +
+#     scale_fill_manual(breaks = c("DF", "RA", "WH", "BM", "OM", "RC", "other"), labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other"), values = c("green3", "red2", "blue2", "cyan2", "darkorchid3", "firebrick", "grey35")) +
+#     theme(legend.justification = c(1, 1), legend.position.inside = c(1, 1), legend.spacing.y = unit(0.3, "line"))
+# }
+# 
+# 
+# ## site index plots
+# if (htDiaOptions$includeInvestigatory) {
+#   ggplot(stands2022 %>% filter(Cruised_Si > 0)) +
+#     geom_point(aes(x = Age_2020, y = Cruised_Si, color = siteSpecies), alpha = 0.6, shape = 16) +
+#     labs(x = "stand age in 2020, years", y = "50-year site index measured in 2015-2016, feet", color = NULL) +
+#     guides(color = guide_legend(override.aes = list(alpha = 0.8))) +
+#     scale_color_manual(breaks = c("Douglas-fir", "hemlock", "hardwood", "other"), values = c("green4", "blue2", "gold1", "purple1")) +
+#     theme(legend.justification = c(1, 0), legend.position.inside = c(0.98, 0.02))
+#   
+#   ggplot() +
+#     geom_hline(yintercept = 75, color = "grey70", linetype = "longdash") +
+#     geom_hline(yintercept = 95, color = "grey70", linetype = "longdash") +
+#     geom_hline(yintercept = 115, color = "grey70", linetype = "longdash") +
+#     geom_hline(yintercept = 135, color = "grey70", linetype = "longdash") +
+#     geom_histogram(aes(y = Cruised_Si, weight = GrossAc), stands2022 %>% filter(Age_2020 < 100, Cruised_Si > 0, siteSpecies == "Douglas-fir"), binwidth = 1, color = "white", fill = "green4") +
+#     annotate("text", x = 1150, y = 145, label = "I", color = "grey70", size = 3) +
+#     annotate("text", x = 1150, y = 125, label = "II", color = "grey70", size = 3) +
+#     annotate("text", x = 1150, y = 105, label = "III", color = "grey70", size = 3) +
+#     annotate("text", x = 1150, y = 85, label = "IV", color = "grey70", size = 3) +
+#     annotate("text", x = 1150, y = 65, label = "V", color = "grey70", size = 3) +
+#     labs(x = "acres of Douglas-fir majority stands cruised winter 2015-2016", y = "Douglas-fir 50-year site index, feet", color = NULL) +
+#     scale_x_continuous(breaks = seq(0, 2000, by = 250)) +
+#     scale_y_continuous(breaks = seq(0, 200, by = 10))
+#   
+#   ggplot() +
+#     geom_histogram(aes(x = 100 * ..count../sum(..count..), y = siteClass, weight = GrossAc), 
+#                    stands2022 %>% filter(Age_2020 < 100, Cruised_Si > 0, siteSpecies == "Douglas-fir") %>% mutate(siteClass = factor(if_else(Cruised_Si >= 135, 1, if_else(Cruised_Si >= 115, 2, if_else(Cruised_Si >= 95, 3, if_else(Cruised_Si >= 75, 4, 5)))), levels = seq(5, 1, by = -1), labels = c("V", "IV", "III", "II", "I"))),
+#                    fill = "green4", stat = "count") +
+#     labs(x = "percentage of Douglas-fir majority stand area cruised in 2015-2016", y = "Douglas-fir 50-year site class", color = NULL) +
+#     scale_x_continuous(breaks = seq(0, 100, by = 10))
+#   
+#   ggplot(stands2022 %>% filter(siteSpecies == "Douglas-fir")) +
+#     geom_histogram(aes(x = Age_2020, y = ..density..), binwidth = 5, fill = "green4") +
+#     labs(x = "stand age in 2020, years", y = "probability", color = NULL)
+# }
 
 
 ## stand tree pooling
@@ -2465,10 +2452,11 @@ if (htDiaOptions$includeInvestigatory) {
            expansionFactor = meanTreesPerBafPlot / meanTreesPerBafMeasurePlot * measureTreeTphContribution / measurePlotsInStand, 
            species = case_match(Species, "DF" ~ "PSME", "RA" ~ "ALRU", "WH" ~ "TSHE", "BM" ~ "ACMA", "OM" ~ "UMCA", "RC" ~ "THPL", "CH" ~ "CHCH", "HX" ~ "CONU", "TO" ~ "LIDE"),
            condition = as.integer(isLiveUnbroken == FALSE)) %>%
-    rename(stand = StandID, plot = PlotID, tree = TreeID, age = standAge2016, dbh = DBH, height = imputedHeight) %>%
-    select(stand, plot, tree, species, year, age, dbh, height, expansionFactor, condition)
-  #treesOfAge %>% group_by(species) %>% summarize(n = n())
-  #treesOfAge %>% group_by(stand) %>% summarize(uniqueTrees = n(), tph = sum(expansionFactor))
+    # rename(stand = StandID, plot = PlotID, tree = TreeID, age = standAge2016, dbh = DBH, height = imputedHeight) %>%
+    # select(stand, plot, tree, species, year, age, dbh, height, expansionFactor, condition)
+    select(StandID, PlotID, treeID, species, year, standAge2016, DBH, imputedHeight, expansionFactor, condition)
+  treesOfAge %>% group_by(species) %>% summarize(n = n())
+  treesOfAge %>% group_by(StandID) %>% summarize(uniqueTrees = n(), tph = sum(expansionFactor))
 }
 
 
