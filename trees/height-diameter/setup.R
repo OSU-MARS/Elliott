@@ -38,7 +38,7 @@ theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), #makes t
 
 htDiaOptions = tibble(folds = 10,
                       repetitions = 10,
-                      includeInvestigatory = TRUE, # default to excluding plotting and other add ons in species scripts #it is like telling R that I do not want the code for plots/investigatory statistics to be run (coded somewhere below, if I set this as FALSE)
+                      includeInvestigatory = FALSE, # default to excluding plotting and other add ons in species scripts #it is like telling R that I do not want the code for plots/investigatory statistics to be run (coded somewhere below, if I set this as FALSE)
                       retainModelThreshold = 10) # cross validation retains model objects if folds * repetitions is less than or equal to this threshold, e.g. 25 = retaining models up to and including 5x5 cross validation but sufficient DDR for loading all results may be an issue (5x5 easily exceeds 90 GB)
 plotLetters = c("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
 #plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "(j)", "(k)", "(l)")
@@ -169,8 +169,9 @@ fit_gam = function(name, formula, data, constraint = c(), family = gaussian(), f
   progressBar = progressor(steps = folds * repetitions) #design of progress bar
   
   # work around https://github.com/HenrikBengtsson/globals/issues/87 to enable GAM fitting using future_map() #to make the constrains passable, it won't be possible 
-  localFormula = local({ gamConstraint = constraint #creating a local formula, that is basically the same as above.
-  formula(paste(deparse(formula), collapse = " ")) }) # to understand the syntax, see ?deparse() and ?paste() in r documentation #collapse=" " defines the separator/concatenator, in this case, the strings will be concatenated using the " " or space 
+   localFormula = local({ gamConstraint = constraint #creating a local formula, that is basically the same as above.
+  formula(paste(deparse(formula), collapse = " ")) }) # to understand the syntax, see ?deparse() and ?paste() in r documentation #collapse=" " defines the separator/concatenator, in this case, the strings will be concatenated using the " " or space
+  #localFormula = eval(parse(text = gsub("gamConstraint", deparse(substitute(constraint)), deparse(formula))))
   if (responseVariable == "TotalHt()") #lets continue the conditional statements after the local formula.
   {
     if (bam)
@@ -1650,7 +1651,7 @@ trees2016 = left_join(read.csv(r"(Elliott_timber_cruise_2015-16.csv)"),
                       by = "standID") %>% # removed the second part of the join because it was not relevant
   rename(Species=species,TotalHt=totalHt,TreeCount=treeCount,PlotID=plotID,StandID=standID,SamplingMethod=samplingMethod,CompCode=condition,CrownRatio=crownRatio,Ht1=taperHt,Dia1=taperDiameter,standArea=areaHa)%>% # renamed columns to match further analysis, this code was added to match variable names.
   mutate(SamplingMethod = ifelse(SamplingMethod == "VRP", "BAF", SamplingMethod))%>%
-  mutate(speciesGroup = factor(if_else(Species %in% c("PSME", "ALRU2", "TSHE","ACMA3", "UMCA", "THPL"), Species, "other"), levels=c("PSME", "ALRU2", "TSHE","ACMA3", "UMCA", "THPL", "other"),labels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
+  mutate(speciesGroup = factor(if_else(Species %in% c("PSME", "ALRU2", "TSHE","ACMA3", "UMCA", "THPL","PISI","RHPU","ARME"), Species, "other"), levels=c("PSME", "ALRU2", "TSHE","ACMA3", "UMCA", "THPL", "PISI","RHPU","ARME","other"),labels = c("DF", "RA", "WH", "BM", "OM", "RC","SS","CB","PM","other")),
          #mutate(speciesGroup = factor(if_else(Species %in% c("DF", "RA", "WH", "BM", "OM", "RC"), Species, "other"), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")),
          PlotType=case_when(plotType=="count"~"CO", #convert plot type "count" and "measure" to "CO" and "IP" respectively
                             plotType == "measure" ~ "IP",
@@ -1661,10 +1662,10 @@ trees2016 = left_join(read.csv(r"(Elliott_timber_cruise_2015-16.csv)"),
          CrownRatio = na_if(CrownRatio, 0),
          Ht1 = na_if(Ht1, 0), # feet to m
          Ht2 = na_if(htToBrokenTop, 0),
-         isConifer = Species %in% c("PSME", "TSHE", "THPL"),
+         isConifer = Species %in% c("PSME", "TSHE", "THPL","PISI"),
          isLive = (CompCode %in% c("deadStanding", "snag")) == FALSE,
          isLiveUnbroken = isLive & (CompCode != "brokenTop"),
-         SampleFactor = if_else(SamplingMethod == "BAF",baExpansionFactor / (pi * (DBH / 200)^2),10000 / 300), #for fixed radius plot of 0.03 ha, the sample factor is calculated as 10000 / 300 * treeCount, where 300 square meters corresponds to 0.03ha
+         SampleFactor = case_when(SamplingMethod == "BAF" & plotType == "count" ~ baExpansionFactor,SamplingMethod == "BAF" & plotType == "measure" ~ baExpansionFactor / (pi * (DBH / 200)^2),SamplingMethod == "FRP" ~ 10000 / 300),  # fixed plot of 300 m² = 0.03 ha #for fixed radius plot of 0.03 ha, the sample factor is calculated as 10000 / 300 * treeCount, where 300 square meters corresponds to 0.03ha
          plotRadius = if_else(SamplingMethod == "BAF",sqrt(baExpansionFactor / (pi * SampleFactor)) * 2,sqrt((10000 / SampleFactor) / pi)),
          TotalHt = na_if(TotalHt, 0),
          TreeCount = if_else((PlotType == "IP") & (SamplingMethod == "BAF") & (TreeCount > 1), 1, TreeCount), # fix tree duplication per notes above
@@ -1715,14 +1716,15 @@ head(trees2016)
 heightClassBreaks = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE) %>%
   group_by(speciesGroup) %>%
   group_modify(~{
-    quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10))) # constrain maximum number of classes based on data availability: setting the max to n / (meanClassN*k) classes averages meanClassN samples per class in validation folds => primarily affects low n species: Oregon myrtle, western redcedar, and other
+    #quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10)-3)) # constrain maximum number of classes based on data availability: setting the max to n / (meanClassN*k) classes averages meanClassN samples per class in validation folds => primarily affects low n species: Oregon myrtle, western redcedar, and other
+    quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10)))
     return(tibble(heightBreaks = unique(ceiling(c(0, quantile(.$TotalHt, probs = quantileBreaks, na.rm = TRUE))))))
   }) %>%
   unstack(heightBreaks ~ speciesGroup) # list of height class breaks, named by species
-dbhClassBreaks = trees2016 %>% filter(isLiveUnbroken, DBH > 2.54 * 3.5) %>%
+dbhClassBreaks = trees2016 %>% filter(isLiveUnbroken, DBH >3.5) %>%
   group_by(speciesGroup) %>%
   group_modify(~{
-    quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10) - 3))
+    quantileBreaks = seq(0, 1, length.out = min(50, sum(.$TreeCount) / (5 * 10))) #returns quantile breaks whichever is minimum, 20 or sum(.$TreeCount) / (5 * 10) - 3)
     return(tibble(dbhBreaks = unique(c(2.5 * c(0, 1.5, 2.5, 3.5), 2.5 * ceiling(quantile(.$DBH, probs = quantileBreaks, na.rm = TRUE) / 2.5) + 0.5 * 2.5))))
   }) %>%
   unstack(dbhBreaks ~ speciesGroup) # list of DBH class breaks, named by species
@@ -2015,7 +2017,7 @@ if (htDiaOptions$includeInvestigatory) {
   # ranges of predictor variables
   liveUnbrokenTrees2016<-trees2016 #assigned liveUnbrokenTrees2016 to trees2016 data frame assuming that this includes trees filtered by, isliveUnbroken and is.na(totalHt)=FALSE) 
   print(liveUnbrokenTrees2016 %>% group_by(speciesGroup) %>%
-          summarize(quantile = c(0, 0.5, 1),
+          reframe(quantile = c(0, 0.5, 1),
                     dbh = quantile(DBH, quantile, na.rm = TRUE),
                     height = quantile(TotalHt, quantile, na.rm = TRUE),
                     tph = quantile(tph, quantile, na.rm = TRUE),
@@ -2120,6 +2122,16 @@ if (htDiaOptions$includeInvestigatory) {
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
   ggsave("figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "CB"), speciesLabel = "Cascara buckthorn", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
+    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "PM"), speciesLabel = "Pacific madrone", maxTreesMeasured = 150, omitLegends = TRUE) +
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  ggsave("figures/Figure A5 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
+  
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "SS"), speciesLabel = "sitka spruce ", distributionLegendPositionY = 0.92) +
+    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
+  ggsave("figures/Figure A6 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  
 }
 
 
@@ -2466,7 +2478,7 @@ if (htDiaOptions$includeInvestigatory) {
   heightMeasureTrees = trees2016 %>% filter(isLiveUnbroken, is.na(TotalHt) == FALSE, is.na(elevation) == FALSE)
   heightVsurf = VSURF(TotalHt ~ ., heightMeasureTrees %>% select(TotalHt, Species, DBH, isPlantation, topHeight, qmd, relativeDiameter, standBasalAreaPerHectare, basalAreaLarger, standAge2016, elevation, slope, aspect, topographicShelterIndex), ncores = 8, parallel = TRUE, RFimplem = "ranger")
   dbhVsurf = VSURF(DBH ~ ., heightMeasureTrees %>% select(DBH, Species, TotalHt, isPlantation, relativeHeight, topHeight, standBasalAreaApprox, tallerApproxBasalArea, standAge2016, elevation, slope, aspect, topographicShelterIndex), ncores = 8, parallel = TRUE, RFimplem = "ranger") # flaky, may not return anything
-  
+
   predictorImportance = bind_rows(tibble(responseVariable = "height", predictor = as.character(attr(heightVsurf$terms, "predvars"))[heightVsurf$imp.mean.dec.ind + 2], importance = heightVsurf$imp.mean.dec) %>% # offset as.character() by two since first element is "list" and second is TotalHt
                                     mutate(predictor = if_else(predictor == "standBasalAreaPerHectare", "standBasalArea", predictor)),
                                   tibble(responseVariable = "DBH", predictor = as.character(attr(dbhVsurf$terms, "predvars"))[dbhVsurf$imp.mean.dec.ind + 2], importance = dbhVsurf$imp.mean.dec) %>%
