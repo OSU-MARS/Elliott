@@ -7,21 +7,39 @@ figureDpi = 500
 speciesGroupColors = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")
 
 #rm(psmeResults, alruResults, tsheResults, acmaResults, umcaResults, thplResults, otherResults, psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients, umcaCoefficients, thplCoefficients, otherCoefficients)
-if (exists("psmeResults") == FALSE) { load("trees/height-diameter/data/PSME results.Rdata") }
-if (exists("alruResults") == FALSE) { load("trees/height-diameter/data/ALRU2 results.Rdata") }
-if (exists("tsheResults") == FALSE) { load("trees/height-diameter/data/TSHE results.Rdata") }
-if (exists("acmaResults") == FALSE) { load("trees/height-diameter/data/ACMA3 results.Rdata") }
-if (exists("thplResults") == FALSE) { load("trees/height-diameter/data/THPL results.Rdata") }
-if (exists("umcaResults") == FALSE) { load("trees/height-diameter/data/UMCA results.Rdata") }
-if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other results.Rdata") }
-
-
+# if (exists("psmeResults") == FALSE) { load("trees/height-diameter/data/PSME results.Rdata") }
+# if (exists("alruResults") == FALSE) { load("trees/height-diameter/data/ALRU2 results.Rdata") }
+# if (exists("tsheResults") == FALSE) { load("trees/height-diameter/data/TSHE results.Rdata") }
+# if (exists("acmaResults") == FALSE) { load("trees/height-diameter/data/ACMA3 results.Rdata") }
+# if (exists("thplResults") == FALSE) { load("trees/height-diameter/data/THPL results.Rdata") }
+# if (exists("umcaResults") == FALSE) { load("trees/height-diameter/data/UMCA results.Rdata") }
+# if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other results.Rdata") }
+if (exists("PSME Results") == FALSE) { load("data/PSME results.Rdata") }
+if (exists("rhpuResults") == FALSE) { load("data/arme results.Rdata") }
+if (exists("rhpuResults") == FALSE) { load("data/pisi results.Rdata") }
+if (exists("rhpuResults") == FALSE) { load("data/arme results.Rdata") }
 ## assemble results tibbles from individual species data
-heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
-                                  umcaResults, thplResults, otherResults) %>%
-  mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name)),
-         species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), levels = c("PSME", "ALRU2", "TSHE", "ACMA3", "UMCA", "THPL", "other")),
-         speciesFraction = recode(species, "Douglas-fir" = 0.750, "red alder" = 0.101, "western hemlock" = 0.056, "bigleaf maple" = 0.029, "Oregon myrtle" = 0.025, "western redcedar" = 0.013, "other species" = 0.017),
+# heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
+#                                   umcaResults, thplResults, otherResults) %>%
+#   mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name)),
+#          species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), levels = c("PSME", "ALRU2", "TSHE", "ACMA3", "UMCA", "THPL", "other")),
+#          speciesFraction = recode(species, "Douglas-fir" = 0.750, "red alder" = 0.101, "western hemlock" = 0.056, "bigleaf maple" = 0.029, "Oregon myrtle" = 0.025, "western redcedar" = 0.013, "other species" = 0.017),
+#          isBaseForm = (str_detect(name, "Sharma-") == FALSE) & (str_detect(name, "ABA\\+T") == FALSE) & (str_detect(name, "BA\\+L") == FALSE) & (str_detect(name, "physio") == FALSE) & (str_detect(name, "RelDbh") == FALSE) & (str_detect(name, "RelHt") == FALSE),
+#          hasPhysio = str_detect(name, "physio"),
+#          hasStand = str_detect(name, "ABA\\+T") | str_detect(name, "BA\\+L"),
+#          hasRelative = str_detect(name, "RelDbh") | str_detect(name, "RelHt"),
+#          significant = as.logical(significant), # since R lacks NA_logical_ significant can end up being either of type double (0/1/NA_real_) or logical (TRUE/FALSE), standardize back to logical (TRUE/FALSE/NA)
+#          weighting = if_else(fitting %in% c("gnls", "nlrob"), "reweighted", "fixed weights"),
+#          sizeShapeAlpha = as.factor(if_else(significant == TRUE, weighting, "not significant"))) %>%
+#   group_by(fitSet, fixedWeight, responseVariable, species) %>%
+#   mutate(nFits = n(),
+#          deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
+#   ungroup()
+
+heightDiameterResults = bind_rows(rhpuResults,armeResults,pisiResults,psmeResults) %>%
+  mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name)), #simply paste the names of the model from the tibble as required
+         species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar","cascara buckthorn","sitka spruce","pacific madrone", "other species"), levels = c("PSME", "alru2", "tshe", "acma3", "umca", "thpl", "rhpu","pisi","arme", "other")),
+         speciesFraction = recode(species, "Douglas-fir" = 0.750, "red alder" = 0.101, "western hemlock" = 0.056, "bigleaf maple" = 0.029, "Oregon myrtle" = 0.025, "western redcedar" = 0.013, "cascara buckthorn"= 0.007, "sitka spruce"=0.006, "pacific madrone" = 0.004,"other species" = 0.009),
          isBaseForm = (str_detect(name, "Sharma-") == FALSE) & (str_detect(name, "ABA\\+T") == FALSE) & (str_detect(name, "BA\\+L") == FALSE) & (str_detect(name, "physio") == FALSE) & (str_detect(name, "RelDbh") == FALSE) & (str_detect(name, "RelHt") == FALSE),
          hasPhysio = str_detect(name, "physio"),
          hasStand = str_detect(name, "ABA\\+T") | str_detect(name, "BA\\+L"),
@@ -33,17 +51,27 @@ heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaRes
   mutate(nFits = n(),
          deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
   ungroup()
+
 # report duplicate naming and fit failures
 heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>% summarize(n = n(), .groups = "drop") %>% filter(n != htDiaOptions$folds * htDiaOptions$repetitions)
 
-heightDiameterCoefficients = left_join(bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients, # ~28 s
-                                                 umcaCoefficients, thplCoefficients, otherCoefficients) %>%
-                                         mutate(species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), levels = c("PSME", "ALRU2", "TSHE", "ACMA3", "UMCA", "THPL", "other"))),
+# heightDiameterCoefficients = left_join(bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients, # ~28 s
+#                                                  umcaCoefficients, thplCoefficients, otherCoefficients) %>%
+#                                          mutate(species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species"), levels = c("PSME", "ALRU2", "TSHE", "ACMA3", "UMCA", "THPL", "other"))),
+#                                        heightDiameterResults %>% select(-fitting, -fixedWeight, -significant), # no need to join duplicate columns
+#                                        by = join_by(fitSet, responseVariable, species, name, repetition, fold)) %>%
+#   mutate(isConverged = as.logical(isConverged)) %>%
+#   select(-weighting, -sizeShapeAlpha, -nFits, -nTaperImplausible, -speciesFraction) %>%
+#   relocate(responseVariable, species, fitSet, fixedWeight, name, significant, isBaseForm, hasRelative, hasStand, hasPhysio, fitting, repetition, fold, nObservations, nValidation, fitTimeInS, isConverged, effectiveDegreesOfFreedom, nNonPhysical, mab, mapb, mae, mape, rmse, rmspe, aic, deltaAicN, nse, meanAbsolutePlantationEffect,	meanAbsolutePercentPlantationEffect, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
+
+heightDiameterCoefficients = left_join(bind_rows(rhpuCoefficients,pisiCoefficients,armeCoefficients,psmeCoefficients # ~28 s
+                                                 ) %>%
+                                         mutate(species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar","cascara buckthorn","sitka spruce","pacific madrone", "other species"), levels = c("psme", "alru2", "tshe", "acma3", "umca", "thpl","rhpu","pisi","arme", "other"))),
                                        heightDiameterResults %>% select(-fitting, -fixedWeight, -significant), # no need to join duplicate columns
                                        by = join_by(fitSet, responseVariable, species, name, repetition, fold)) %>%
   mutate(isConverged = as.logical(isConverged)) %>%
   select(-weighting, -sizeShapeAlpha, -nFits, -nTaperImplausible, -speciesFraction) %>%
-  relocate(responseVariable, species, fitSet, fixedWeight, name, significant, isBaseForm, hasRelative, hasStand, hasPhysio, fitting, repetition, fold, nObservations, nValidation, fitTimeInS, isConverged, effectiveDegreesOfFreedom, nNonPhysical, mab, mapb, mae, mape, rmse, rmspe, aic, deltaAicN, nse, meanAbsolutePlantationEffect,	meanAbsolutePercentPlantationEffect, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
+  relocate(responseVariable, species, fitSet, fixedWeight, name, significant, isBaseForm, hasRelative, hasStand, hasPhysio, fitting, repetition, fold, nObservations, nValidation, fitTimeInS, isConverged, effectiveDegreesOfFreedom, nNonPhysical, mab, mapb, mae, mape, rmse, rmspe, aic, deltaAicN, nse, meanAbsolutePlantationEffect,	meanAbsolutePercentPlantationEffect, a0, a1, a1p, a2, a2p, a3, a3p, a4, a8, a9, a9p, a10, b1, b1p, b2, b2p, b3, b4)
 #write_xlsx(heightDiameterCoefficients %>% 
 #             filter(fitSet == "primary", is.na(fixedWeight)) %>%
 #             select(-baseName, -fitSet, -fixedWeight, -aict, -bic, -bict, -bias, -ends_with("NaturalRegen"), -ends_with("Plantation"), -adaptiveWeightFraction) %>% # drop diagnostic columns
@@ -57,8 +85,8 @@ primaryResults = heightDiameterResults %>%
   filter(fitSet == "primary", is.na(fixedWeight), fitting != "gnls",  # exclude fits from gnls()
          (responseVariable != "height") | (str_detect(name, "RelHt") == FALSE), # exclude height control forms using relative height
          (responseVariable != "DBH") | (str_detect(name, "BA\\+L") == FALSE)) # exclude diameter control forms using basal area
-#print(primaryResults %>% group_by(fitSet, responseVariable) %>% reframe(n = n(), names = unique(name)), n = 60)
-#primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na(deltaAicN)), mab = sum(is.na(mab)), mae = sum(is.na(mae)), nse = sum(is.na(nse)), rmse = sum(is.na(rmse)))
+print(primaryResults %>% group_by(fitSet, responseVariable) %>% reframe(n = n(), names = unique(name)), n = 60)
+primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na(deltaAicN)), mab = sum(is.na(mab)), mae = sum(is.na(mae)), nse = sum(is.na(nse)), rmse = sum(is.na(rmse)))
 
 # rank model forms by estimated prediction ability (using AUC) for form selection
 #          runtime, seconds
@@ -69,14 +97,15 @@ primaryResults = heightDiameterResults %>%
 #  7                         20.6
 #  8                         20.9
 # 16                         20.4
+
+
 with_progress({
   crossValidatedModelCount = primaryResults %>% group_by(responseVariable, species) %>% summarize(n = n_distinct(name), .groups = "drop")
   progressBar = progressor(steps = sum(crossValidatedModelCount$n))
-  
   heightDiameterModelAucs = primaryResults %>%
     group_by(responseVariable, species, name) %>%
     group_split() %>%
-    future_map_dfr(function(fitResults)
+    future_map_dfr(function(fitResults) #future_map_dfr applies a function to multiple data frames created from above group_by function.
     {
       if ((nrow(fitResults) == 1) | all(is.na(fitResults$nse)))
       {
@@ -123,10 +152,10 @@ with_progress({
         aucMab = NA_real_
         if ((nrow(availableMabData) > 1) & (n_distinct(availableMabData$label) > 1)) # unlikely but possible that availableMabData ends up with a single row, also possible one set of fits has MAB values but the other does not
         {
-          #if ((nrow(availableMabData) < 2) | (n_distinct(availableMabData$label) < 2))
-          #{
-          #  stop(paste0("MAB ROC label formation error with name = ", otherModelName, " for ", fitResults$species[1], " ", fitResults$responseVariable[1], ".  nrow(fitResults) = ", nrow(fitResults), ", nrow(otherFitResults) = ", nrow(otherFitResults), ", nrow(availableMabData) = ", nrow(availableMabData), "."))
-          #}
+          if ((nrow(availableMabData) < 2) | (n_distinct(availableMabData$label) < 2))
+          {
+           stop(paste0("MAB ROC label formation error with name = ", otherModelName, " for ", fitResults$species[1], " ", fitResults$responseVariable[1], ".  nrow(fitResults) = ", nrow(fitResults), ", nrow(otherFitResults) = ", nrow(otherFitResults), ", nrow(availableMabData) = ", nrow(availableMabData), "."))
+          }
           aucMab = WeightedAUC(WeightedROC(guess = availableMabData$guess, label = availableMabData$label))
         }
         
@@ -714,8 +743,8 @@ print(heightDiameterModelRanking %>% filter(significant, isBaseForm) %>% select(
         group_by(species, responseVariable, statistic) %>%
         slice_max(auc, n = 1) %>% arrange(species, desc(responseVariable), statistic), n = 70)
 
-if (exists("psmeHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/PSME preferred models.Rdata") }
-if (exists("alruHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ALRU2 preferred models.Rdata") }
+if (exists("psmeHeightFromDiameterPreferred") == FALSE) { load("data/PSME preferred models.Rdata") }
+if (exists("alruHeightFromDiameterPreferred") == FALSE) { load("data/ALRU2 preferred models.Rdata") }
 
 # Temesgen et al. 2007 height = 1.3 + exp(b1 - b2 * DBH^b3) => b1 - b2 * DBH^b3 = ln(height - 1.3) => DBH^b3 = 1/b2 * (b1 - ln(height - 1.3))
 #                      DBH = (1/b2 * (b1 - ln(height - 1.3)))^(1/b3)
@@ -811,8 +840,8 @@ ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves 1000.pdf", hei
 
 ## Figure 7: western hemlock and bigleaf maple preferred models
 #print(preferredForms %>% filter(species %in% c("western hemlock", "bigleaf maple")) %>% select(-mabName, -aucMab, -nseName, -aucNse) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "ALRU2", "TSHE", "ACMA3", "UMCA", "THPL", "other"), levels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")), maeName = str_trunc(maeName, 28, ellipsis = ""), rmseName = str_trunc(rmseName, 28, ellipsis = ""), aicName = str_trunc(aicName, 28, ellipsis = "")), n = 32)
-if (exists("tsheHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/TSHE preferred models.Rdata") }
-if (exists("acmaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/ACMA3 preferred models.Rdata") }
+if (exists("tsheHeightFromDiameterPreferred") == FALSE) { load("data/TSHE preferred models.Rdata") }
+if (exists("acmaHeightFromDiameterPreferred") == FALSE) { load("data/ACMA3 preferred models.Rdata") }
 
 tsheReference = bind_rows(bind_rows(tsheHeightFromDiameterPreferred$gam$stats %>% mutate(model = "base form 1"),
                                     tsheHeightFromDiameterPreferred$chapmanRichards$stats %>% mutate(model = "base form 2"),
@@ -905,8 +934,8 @@ ggsave("trees/height-diameter/figures/Figure 07 TSHE-ACMA3 curves.pdf", height =
 
 ## Figure 8: Oregon myrtle and western redcedar preferred models
 #print(preferredForms %>% filter(species %in% c("Oregon myrtle", "western redcedar")) %>% select(-mabName, -aucMab, -nseName, -aucNse) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "ALRU2", "TSHE", "ACMA3", "UMCA", "THPL", "other"), levels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")), maeName = str_trunc(maeName, 28, ellipsis = ""), rmseName = str_trunc(rmseName, 28, ellipsis = ""), aicName = str_trunc(aicName, 28, ellipsis = "")), n = 32)
-if (exists("umcaHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/UMCA preferred models.Rdata") }
-if (exists("thplHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/THPL preferred models.Rdata") }
+if (exists("umcaHeightFromDiameterPreferred") == FALSE) { load("data/UMCA preferred models.Rdata") }
+if (exists("thplHeightFromDiameterPreferred") == FALSE) { load("data/THPL preferred models.Rdata") }
 
 # no prior height model for Oregon myrtle, so no UMCA reference or reference DBH
 umcaReference = bind_rows(bind_rows(umcaHeightFromDiameterPreferred$michaelisMenten$stats %>% mutate(model = "base form 1"),
@@ -1009,7 +1038,7 @@ ggsave("trees/height-diameter/figures/Figure 08 UMCA-THPL curves.pdf", height = 
 #                power             REML GAM BAL+L physio          parabolic               Chapman-Richards form RelHt
 #                Korf                                             linear
 #print(preferredForms %>% filter(species == "other species") %>% select(-mabName, -aucMab, -nseName, -aucNse) %>% rename(respVar = responseVariable, base = isBaseForm, aucAic = aucDeltaAicN) %>% mutate(species = factor(species, labels = c("PSME", "ALRU2", "TSHE", "ALRU2", "ACMA3", "UMCA", "THPL", "other"), levels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar", "other species")), maeName = str_trunc(maeName, 28, ellipsis = ""), rmseName = str_trunc(rmseName, 28, ellipsis = ""), aicName = str_trunc(aicName, 28, ellipsis = "")), n = 16)
-if (exists("otherHeightFromDiameterPreferred") == FALSE) { load("trees/height-diameter/data/other preferred models.Rdata") }
+if (exists("otherHeightFromDiameterPreferred") == FALSE) { load("data/other preferred models.Rdata") }
 
 # no prior height model for other species, so no reference or reference DBH
 otherReference = bind_rows(bind_rows(otherHeightFromDiameterPreferred$gam$stats %>% mutate(model = "base form 1"),
