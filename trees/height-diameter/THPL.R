@@ -420,8 +420,6 @@ if (thplOptions$fitDbh)
 }
 if (htDiaOptions$includeInvestigatory)
 {
-  print(thplDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
-  
   ggplot(thpl2016) +
     geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
     #geom_line(aes(x = predict(thplDiameterFromHeight$sharmaParton), y = TotalHt, color = "modified Sharma-Parton", group = isPlantation), alpha = 0.5) +

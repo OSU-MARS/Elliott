@@ -404,8 +404,6 @@ if (umcaOptions$fitDbh)
 }
 if (htDiaOptions$includeInvestigatory)
 {
-  print(umcaDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
-
   ggplot(umca2016) +
     geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
     #geom_line(aes(x = predict(umcaDiameterFromHeight$chapmanReplace), y = TotalHt, color = "Chapman-Richards replace", group = isPlantation)) +

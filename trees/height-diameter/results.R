@@ -333,10 +333,11 @@ modelCounts %>% summarize(nAucsIfAllFitsSucceeded = sum(nAucs)) %>% mutate(total
 #setdiff(redAlder, myrtle) # modified Sharma-Parton
 #setdiff(redAlder, redcedar) # Schnute inverse
 
+# generalization effect sizes for stand and physiographic variables
 heightDiameterResults %>% 
-  filter(fitting %in% c("gsl_nls", "nlrob"), significant) %>% 
+  filter(fitting %in% c("gsl_nls", "nlrob", "gam"), significant) %>% 
   mutate(deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # change to unrestricted ΔAICn
-  filter(baseName %in% c("Chapman-Richards", "Ruark", "Sharma-Parton", "Sharma-Zhang", "Sibbesen", "Weibull")) %>% # remove base forms which weren't generalized
+  filter(baseName %in% c("Chapman-Richards", "Ruark", "Sharma-Parton", "Sharma-Zhang", "Sibbesen", "Weibull", "REML GAM")) %>% # remove base forms which weren't generalized
   group_by(responseVariable, species, baseName) %>%
   mutate(nseBase = median(if_else(isBaseForm | (baseName == "Sharma-Parton") | (baseName == "Sharma-Zhang"), nse, NA_real_), na.rm = TRUE),
          nseStandRelDelta = if_else((hasStand | hasRelative) & (hasPhysio == FALSE), nse, NA_real_) - nseBase,
@@ -357,7 +358,7 @@ heightDiameterResults %>%
             nsePhysioDelta = median(nsePhysioDelta, na.rm = TRUE),
             nseCombinedDelta = median(nseCombinedDelta, na.rm = TRUE),
             .groups = "drop") %>%
-  filter(baseName %in% c("Chapman-Richards", "Sharma-Parton", "Ruark", "Sibbesen"), (responseVariable != "height") | (baseName != "Sibbesen")) %>%
+  #filter(baseName %in% c("Chapman-Richards", "Sharma-Parton", "Ruark", "Sibbesen", "REML GAM"), (responseVariable != "height") | (baseName != "Sibbesen")) %>%
   arrange(desc(fitSet), desc(responseVariable), is.na(fixedWeight) == FALSE) %>%
   select(-fixedWeight)
 
@@ -526,6 +527,17 @@ plot_layout(guides = "collect") &
   guides(color = guide_legend(override.aes = list(alpha = 0.8))) &
   scale_x_continuous(breaks = seq(0, 12, by = 3)) &
   scale_y_discrete(limits = rev)
+
+# summaries for supplemental material
+standVariableSelection = predictorVariableResults %>% 
+  filter(significant, isBaseForm == FALSE, hasSignificantBasalArea | hasSignificantRelative) %>% 
+  group_by(responseVariable, species, name) %>%
+  summarize(a2 = a2[1], a2p = a2p[1], a3 = a3[1], a3p = a3p[1], 
+            relSize = if_else(responseVariable[1] == "height", a9[1], a10[1]), relSizeP = if_else(responseVariable[1] == "height", a9p[1], a10p[1]),
+            .groups = "drop")
+standVariableSelection %>% group_by(responseVariable, species) %>%
+  summarize(pa2 = sum(a2) / n(), pa2p = sum(a2p) / sum(a2), pa3 = sum(a3) / n(), pa3p = sum(a3p) / sum(a3),
+            pRelSize = sum(relSize) / n(), pRelSizeP = sum(relSizeP) / sum(relSize))
 
 
 ## Figure 1: overall dataset summary
@@ -730,7 +742,7 @@ psmeReference = bind_rows(bind_rows(psmeHeightFromDiameterPreferred$gam$stats %>
                                     get_prediction_stats("Temesgen et al. 2007", "DBH", psme2016, (1/6.7792 * (5.7567 - log(psme2016$TotalHt - 1.3)))^(1/-0.2795), 4, psme2016) %>% mutate(model = "previous model")) %>% 
                             mutate(responseVariable = "DBH")) %>%
   mutate(fitSet = "primary", species = "PSME", adaptiveWeightFraction = 0)
-psmeReferenceDbh = seq(0, 241) # Temesgen et al. 2007 dataset limit of 190 cm, extended of necessity
+psmeReferenceDbh = seq(0, ceiling(max(psme2016$DBH))) # Temesgen et al. 2007 dataset limit of 190 cm, extended of necessity
 
 # Hanus et al. height = h0 + a1 * exp(b1 - b2 * (b3 * DBH)^b4) => b1 - b2 * (b3 * DBH)^b4 = ln(1/a1 * (height - h0)) => (b3 * DBH)^b4 = 1/b2 * (b1 - ln(1/a1 * (height - h0)))
 #              DBH = 1/b3 * (1/b2 * (b1 - ln(1/a1 * (height - h0)))^(1/b4))
@@ -746,7 +758,7 @@ alruReference = bind_rows(bind_rows(alruHeightFromDiameterPreferred$gam$stats %>
                             mutate(responseVariable = "DBH")) %>%
   mutate(fitSet = "primary", species = "ALRU2", adaptiveWeightFraction = 0)
 alruPreviousDbhFailures = sum(alru2016$TreeCount * is.na(1/0.393701 * (1/12.00274935 * (4.41820972 - log(1/0.3048 * (alru2016$TotalHt - 1.37))))^(1/-2.13835482))) # 484 of 3307 trees = 14.6% numerical failure due to negative power of negative number
-alruReferenceDbh = seq(0, 135) # Hanus et al. 1999 dataset limit of 50 cm, extended of necessity plus for plot visiblity
+alruReferenceDbh = seq(0, ceiling(max(alru2016$DBH)) + 5) # Hanus et al. 1999 dataset limit of 50 cm, extended of necessity plus for plot visiblity
 
 ggplot() +
   geom_point(aes(x = psme2016$DBH, y = psme2016$TotalHt), alpha = 0.08, color = "grey25", na.rm = TRUE, shape = 16, size = 1.2) +
@@ -804,9 +816,9 @@ plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt"))) +
 plot_layout(design = "12\n34\n55", heights = c(1, 1, 0)) &
   scale_linetype_manual(breaks = c(FALSE, TRUE, "previous model"), labels = c("natural regeneration", "plantation", "previous model"), values = c("solid", "longdash", "dashed")) &
   scale_y_continuous(breaks = seq(0, 100, by = 20))
-#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.png", height = 12, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.png", height = 12, width = 20, units = "cm", dpi = figureDpi)
 #ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves.tif", height = 12, width = 20, units = "cm", dpi = figureDpi, compression = "lzw+p")
-ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves 1000.pdf", height = 12, width = 20, units = "cm", dpi = figureDpi, device = cairo_pdf, fallback_resolution = figureDpi)
+#ggsave("trees/height-diameter/figures/Figure 06 PSME-ALRU2 curves 1000.pdf", height = 12, width = 20, units = "cm", dpi = figureDpi, device = cairo_pdf, fallback_resolution = figureDpi)
 
 
 ## Figure 7: western hemlock and bigleaf maple preferred models
@@ -1172,7 +1184,7 @@ ggplot(accuracyCorrelation %>% filter(responseVariable == "DBH")) +
   plot_layout(nrow = 1, ncol = 2, guides = "collect") &
   scale_fill_scico(palette = "vik", limits = c(-1, 1)) &
   theme(legend.spacing.y = unit(0.5, "line"))
-#ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.png", height = 8.5, width = 20, units = "cm")
+#ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.png", height = 8.5, width = 20, units = "cm", dpi = figureDpi)
 #ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.tif", height = 8.5, width = 20, units = "cm", dpi = figureDpi, compression = "lzw+p")
 ggsave("trees/height-diameter/figures/Figure S01 goodness of fit correlation.pdf", height = 8.5, width = 20, units = "cm", dpi = figureDpi, device = cairo_pdf, fallback_resolution = figureDpi)
 

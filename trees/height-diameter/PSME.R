@@ -510,8 +510,6 @@ if (psmeOptions$fitDbhPrimary)
 
 if (htDiaOptions$includeInvestigatory)
 {
-  print(psmeDiameterFromHeightResults %>% select(-responseVariable, -species, -biasNR, -biasPl, -rmse, -rmseNR, -rmsePl, -pearsonNR, -pearsonPl, -aic, -bic), n = 25)
-  
   ggplot(psme2016) +
     geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
     #geom_line(aes(x = predict(psmeDiameterFromHeight$chapmanReplace), y = TotalHt, color = "Chapman replace", group = isPlantation)) +

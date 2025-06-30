@@ -146,7 +146,7 @@ plot_layout() &
 # stand trajectories
 logBreaks = c(1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000, 4000)
 logMinorBreaks = c(4, 6, 7, 8, 9, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 2000, 3000)
-sdi = crossing(tph = c(1, 1000, 4000), sdi = c(100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000)) %>% mutate(qmd = 25.4 * (sdi / tph)^(1/1.605))
+sdi = crossing(tph = c(1, 1000, 4000), sdi = c(100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000)) %>% mutate(qmd = 25 * (sdi / tph)^(1/1.605))
 
 ggplot() +
   geom_path(aes(x = tph, y = qmd, group = sdi), sdi, color = "grey70", linetype = "longdash") +
@@ -177,53 +177,60 @@ plantationTrajectories = left_join(read_stand_trajectories(standTrajectoriesFile
          isPlantation = standAge2016 < (2016 - 1950))
 (Sys.time() - plantationTrajectoryReadStart)
 
-plantationTrajectories %>% filter(levRotation == maxLev, (standAge == thin1) | (standAge == rotation), discountRatePct> 0) %>% 
+plantationTrajectories %>% filter(levRotation == maxLev, (standAge == thin1) | (standAge == rotation), discountRatePct > 0) %>% 
   group_by(discountRatePct, stand) %>% 
   summarize(area = area[1], isThinned = standAge[1] == thin1[1], .groups = "drop_last") %>%
   summarize(stands = n(), areaHa = sum(area), thinned = sum(isThinned), thinnedAreaHa = sum(isThinned * area)) %>%
   mutate(thinAreaPct = 100 * thinnedAreaHa / areaHa)
+plantationTrajectories %>% filter(discountRatePct == 2, standAge == rotation) %>% slice_max(levRotation)
+#print(plantationTrajectories %>% filter(levRotation == maxLev, standAge == rotation, discountRatePct == 2) %>%
+#  group_by(discountRatePct, stand) %>%
+#  summarize(area = area[1], isThinned = standAge[1] == thin1[1], rotation = rotation[1], .groups = "drop_last") %>%
+#  group_by(discountRatePct, rotation) %>%
+#  summarize(stands = n(), areaHa = sum(area), thinned = sum(isThinned), thinnedAreaHa = sum(isThinned * area)) %>%
+#  mutate(thinAreaPct = 100 * thinnedAreaHa / areaHa), n = 50)
 
 # LEV by discount rate
 ggplot() +
-  geom_point(aes(x = standAge, y = LEV, size = area, color = if_else(thin1 != -1, "with thinning", "clearcut only")), plantationTrajectories %>% filter(discountRatePct == 1.0, levRotation == maxLev, standAge == rotation), alpha = 0.2, shape = 16) +
+  geom_point(aes(x = standAge, y = LEV, size = area, color = if_else(thin1 != -1, "with thinning", "clearcut only")), plantationTrajectories %>% filter(discountRatePct == 1.0, levRotation == maxLev, standAge == rotation, (stand %in% c(507, 1661)) == FALSE), alpha = 0.2, shape = 16) +
   coord_cartesian(xlim = c(0, 125), ylim = c(0, NA)) +
-  labs(x = "rotation age, years", y = bquote("land expectation value, US$ ha"^-1), color = "preferred rotation", size = "stand area, ha", title = "(a) 1% discount rate") +
+  labs(x = "rotation age, years", y = bquote("land expectation value, US$ ha"^-1), color = "preferred rotation", size = "stand area, ha", title = "(a) 1% discount, 35% thinned") +
   scale_y_continuous(labels = scales::label_comma()) +
 ggplot() +
-  geom_point(aes(x = standAge, y = LEV, size = area, color = if_else(thin1 != -1, "with thinning", "clearcut only")), plantationTrajectories %>% filter(discountRatePct == 3.0, levRotation == maxLev, standAge == rotation), alpha = 0.2, shape = 16) +
+  geom_point(aes(x = standAge, y = LEV, size = area, color = if_else(thin1 != -1, "with thinning", "clearcut only")), plantationTrajectories %>% filter(discountRatePct == 2.0, levRotation == maxLev, standAge == rotation, (stand %in% c(507, 1661)) == FALSE), alpha = 0.2, shape = 16) +
   coord_cartesian(xlim = c(0, 125), ylim = c(0, NA)) +
-  labs(x = "rotation age, years", y = NULL, color = "preferred rotation", size = "stand area, ha", title = "(b) 3% discount rate") +
+  labs(x = "rotation age, years", y = NULL, color = "preferred rotation", size = "stand area, ha", title = "(b) 2% discount, 18% thinned") +
   scale_y_continuous(labels = scales::label_comma()) +
 ggplot() +
-  geom_point(aes(x = standAge, y = LEV, size = area, color = if_else(thin1 != -1, "with thinning", "clearcut only")), plantationTrajectories %>% filter(discountRatePct == 5.0, levRotation == maxLev, standAge == rotation), alpha = 0.2, shape = 16) +
+  geom_point(aes(x = standAge, y = LEV, size = area, color = if_else(thin1 != -1, "with thinning", "clearcut only")), plantationTrajectories %>% filter(discountRatePct == 3.0, levRotation == maxLev, standAge == rotation, (stand %in% c(507, 1661)) == FALSE), alpha = 0.2, shape = 16) +
   coord_cartesian(xlim = c(0, 125), ylim = c(0, NA)) +
-  labs(x = "rotation age, years", y = NULL, color = "preferred rotation", size = "stand area, ha", title = "(c) 5% discount rate") +
+  labs(x = "rotation age, years", y = NULL, color = "preferred rotation", size = "stand area, ha", title = "(c) 3% discount, 6.5% thinned by area") +
   scale_y_continuous(labels = scales::label_comma()) +
 ggplot() +
-  geom_point(aes(x = standAge, y = 100 * BAintensity, color = "with thinning", size = area), plantationTrajectories %>% filter(discountRatePct == 1.0, netRevenue == maxNetRevenue, standAge == thin1), alpha = 0.2, shape = 16) +
-  coord_cartesian(xlim = c(0, 125), ylim = c(0, 40)) +
+  geom_point(aes(x = standAge, y = 100 * BAintensity, color = "with thinning", size = area), plantationTrajectories %>% filter(discountRatePct == 1.0, netRevenue == maxNetRevenue, standAge == thin1, (stand %in% c(507, 1661)) == FALSE), alpha = 0.2, shape = 16) +
+  coord_cartesian(xlim = c(0, 125), ylim = c(0, 52)) +
   labs(x = "thin age, years", y = "thinning\nintensity, % BA", color = "preferred rotation", size = "stand area, ha") +
-  scale_y_continuous(breaks = seq(0, 50, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 50, by = 10), minor_breaks = NULL) +
   theme(legend.position = "none") +
 ggplot() +
-  geom_point(aes(x = standAge, y = 100 * BAintensity, color = "with thinning", size = area), plantationTrajectories %>% filter(discountRatePct == 3.0, netRevenue == maxNetRevenue, standAge == thin1), alpha = 0.2, shape = 16) +
-  coord_cartesian(xlim = c(0, 125), ylim = c(0, 40)) +
+  geom_point(aes(x = standAge, y = 100 * BAintensity, color = "with thinning", size = area), plantationTrajectories %>% filter(discountRatePct == 2.0, netRevenue == maxNetRevenue, standAge == thin1, (stand %in% c(507, 1661)) == FALSE), alpha = 0.2, shape = 16) +
+  coord_cartesian(xlim = c(0, 125), ylim = c(0, 52)) +
   labs(x = "thin age, years", y = NULL, color = "preferred rotation", size = "stand area, ha") +
-  scale_y_continuous(breaks = seq(0, 50, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 50, by = 10), minor_breaks = NULL) +
   theme(legend.position = "none") +
 ggplot() +
-  geom_point(aes(x = standAge, y = 100 * BAintensity, color = "with thinning", size = area), plantationTrajectories %>% filter(discountRatePct == 5.0, netRevenue == maxNetRevenue, standAge == thin1), alpha = 0.2, shape = 16) +
-  coord_cartesian(xlim = c(0, 125), ylim = c(0, 40)) +
+  geom_point(aes(x = standAge, y = 100 * BAintensity, color = "with thinning", size = area), plantationTrajectories %>% filter(discountRatePct == 3.0, netRevenue == maxNetRevenue, standAge == thin1, (stand %in% c(507, 1661)) == FALSE), alpha = 0.2, shape = 16) +
+  coord_cartesian(xlim = c(0, 125), ylim = c(0, 52)) +
   labs(x = "thin age, years", y = NULL, color = "preferred rotation", size = "stand area, ha") +
-  scale_y_continuous(breaks = seq(0, 50, by = 10)) +
+  scale_y_continuous(breaks = seq(0, 50, by = 10), minor_breaks = NULL) +
   theme(legend.position = "none") +
 plot_annotation(theme = theme(plot.margin = margin())) +
-plot_layout(nrow = 2, ncol = 3, heights = c(1, 0.25), guides = "collect") &
-  guides(color = guide_legend(order = 1, override.aes = list(alpha = 0.7)), size = guide_legend(order = 2, override.aes = list(alpha = 0.4))) &
+plot_layout(nrow = 2, ncol = 3, heights = c(1, 0.4), guides = "collect") &
+  guides(color = guide_legend(order = 1, override.aes = list(alpha = 0.8)), size = guide_legend(order = 2, override.aes = list(alpha = 0.4))) &
   scale_color_manual(breaks = c("with thinning", "clearcut only"), values = c("darkorchid", "firebrick")) &
   scale_size_area(limits = c(0, 50), max_size = 4) &
   theme(legend.spacing.y = unit(0.4, "line"))
-#ggsave("trees/Organon/figures/plantation management Organon SWO discount rates.png", units = "cm", width = 22, height = 12, dpi = 200)
+#ggsave("trees/Organon/figures/plantation management Organon SWO discount rates 123.png", units = "cm", width = 22, height = 12, dpi = 200)
 
 # net harvest revenues by stand age
 # TODO: filter out pre-2021 harvest
@@ -311,3 +318,99 @@ ggplot() +
   scale_fill_viridis_c(labels = scales::label_comma(), trans = "log10") +
   scale_x_continuous(breaks = c(0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 10000), minor_breaks = c(3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900), trans = scales::transform_pseudo_log()) +
   scale_y_continuous(breaks = c(0, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 10000), minor_breaks = c(3, 4, 6, 7, 8, 9, 30, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900), trans = scales::transform_pseudo_log())
+
+
+## coordinate descent illustration
+ggplot() +
+  geom_segment(aes(x = c(20, 20, 20, 20), y = c(15, 15, 15, 15), xend = c(15, 20, 20, 25), yend = c(15, 10, 20, 15)), color = "cornflowerblue") +
+  geom_point(aes(x = c(15, 20, 20, 25), y = c(15, 10, 20, 15)), color = "cornflowerblue", size = 1) +
+  geom_point(aes(x = 20, y = 15), color = "blue2", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  labs(x = "thin from below intensity, % BA", y = "proportional thinning intensity, % BA")
+ggsave("trees/Organon/figures/coordinate descent 0.png", height = 9, width = 10, units = "cm", dpi = 200)
+
+ggplot() +
+  geom_segment(aes(x = c(20, 20, 20, 20), y = c(15, 15, 15, 15), xend = c(15, 20, 20, 25), yend = c(15, 10, 20, 15)), color = "gray70") +
+  geom_point(aes(x = c(15, 20, 20, 25), y = c(15, 10, 20, 15)), color = "gray70", size = 1) +
+  geom_point(aes(x = 20, y = 15), color = "gray70", size = 2) +
+  geom_segment(aes(x = c(15, 15, 15), y = c(15, 15, 15), xend = c(10, 15, 15), yend = c(15, 10, 20)), color = "cornflowerblue") +
+  geom_point(aes(x = c(10, 15, 15), y = c(15, 10, 20)), color = "cornflowerblue", size = 1) +
+  geom_point(aes(x = 15, y = 15), color = "blue2", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  labs(x = "thin from below intensity, % BA", y = "proportional thinning intensity, % BA")
+ggsave("trees/Organon/figures/coordinate descent 1.png", height = 9, width = 10, units = "cm", dpi = 200)
+
+ggplot() +
+  geom_segment(aes(x = c(20, 20, 20, 20), y = c(15, 15, 15, 15), xend = c(15, 20, 20, 25), yend = c(15, 10, 20, 15)), color = "gray85") +
+  geom_point(aes(x = c(15, 20, 20, 25), y = c(15, 10, 20, 15)), color = "gray85", size = 1) +
+  geom_point(aes(x = 20, y = 15), color = "gray85", size = 2) +
+  geom_segment(aes(x = c(15, 15, 15), y = c(15, 15, 15), xend = c(10, 15, 15), yend = c(15, 10, 20)), color = "gray70") +
+  geom_point(aes(x = c(10, 15, 15), y = c(15, 10, 20)), color = "gray70", size = 1) +
+  geom_point(aes(x = 15, y = 15), color = "gray70", size = 2) +
+  geom_segment(aes(x = c(10, 10, 10), y = c(15, 15, 15), xend = c(5, 10, 10), yend = c(15, 10, 20)), color = "cornflowerblue") +
+  geom_point(aes(x = c(5, 10, 10), y = c(15, 10, 20)), color = "cornflowerblue", size = 1) +
+  geom_point(aes(x = 10, y = 15), color = "blue2", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  labs(x = "thin from below intensity, % BA", y = "proportional thinning intensity, % BA")
+ggsave("trees/Organon/figures/coordinate descent 2.png", height = 9, width = 10, units = "cm", dpi = 200)
+
+ggplot() +
+  geom_segment(aes(x = c(20, 20, 20, 20), y = c(15, 15, 15, 15), xend = c(15, 20, 20, 25), yend = c(15, 10, 20, 15)), color = "gray90") +
+  geom_point(aes(x = c(15, 20, 20, 25), y = c(15, 10, 20, 15)), color = "gray90", size = 1) +
+  geom_point(aes(x = 20, y = 15), color = "gray90", size = 2) +
+  geom_segment(aes(x = c(15, 15, 15), y = c(15, 15, 15), xend = c(10, 15, 15), yend = c(15, 10, 20)), color = "gray85") +
+  geom_point(aes(x = c(10, 15, 15), y = c(15, 10, 20)), color = "gray85", size = 1) +
+  geom_point(aes(x = 15, y = 15), color = "gray85", size = 2) +
+  geom_segment(aes(x = c(10, 10, 10), y = c(15, 15, 15), xend = c(5, 10, 10), yend = c(15, 10, 20)), color = "gray70") +
+  geom_point(aes(x = c(5, 10, 10), y = c(15, 10, 20)), color = "gray70", size = 1) +
+  geom_point(aes(x = 10, y = 15), color = "gray70", size = 2) +
+  geom_segment(aes(x = c(10, 10), y = c(10, 10), xend = c(5, 10), yend = c(10, 5)), color = "cornflowerblue") +
+  geom_point(aes(x = c(5, 10), y = c(10, 5)), color = "cornflowerblue", size = 1) +
+  geom_point(aes(x = 10, y = 10), color = "blue2", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  labs(x = "thin from below intensity, % BA", y = "proportional thinning intensity, % BA")
+ggsave("trees/Organon/figures/coordinate descent 3.png", height = 9, width = 10, units = "cm", dpi = 200)
+
+ggplot() +
+  geom_segment(aes(x = c(20, 20, 20, 20), y = c(15, 15, 15, 15), xend = c(15, 20, 20, 25), yend = c(15, 10, 20, 15)), color = "gray90") +
+  geom_point(aes(x = c(15, 20, 20, 25), y = c(15, 10, 20, 15)), color = "gray90", size = 1) +
+  geom_point(aes(x = 20, y = 15), color = "gray90", size = 2) +
+  geom_segment(aes(x = c(15, 15, 15), y = c(15, 15, 15), xend = c(10, 15, 15), yend = c(15, 10, 20)), color = "gray90") +
+  geom_point(aes(x = c(10, 15, 15), y = c(15, 10, 20)), color = "gray90", size = 1) +
+  geom_point(aes(x = 15, y = 15), color = "gray90", size = 2) +
+  geom_segment(aes(x = c(10, 10, 10), y = c(15, 15, 15), xend = c(5, 10, 10), yend = c(15, 10, 20)), color = "gray85") +
+  geom_point(aes(x = c(5, 10, 10), y = c(15, 10, 20)), color = "gray85", size = 1) +
+  geom_point(aes(x = 10, y = 15), color = "gray85", size = 2) +
+  geom_segment(aes(x = c(10, 10), y = c(10, 10), xend = c(5, 10), yend = c(10, 5)), color = "gray70") +
+  geom_point(aes(x = c(5, 10), y = c(10, 5)), color = "gray70", size = 1) +
+  geom_point(aes(x = 10, y = 10), color = "gray70", size = 2) +
+  geom_segment(aes(x = c(7.5, 10, 10, 12.5), y = c(10, 7.5, 12.5, 10), xend = c(10, 10, 10, 10), yend = c(10, 10, 10, 10)), color = "cornflowerblue") +
+  geom_point(aes(x = c(7.5, 10, 10, 12.5), y = c(10, 7.5, 12.5, 10)), color = "cornflowerblue", size = 1) +
+  geom_point(aes(x = 10, y = 10), color = "blue2", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  labs(x = "thin from below intensity, % BA", y = "proportional thinning intensity, % BA")
+ggsave("trees/Organon/figures/coordinate descent 4.png", height = 9, width = 10, units = "cm", dpi = 200)
+
+ggplot() +
+  geom_segment(aes(x = c(20, 20, 20, 20), y = c(15, 15, 15, 15), xend = c(15, 20, 20, 25), yend = c(15, 10, 20, 15)), color = "gray90") +
+  geom_point(aes(x = c(15, 20, 20, 25), y = c(15, 10, 20, 15)), color = "gray90", size = 1) +
+  geom_point(aes(x = 20, y = 15), color = "gray90", size = 2) +
+  geom_segment(aes(x = c(15, 15, 15), y = c(15, 15, 15), xend = c(10, 15, 15), yend = c(15, 10, 20)), color = "gray90") +
+  geom_point(aes(x = c(10, 15, 15), y = c(15, 10, 20)), color = "gray90", size = 1) +
+  geom_point(aes(x = 15, y = 15), color = "gray90", size = 2) +
+  geom_segment(aes(x = c(10, 10, 10), y = c(15, 15, 15), xend = c(5, 10, 10), yend = c(15, 10, 20)), color = "gray90") +
+  geom_point(aes(x = c(5, 10, 10), y = c(15, 10, 20)), color = "gray90", size = 1) +
+  geom_point(aes(x = 10, y = 15), color = "gray90", size = 2) +
+  geom_segment(aes(x = c(10, 10), y = c(10, 10), xend = c(5, 10), yend = c(10, 5)), color = "gray85") +
+  geom_point(aes(x = c(5, 10), y = c(10, 5)), color = "gray85", size = 1) +
+  geom_point(aes(x = 10, y = 10), color = "gray85", size = 2) +
+  geom_segment(aes(x = c(7.5, 10, 10, 12.5), y = c(10, 7.5, 12.5, 10), xend = c(10, 10, 10, 10), yend = c(10, 10, 10, 10)), color = "gray70") +
+  geom_point(aes(x = c(7.5, 10, 10, 12.5), y = c(10, 7.5, 12.5, 10)), color = "gray70", size = 1) +
+  geom_point(aes(x = 10, y = 10), color = "gray70", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  geom_segment(aes(x = c(7.5, 7.5), y = c(10, 10), xend = c(7.5, 7.5), yend = c(7.5, 12.5)), color = "cornflowerblue") +
+  geom_point(aes(x = c(7.5, 7.5), y = c(7.5, 12.5)), color = "cornflowerblue", size = 1) +
+  geom_point(aes(x = 7.5, y = 10), color = "blue2", size = 2) +
+  coord_equal(xlim = c(0, 45), ylim = c(0, 45)) +
+  labs(x = "thin from below intensity, % BA", y = "proportional thinning intensity, % BA")
+ggsave("trees/Organon/figures/coordinate descent 5.png", height = 9, width = 10, units = "cm", dpi = 200)

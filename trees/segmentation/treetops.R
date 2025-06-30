@@ -896,6 +896,17 @@ if (treetopOptions$includeSetup)
   s4268maximaDsm %<>% filter(is.na(dsmSlope) == FALSE) # exclude 346 local maxima on accepted tiles whose local slopes are undefined (comment this out if DSM and CMM slope aren't being considered as predictors)
   Sys.time() - loadStart
   
+  # predictor variable summary (Table 3)
+  variableCategorization = tibble(variable = names(s4268maximaDsm)) %>% 
+    filter((variable %in% c("tile", "id", "sourceID", "dsmZ", "cmmZ", "geom", "mergeClusterID", "x", "y", "uniqueID", "uniqueMergeClusterID", "treetop")) == FALSE) %>%
+    mutate(category = if_else(variable %in% c("radius", "height", "deltaCmm", "dsmSlope", "cmmSlope3"), "local maxima",
+                              if_else(variable %in% c("prominenceMean", "prominenceMeanNormalized", "prominenceVariance", "prominenceVarianceNormalized", "rangeMean", "rangeMeanNormalized", "rangeVariance", "rangeVarianceNormalized", "netProminence", "netProminenceNormalized", "netRange", "netRangeNormalized"), "ring, combined",
+                                      if_else(variable %in% c("neighborDistance10mean", "neighborDistance20mean", "neighborDistance50mean"), "density",
+                                              if_else(variable %in% c("neighborDistance2mean", "neighborDistance3mean", "neighborDistance4mean", "neighborDistance5mean", "neighborProminence5mean", "netProminenceNeighbor2", "netProminenceNeighbor3", "netProminenceNeighbor5", "netProminenceNeighbor1normalized", "netProminenceNeighbor2normalized", "netProminenceNeighbor3normalized", "netProminenceNeighbor4normalized", "netProminenceNeighbor5normalized", "prominenceNeighbor5Variance", "prominenceNeighbor5VarianceNormalized", "rangeNeighbor2", "rangeNeighbor3", "rangeNeighbor5", "rangeNeighbor2Normalized", "rangeNeighbor3Normalized", "rangeNeighbor5Normalized"), "neighbor, combined",
+                                                      if_else(str_detect(variable, "[N, n]eighbor"), "neighbor, individual", "ring, individual"))))))
+  variableCategorization %>% group_by(category) %>% summarize(n = n())
+  print(variableCategorization, n = nrow(variableCategorization))
+  
   # drop unrelated predictors
   s4268maximaDsm %<>% select(-neighbor4differentSourceID, -neighbor5differentSourceID) # Boruta
   

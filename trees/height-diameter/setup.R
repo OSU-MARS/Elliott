@@ -1574,7 +1574,7 @@ plot_qq = function(diameterRegression1, diameterRegression2, diameterRegression3
 
 ## load data
 # Notable properties of cruise data loaded into trees2016
-#  - Plots are either count plots, where trees aren't measured, or count plots, where all trees and snags are measured
+#  - Plots are either count plots, where trees aren't measured, or measure plots, where all trees and snags are measured
 #    for DBH and a subset measured for height. Thus, all stems with heights (TotalHt if unbroke, Ht2 if broken) are 
 #    also have DBH measurements.
 #  - Trees are on CO (count) and IP (measure) plots. Count plots are variable radius and count trees by species. 
@@ -1694,41 +1694,82 @@ if (htDiaOptions$includeInvestigatory)
 
   # check plots for calculated stand-level quantities: BA, TPH, QMD, H100
   standsFromTrees2016 = trees2016 %>% group_by(StandID) %>%
-    summarize(plots = plotsInStand[1], measurePlots = measurePlotsInStand[1], meanTreesPerBafPlot = meanTreesPerBafPlot[1], meanTreesPerBafMeasurePlot = meanTreesPerBafMeasurePlot[1],
+    summarize(isPlantation = isPlantation[1], standArea = standArea[1], standAge2016 = standAge2016[1],
+              plots = plotsInStand[1], measurePlots = measurePlotsInStand[1], meanTreesPerBafPlot = meanTreesPerBafPlot[1], meanTreesPerBafMeasurePlot = meanTreesPerBafMeasurePlot[1],
               tph = tph[1], topHeight = topHeight[1], standBasalAreaPerHectare = standBasalAreaPerHectare[1], standBasalAreaApprox = standBasalAreaApprox[1],
-              qmd = sqrt(standBasalAreaPerHectare / (pi / (4 * 100^2) * tph)))
+              qmd = sqrt(standBasalAreaPerHectare / (pi / (4 * 100^2) * tph)),
+              sdi = tph * (qmd/25)^1.605, sdisum = sum(isLive * meanTreesPerBafPlot / (meanTreesPerBafMeasurePlot * measurePlotsInStand) * measureTreeTphContribution * (DBH / 25)^1.605, na.rm = TRUE))
   standsFromTrees2016 %>% summarise(stands = n(), plotsOK = sum(measurePlots <= plots), trees = sum(is.na(meanTreesPerBafPlot) == FALSE), measureTrees = sum(is.na(meanTreesPerBafMeasurePlot) == FALSE),
                                     topHeight = sum(is.na(topHeight) == FALSE), basalArea = sum(is.na(standBasalAreaPerHectare) == FALSE), basalAreaApprox = sum(is.na(standBasalAreaApprox) == FALSE))
-  reinekeSdi = crossing(sdi = c(100 * seq(1, 9), 1000 * seq(1, 10)),
-                        tph = c(1, 10000)) %>%
-    mutate(qmd = 25.4 * (sdi/tph)^(1/1.605)) # sdi = tph * (qmd/25.4)^1.605 => (sdi/tph)^(1/1.605) = (qmd/25.4)
+  standsFromTrees2016 %>% filter(standBasalAreaPerHectare > 30, standAge2016 < 10)
+  reinekeSdi = crossing(sdi = c(10 * seq(1, 9), 100 * seq(1, 9), 1000 * seq(1, 2)),
+                        tph = c(1, 5000, 10000)) %>%
+    mutate(qmd = 25 * (sdi/tph)^(1/1.605)) # sdi = tph * (qmd/25.4)^1.605 => (sdi/tph)^(1/1.605) = (qmd/25.4)
   ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 100, yend = 100), color = "grey80", linewidth = 0.3, linetype = "longdash") +
-    geom_point(aes(x = plots, y = measurePlots), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
+    geom_point(aes(x = plots, y = measurePlots, color = isPlantation), standsFromTrees2016, alpha = 0.2, shape = 16) +
     coord_cartesian(xlim = c(0, 90)) +
-    labs(x = "plots", y = "measure plots") +
+    labs(x = "plots", y = "measure plots", color = NULL) +
   ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 120, yend = 120), color = "grey80", linewidth = 0.3, linetype = "longdash") +
-    geom_point(aes(x = standBasalAreaPerHectare, y = standBasalAreaApprox), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
+    geom_point(aes(x = standBasalAreaPerHectare, y = standBasalAreaApprox, color = isPlantation), standsFromTrees2016, alpha = 0.2, shape = 16) +
     coord_cartesian(xlim = c(0, 120)) +
-    labs(x = bquote("basal area, m"^2*" ha"^-1), y = bquote("approximate basal area, m"^2*" ha"^-1)) +
+    labs(x = bquote("basal area, m"^2*" ha"^-1), y = bquote("approximate basal area, m"^2*" ha"^-1), color = NULL) +
   ggplot() +
     geom_segment(aes(x = 0, y = 0, xend = 10, yend = 10), color = "grey80", linewidth = 0.3, linetype = "longdash") +
-    geom_point(aes(x = meanTreesPerBafPlot, y = meanTreesPerBafMeasurePlot), standsFromTrees2016, alpha = 0.2, color = "grey25", shape = 16) +
+    geom_point(aes(x = meanTreesPerBafPlot, y = meanTreesPerBafMeasurePlot, color = isPlantation), standsFromTrees2016, alpha = 0.2, shape = 16) +
     #coord_cartesian(xlim = c(0, 120)) +
-    labs(x = "mean trees per BAF plot", y = "mean trees per BAF measure plot") +
+    labs(x = "mean trees per BAF plot", y = "mean trees per BAF measure plot", color = NULL) +
   ggplot() +
     geom_line(aes(x = tph, y = qmd, group = sdi), reinekeSdi, color = "grey80", linewidth = 0.3, linetype = "longdash") +
-    geom_point(aes(x = tph, y = qmd), standsFromTrees2016, alpha = 0.5, shape = 16) +
+    geom_point(aes(x = tph, y = qmd, color = isPlantation), standsFromTrees2016, alpha = 0.2, shape = 16) +
     coord_cartesian(xlim = c(50, 5000), ylim = c(5, 95)) +
-    labs(x = "TPH", y = "QMD, cm") +
+    labs(x = "TPH", y = "QMD, cm", color = NULL) +
     scale_x_log10(breaks = c(50, 100, 200, 500, 1000, 5000), minor_breaks = c(60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 2000, 3000, 4000, 6000, 7000)) +
     scale_y_log10(breaks = c(5, 10, 20, 50, 100), minor_breaks = c(6, 7, 8, 9, 30, 40, 60, 70, 80, 90)) +
   ggplot() +
-    geom_histogram(aes(y = topHeight), standsFromTrees2016, binwidth = 2) +
-    labs(x = "stands", y = bquote("H"[100]*", m")) +
+    geom_histogram(aes(y = topHeight, fill = isPlantation, group = isPlantation), standsFromTrees2016, alpha = 0.7, binwidth = 1) +
+    labs(x = "stands", y = bquote("H"[100]*", m"), fill = NULL) +
   plot_annotation(theme = theme(plot.margin = margin())) +
-  plot_layout(nrow = 2, ncol = 3)
+  plot_layout(nrow = 2, ncol = 3, guides = "collect") &
+    guides(color = guide_legend(override.aes = list(alpha = 0.7)), fill = "none") &
+    scale_color_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c("forestgreen", "blue")) &
+    scale_fill_manual(breaks = c(FALSE, TRUE), labels = c("natural regeneration", "plantation"), values = c("forestgreen", "blue"))
+
+  # stand density comparison
+  ggplot() +
+    geom_segment(aes(x = 70, y = 0, xend = 70, yend = 106.5), color = "grey80", linetype = "longdash") +
+    geom_point(aes(x = standAge2016, y = standBasalAreaPerHectare, color = isPlantation, size = standArea), standsFromTrees2016 %>% filter(StandID != 1661), alpha = 0.2, shape = 16) + # 1661's age of three years is wrong, possibly a typo for 30 years
+    guides(color = guide_legend(order = 1, override.aes = list(alpha = 0.7)), fill = "none") +
+    labs(x = "stand age, years", y = bquote("basal area, m"^2*" ha"^-1), color = "stand type", size = "stand area, ha", title = paste(plotLetters[1], "bimodal age distribution")) +
+    theme(axis.title.y = element_text(vjust = -2)) +
+  ggplot() +
+    geom_line(aes(x = tph, y = qmd, group = sdi), reinekeSdi, color = "grey90", linewidth = if_else(reinekeSdi$sdi %in% c(100, 1000, 10000), 0.5, 0.3), linetype = "solid") +
+    geom_point(aes(x = tph, y = qmd, color = isPlantation, size = standArea), standsFromTrees2016, alpha = 0.2, shape = 16) +
+    geom_label(aes(x = tph, y = qmd, label = if_else(sdi == 2000, paste0("SDI =\n", sdi), as.character(sdi))), reinekeSdi %>% filter(tph == 5000, sdi %in% c(1000, 2000)), color = "grey70", fill = alpha("white", 0.7), label.padding = unit(0.15, "line"), label.size = NA, size = 3.0) +
+    coord_cartesian(xlim = c(50, 5000), ylim = c(5, 95)) +
+    guides(color = guide_legend(order = 1, override.aes = list(alpha = 0.7)), fill = "none") +
+    labs(x = "trees per hectare", y = "quadratic mean diameter, cm", color = "stand type", size = "stand area, ha", title = paste(plotLetters[2], "Reinecke stand density index (SDI)")) +
+    scale_x_log10(breaks = c(50, 100, 200, 500, 1000, 2000, 5000), minor_breaks = c(60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 3000, 4000, 6000, 7000)) +
+    scale_y_log10(breaks = c(5, 10, 20, 50, 100), minor_breaks = c(6, 7, 8, 9, 30, 40, 60, 70, 80, 90)) +
+  #ggplot() +
+  #  geom_histogram(aes(x = standBasalAreaPerHectare, fill = isPlantation, group = isPlantation, weight = standArea), standsFromTrees2016, alpha = 0.7, binwidth = 3) +
+  #  labs(x = bquote("basal area, m"^2*" ha"^-1), y = "area of cruised stands, ha", fill = NULL) +
+  #  scale_x_continuous(breaks = seq(0, 125, by = 20)) +
+  ggplot() +
+    geom_segment(aes(x = 0, y = 0, xend = 2000, yend = 2000), color = "grey90", linewidth = 0.5) +
+    geom_point(aes(x = sdi, y = sdisum, color = isPlantation, size = standArea), standsFromTrees2016, alpha = 0.2, shape = 16) +
+    coord_equal(xlim = c(0, 1750), ylim = c(0, 1750)) +
+    guides(color = "none", size = "none") + # patchwork 1.3.0 fails to collect
+    labs(x = "Reinecke stand density index", y = bquote("SDI"[sum]), color = "stand type", size = "stand area, ha", title = paste("                                         ", plotLetters[3], "multi-age stand density")) +
+    theme(plot.title.position = "panel") +
+  plot_annotation(theme = theme(plot.margin = margin())) +
+  plot_layout(design = "AB\nCC", guides = "collect") &
+    scale_color_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation"), values = c("forestgreen", "blue")) &
+    scale_fill_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation"), values = c("forestgreen", "blue")) &
+    scale_size_continuous(breaks = c(5, 50, 140)) &
+    theme(legend.spacing.y = unit(1, "line"))
+  #ggsave("trees/height-diameter/figures/Figure S05 stand density.png", height = 17, width = 20, units = "cm", dpi = figureDpi)
 
   # check plots for tree-level properties derived from stand-level properties
   ggplot() +
@@ -2120,7 +2161,7 @@ if (htDiaOptions$includeInvestigatory)
   
   reinekeSdi = crossing(sdi = c(100 * seq(1, 9), 1000 * seq(1, 9), 10000),
                         tph = c(1, 10000)) %>%
-    mutate(qmd = 25.4 * (sdi/tph)^(1/1.605)) # sdi = tph * (qmd/25.4)^1.605 => (sdi/tph)^(1/1.605) = (qmd/25.4)
+    mutate(qmd = 25 * (sdi/tph)^(1/1.605)) # sdi = tph * (qmd/25.4)^1.605 => (sdi/tph)^(1/1.605) = (qmd/25.4)
   
   # Reineke SDI
   ggplot() +

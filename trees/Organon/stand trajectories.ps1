@@ -20,7 +20,7 @@ Write-TreeList -Trajectories $standTrajectories -StartYear 2016 -FilePath ([Syst
 
 # cruised plantations: LEV maximization
 $plantations = Get-CruisedStands -Model OrganonSWO -TreesSheet "plantationTrees" -Xlsx ([System.IO.Path]::Combine((Get-Location), "Elliott Organon cruise records 2015-16 v2.xlsx"))
-$thinAges = (-1, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80)
+$thinAges = (-1, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85)
 $rotationAges = (35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105, 110, 115, 120, 125)
 
 $allTrajectories = New-Object "System.Collections.Generic.List[Mars.Seem.Heuristics.HeuristicStandTrajectories[Mars.Seem.Heuristics.PrescriptionParameters]]"
@@ -42,13 +42,13 @@ for ($standIndex = 0; $standIndex -lt $plantations.Stands.Count; ++$standIndex)
 	}
 	
     Write-Host "Stand $($plantations.Stands[$standIndex].Name)..."
-    $standTrajectories = Optimize-Prescription -Stand $stand -Financial $financial -TreeModel $plantations.OrganonVariant.TreeModel -Enumerate -FirstThinAge $thinAges -RotationAge $rotationAges -FromAbovePercentageUpperLimit 0 -FromBelowPercentageUpperLimit 40 -MinimumIntensity 10 -MaximumIntensity 45 -DefaultStep 5 -MinimumStep 2.5
+    $standTrajectories = Optimize-Prescription -Stand $stand -Financial $financial -TreeModel $plantations.OrganonVariant.TreeModel -Enumerate -FirstThinAge $thinAges -RotationAge $rotationAges -FromAbovePercentageUpperLimit 0 -FromBelowPercentageUpperLimit 50 -MinimumIntensity 10 -MaximumIntensity 50 -DefaultStep 5 -MinimumStep 1.25
     $allTrajectories.Add($standTrajectories)
 }
 
-# TODO: .feather size is misestimated at 11 GB instead of 2 GB
-Write-SilviculturalTrajectories -Trajectories $allTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott intensive prescriptions max LEV.feather")) -NoCarbon
-#Write-SilviculturalTrajectories -Trajectories $allTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott intensive prescriptions max LEV.csv")) -NoCarbon
+# TODO: .feather size is misestimated at 30 GB instead of 4.1 GB
+Write-SilviculturalTrajectories -LimitGB 30 -Trajectories $allTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott plantation prescriptions max LEV.feather")) -NoCarbon
+#Write-SilviculturalTrajectories -Trajectories $allTrajectories -StartYear 2016 -FilePath ([System.IO.Path]::Combine((Get-Location), "Elliott plantation prescriptions max LEV.csv")) -NoCarbon
 
 # cruised plantations: NPV maximization
 $allTrajectories = New-Object "System.Collections.Generic.List[Mars.Seem.Heuristics.HeuristicStandTrajectories[Mars.Seem.Heuristics.PrescriptionParameters]]"

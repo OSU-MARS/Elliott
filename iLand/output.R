@@ -39,7 +39,7 @@ Sys.time() - featherReadStart
 # Reineke stand density diagrams by resource unit and stand (with workaround for https://github.com/tidyverse/ggplot2/issues/4935)
 logBreaks = c(1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000, 4000)
 logMinorBreaks = c(4, 6, 7, 8, 9, 40, 60, 70, 80, 90, 300, 400, 600, 700, 800, 900, 2000, 3000)
-sdi = crossing(tph = c(1, 1000, 4000), sdi = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000)) %>% mutate(qmd = 25.4 * (sdi / tph)^(1/1.605))
+sdi = crossing(tph = c(1, 1000, 4000), sdi = c(10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000, 1500, 2000)) %>% mutate(qmd = 25 * (sdi / tph)^(1/1.605))
 
 ggplot() +
   geom_path(aes(x = tph, y = qmd, group = sdi), sdi, color = "grey90", linetype = if_else(sdi$sdi == 1500, "longdash", "solid"), linewidth = if_else(sdi$sdi %in% c(10, 100, 1000), 0.5, 0.25)) +

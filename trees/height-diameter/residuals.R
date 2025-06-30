@@ -140,7 +140,7 @@ plot_layout(guides = "collect") &
   scale_shape_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(16, 18)) &
   scale_size_manual(breaks = c(FALSE, TRUE), labels = c("natural\nregeneration", "plantation\n(if significant)"), values = c(1.5, 1.9)) &
   theme(legend.spacing.y = unit(0.5, "line"), strip.background = element_rect(fill = "grey95"), strip.text = element_text(size = 8))
-#ggsave("trees/height-diameter/figures/Figure S04 variance model.png", height = 15, width = 22, units = "cm", dpi = 200)
+#ggsave("trees/height-diameter/figures/Figure S04 variance model.png", height = 15, width = 22, units = "cm", dpi = figureDpi)
 #ggsave("trees/height-diameter/figures/Figure S04 variance model.tif", height = 17.7, width = 22, units = "cm", dpi = 300, compression = "lzw+p")
 ggsave("trees/height-diameter/figures/Figure S04 variance model.pdf", height = 17.7, width = 22, units = "cm", dpi = figureDpi, device = cairo_pdf, fallback_resolution = figureDpi)
 
