@@ -291,7 +291,6 @@ fit_gam = function(name, formula, data, constraint = c(), family = gaussian(), f
     }
   }
   
-  # use map() instead of future_map() since GAM constraints fail to flow with future_map()
   splitsAndFits = vfold_cv(data, v = folds, repeats = repetitions) %>% mutate(fit = future_map(splits, fitFunction, .options = furrr_options(seed = TRUE)))
   return(get_cross_validation_return_value(splitsAndFits, returnModel))
 }
@@ -440,7 +439,7 @@ fit_lm = function(name, formula, data, folds = htDiaOptions$folds, repetitions =
     if ((folds == 1) & (repetitions == 1))
     {
       startFit = Sys.time()
-      allFit = lm(formula = formula, data = data, weights = dbhWeight)
+      allFit = lm(formula = formula, data = data, offset = breastHeight, weights = dbhWeight)
       allFitStats = get_height_stats(name = name, model = allFit, trainingData = data, validationData = data, significant = significant, tDegreesOfFreedom = tDegreesOfFreedom)
       allFitStats$fitTimeInS = get_elapsed_time(startFit)
       progressBar()
@@ -717,11 +716,13 @@ get_dbh_stats = function(name, model, trainingData, validationData, validationWe
   nObservations = sum(trainingData$TreeCount)
   if (is(model, "gam"))
   {
-    effectiveDegreesOfFreedom = sum(model$edf) + 1 # for GAMs use indicated effective degrees of freedom
+    effectiveDegreesOfFreedom = sum(model$edf) # for GAMs use indicated effective degrees of freedom
   } else if(is(model, "gamm")) {
-    effectiveDegreesOfFreedom = sum(model$gam$edf) + 1 # gamm effective degrees of freedom include random effect degrees of freedom from s(bs = "re) but not from random = list()
+    effectiveDegreesOfFreedom = sum(model$gam$edf) # gamm effective degrees of freedom include random effect degrees of freedom from s(bs = "re) but not from random = list()
+  } else if (is(model, "nlme")) {
+    effectiveDegreesOfFreedom = length(fixed.effects(model)) + length(random.effects(model))
   } else {
-    effectiveDegreesOfFreedom = length(coef(model)) + 1 # for linear and nonlinear regressions assume one degree of freedom per model parameter, coef(nlme()) is data.frame with length() returning the number of columns
+    effectiveDegreesOfFreedom = length(coef(model)) # for linear and nonlinear regressions assume one degree of freedom per model parameter, coef(nlme()) is data.frame with length() returning the number of columns
   }
   residualDegreesOfFreedom = nObservations - effectiveDegreesOfFreedom # gamm() and nlme() don't implement df.residual(model), simplest just to calculate it here
   
@@ -858,12 +859,13 @@ get_height_stats = function(name, model, trainingData, validationData, validatio
   nObservations = sum(trainingData$TreeCount)
   if (is(model, "gam"))
   {
-    effectiveDegreesOfFreedom = sum(model$edf) + 1
-  } else if (is(model, "gamm"))
-  {
-    effectiveDegreesOfFreedom = sum(model$gam$edf) + 1
+    effectiveDegreesOfFreedom = sum(model$edf)
+  } else if (is(model, "gamm")) {
+    effectiveDegreesOfFreedom = sum(model$gam$edf)
+  } else if (is(model, "nlme")) {
+    effectiveDegreesOfFreedom = length(fixed.effects(model)) + length(random.effects(model))
   } else {
-    effectiveDegreesOfFreedom = length(coef(model)) + 1
+    effectiveDegreesOfFreedom = length(coef(model))
   }
   residualDegreesOfFreedom = nObservations - effectiveDegreesOfFreedom
   
@@ -1327,7 +1329,7 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
         new_scale_fill() +
         geom_raster(aes(x = species, y = name, fill = as.factor(if_else(is.na(aucMae), NA_real_, significant))), aucs) +
         scale_fill_manual(breaks = c(1, 0, NA), labels = c("", "not\nsignificant", "fitting did not\nconverge"), values = c("transparent", "grey70", "red2"), guide = guide_legend(order = 2)) +
-        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMabRank <= 2, aucMabRank <= 2)), fill = "transparent") +
+        geom_tile(aes(x = species, y = name, color = as.factor(isBaseForm), linewidth = isBaseForm), aucs %>% filter(if_else(isBaseForm, aucMaeRank <= 2, aucMaeRank <= 2)), fill = "transparent") +
         labs(title = bquote(.(plotLetters[1])~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         #labs(title = bquote(bold(.(plotLetters[1]))~"MAE"), x = NULL, y = NULL, color = NULL, fill = NULL) +
         scale_y_discrete(limits = rev)

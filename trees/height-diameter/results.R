@@ -709,8 +709,8 @@ ggplot(predictorVariableResults %>% filter(responseVariable == "DBH", hasRelHt))
   scale_y_discrete(labels = NULL, limits = rev(levels(predictorVariableResults$species))) +
 plot_annotation(theme = theme(plot.margin = margin())) +
 plot_layout(nrow = 2, ncol = 6, widths = c(1.7, 1.7, 2.2, 1.7, 2.7, 1.2), guides = "collect") &
-  scale_color_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults$species), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
-  scale_fill_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65")) &
+  scale_color_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults$species), values = speciesGroupColors) &
+  scale_fill_manual(breaks = levels(predictorVariableStats$species), limits = levels(predictorVariableResults), values = speciesGroupColors) &
   scale_size_area(max_size = 4.5) & # 4.5 for Cairo .pdf, 5.0 for .tif
   theme(legend.position = "none")
 #ggsave("trees/height-diameter/figures/Figure 05 predictor variables.png", height = 10, width = 20, units = "cm", dpi = 150)

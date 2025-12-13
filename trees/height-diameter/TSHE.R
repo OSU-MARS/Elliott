@@ -1,4 +1,4 @@
-# load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
+# load libraries, functions, and trees2016 from setup.R
 
 ## western hemlock height-diameter regression form sweep
 tshe2016 = trees2016 %>% filter(Species == "WH", isLiveUnbroken, is.na(TotalHt) == FALSE) %>% # live western hemlocks measured for height
@@ -311,7 +311,7 @@ if (tsheOptions$fitDbh)
   tsheDiameterFromHeight$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2*(TotalHt - 1.37)), tshe2016physio, start = list(a1 = 2.4, a5 = 0.6, b1 = 0.75, b2 = 0.013)) # a1p, a4, a5, a6, a7, a8, b1p, b2p not significant
   tsheDiameterFromHeight$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), tshe2016, start = list(a1 = 2.7, a9 = 1.0, b1 = 0.74, b1p = -0.033, b2 = 0.01)) # a9p, b2p not significant
   tsheDiameterFromHeight$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope) + a9*relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2*(TotalHt - 1.37)), tshe2016physio, start = list(a1 = 2.4, a5 = 0.65, a9 = 0.5, b1 = 0.7, b2 = 0.012))
-  #tsheDiameterFromHeight$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), tshe2016, start = list(a1 = 0.00108, a2 = 0.058, b1 = 0.96, Ha = 32)) # converges from red alder values but fails to reconverge (singular gradient), NaN-inf or singular gradient with fit_gsl_nls()
+  #tsheDiameterFromHeight$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.37^b1)), tshe2016, start = list(a1 = 0.00108, a2 = 0.058, b1 = 0.96, Ha = 32)) # converges from red alder values but fails to reconverge (singular gradient), NaN-inf or singular gradient with fit_gsl_nls()
   tsheDiameterFromHeight$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, tshe2016, start = list(a1 = 30, b1 = 0.5, b2 = 0.003, b3 = 0.4, b4 = 0.9), control = gsl_nls_control(maxiter = 250, xtol = 0.03)) # a1-b1 evaporation
   tsheDiameterFromHeight$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016, start = list(a1 = 2.32, b1 = 0.750, b2 = 0.057)) # no significant plantation effects
   tsheDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016, start = list(a1 = 2.7, a2 = -0.009, b1 = 0.6, b2 = 0.12)) # no significant plantation effects
@@ -380,7 +380,7 @@ if (tsheOptions$fitDbh)
   tsheDiameterFromHeightGslNlsDefault$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^b1 * exp(b2*(TotalHt - 1.37)), tshe2016defaultWeightPhysio, start = list(a1 = 2.4, a5 = 0.6, b1 = 0.75, b2 = 0.013))
   tsheDiameterFromHeightGslNlsDefault$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9*relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), tshe2016defaultWeight, start = list(a1 = 2.0, a9 = 1.1, b1 = 0.90, b1p = -0.033, b2 = 0)) # b2 not significant
   tsheDiameterFromHeightGslNlsDefault$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope) + a9*relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2*(TotalHt - 1.37)), tshe2016defaultWeightPhysio, start = list(a1 = 1.8, a5 = 0.49, a9 = 0.4, b1 = 0.87, b2 = 0.01))
-  #tsheDiameterFromHeightGslNlsDefault$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), tshe2016defaultWeight, start = list(a1 = 0.00108, a2 = 0.058, b1 = 0.96, Ha = 32))
+  #tsheDiameterFromHeightGslNlsDefault$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.37^b1)), tshe2016defaultWeight, start = list(a1 = 0.00108, a2 = 0.058, b1 = 0.96, Ha = 32))
   tsheDiameterFromHeightGslNlsDefault$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, tshe2016defaultWeight, start = list(a1 = 45, b1 = 0.25, b2 = 0.01, b3 = -0.03, b4 = 0.67), control = gsl_nls_control(maxiter = 250, xtol = 0.03))
   tsheDiameterFromHeightGslNlsDefault$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016defaultWeight, start = list(a1 = 2.32, b1 = 0.750, b2 = 0.057))
   tsheDiameterFromHeightGslNlsDefault$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), tshe2016defaultWeight, start = list(a1 = 2.3, a2 = -0.01, b1 = 0.74, b2 = 0.05))
@@ -507,7 +507,7 @@ if (tsheOptions$fitDbhMixed)
   tsheDiameterFromHeightMixed$ruarkRelHtPhysio = fit_nlme("Ruark RelHt physio", DBH ~ (a1 + a1r + a5 * sin(3.14159/180 * slope) + a9*relativeHeight)*(TotalHt - 1.37)^b1 * exp(b2*(TotalHt - 1.37)), tshe2016physio,
                                                           fixedFormula = a1 + a5 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1,
                                                           start = list(fixed = c(a1 = 2.4, a5 = 0.65, a9 = 0.5, b1 = 0.7, b2 = 0.012)))
-  #tsheDiameterFromHeightMixed$schnute = fit_nlme("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/((Ha + Har)^b1 - 1.3^b1)), tshe2016, 
+  #tsheDiameterFromHeightMixed$schnute = fit_nlme("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/((Ha + Har)^b1 - 1.37^b1)), tshe2016, 
   #                                               fixedFormula = a1 + a2 + b1 + Ha ~ 1, randomFormula = Har ~ 1,
   #                                               start = list(fixed = c(a1 = 0.00108, a2 = 0.058, b1 = 0.96, Ha = 32)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
   #tsheDiameterFromHeightMixed$sharmaParton = fit_nlme("modified Sharma-Parton", DBH ~ (a1 + a1r) * (TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, tshe2016, 

@@ -1,4 +1,4 @@
-# load libraries, functions, and trees2016 from Elliott Stand Data Feb2022.R
+# load libraries, functions, and trees2016 from setup.R
 
 ## bigleaf maple height-diameter regression form sweep
 acma2016 = trees2016 %>% filter(Species == "BM", isLiveUnbroken, is.na(TotalHt) == FALSE) %>% # live bigleaf maples measured for height
@@ -311,7 +311,7 @@ if (acmaOptions$fitDbh)
   acmaDiameterFromHeight$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a7 * sin(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.2, a7 = -0.055, b1 = 1.45, b1p = -0.064, b2 = 0.03), significant = FALSE) # a1p, a4, a5, a6, a7, a8 not significant, b1p-b2p not mutually significant
   acmaDiameterFromHeight$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.4, a9 = 0, b1 = 1.45, b1p = -0.3, b2 = -0.03), significant = FALSE) # a9, a9p not significant, b1p-b2p not mutually significant
   acmaDiameterFromHeight$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a7 * sin(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.2, a7 = -0.06, a9 = 0, b1 = 1.45, b1p = -0.064, b2 = 0.03), significant = FALSE)
-  acmaDiameterFromHeight$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161))
+  acmaDiameterFromHeight$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.37^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161))
   acmaDiameterFromHeight$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, acma2016, start = list(a1 = 0.29, b1 = 1.14, b2 = 0.00001, b3 = 0.8, b4 = -0.2), control = gsl_nls_control(maxiter = 500, xtol = 0.002)) # NaN-inf from nls() at nls_multstart() positions, NaN-inf or code error with nlrob()
   acmaDiameterFromHeight$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 6, b1 = 2, b2 = -0.13)) # no significant plantation effects
   acmaDiameterFromHeight$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.5, a2 = 0, b1 = 2.2, b2 = -0.13), significant = FALSE) # a2 not significant
@@ -346,7 +346,7 @@ if (acmaOptions$fitDbh)
     acmaDiameterFromHeightNlrob$ruarkRelHt = fit_nlrob("Ruark RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.2, a9 = 0, b1 = 1.45, b1p = -0.1, b2 = -0.03), control = nls.control(maxiter = 100, tol = 0.001), significant = FALSE) # job step factor
     acmaDiameterFromHeightNlrob$ruarkRelHtPhysio = fit_nlrob("Ruark RelHt physio", DBH ~ (a1 + a7 * sin(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.2, a7 = -0.05, a9 = 0, b1 = 1.47, b1p = -0.081, b2 = 0.03), control = nls.control(maxiter = 100, tol = 0.01), significant = FALSE) # job step factor
     #acmaDiameterFromHeightNlrob$sharmaParton = fit_nlrob("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, acma2016, start = list(a1 = 3.3, b1 = 0.9, b2 = 0.001, b3 = 1, b4 = 0.5), control = nls.control(maxiter = 100, tol = 0.1)) # always step factor
-    #acmaDiameterFromHeightNlrob$schnute = fit_nlrob("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161)) # always step factor
+    #acmaDiameterFromHeightNlrob$schnute = fit_nlrob("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.37^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161)) # always step factor
     acmaDiameterFromHeightNlrob$sibbesenReplace = fit_nlrob("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 6, b1 = 2, b2 = -0.13))
     acmaDiameterFromHeightNlrob$sibbesenReplaceAbat = fit_nlrob("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.6, a2 = 0.0007, b1 = 2.2, b2 = -0.1), control = nls.control(maxiter = 100, tol = 1E-4), significant = FALSE) # job step factor
     acmaDiameterFromHeightNlrob$sibbesenReplaceAbatPhysio = fit_nlrob("Sibbesen replace ABA+T physio", DBH ~ (a1 + a2 * tallerApproxBasalArea + a5 * sin(3.14159/180 * slope))*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation)), acma2016, start = list(a1 = 0.4, a2 = -0.002, a5 = -0.10, b1 = 2.9, b2 = -0.18, b2p = -0.024), significant = FALSE)
@@ -381,7 +381,7 @@ if (acmaOptions$fitDbh)
   acmaDiameterFromHeightGslNlsDefault$ruarkPhysio = fit_gsl_nls("Ruark physio", DBH ~ (a1 + a7 * sin(3.14159/180 * aspect))*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.2, a7 = -0.055, b1 = 1.45, b1p = -0.064, b2 = 0.03), significant = FALSE)
   acmaDiameterFromHeightGslNlsDefault$ruarkRelHt = fit_gsl_nls("Ruark RelHt", DBH ~ (a1 + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016, start = list(a1 = 1.4, a9 = 0, b1 = 1.45, b1p = -0.3, b2 = -0.03), significant = FALSE)
   acmaDiameterFromHeightGslNlsDefault$ruarkRelHtPhysio = fit_gsl_nls("Ruark RelHt physio", DBH ~ (a1 + a7 * sin(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016defaultWeightPhysio, start = list(a1 = 1.2, a7 = -0.06, a9 = 0, b1 = 1.45, b1p = -0.07, b2 = 0.03), significant = FALSE)
-  acmaDiameterFromHeightGslNlsDefault$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.3^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161))
+  acmaDiameterFromHeightGslNlsDefault$schnute = fit_gsl_nls("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/(Ha^b1 - 1.37^b1)), acma2016, start = list(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161))
   acmaDiameterFromHeightGslNlsDefault$sharmaParton = fit_gsl_nls("modified Sharma-Parton", DBH ~ a1*(TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, acma2016, start = list(a1 = 0.6, b1 = 1.1, b2 = 0.00001, b3 = 1.2, b4 = -0.14), control = gsl_nls_control(maxiter = 500, xtol = 0.01)) # NaN-inf, b2 collapse to zero
   acmaDiameterFromHeightGslNlsDefault$sibbesenReplace = fit_gsl_nls("Sibbesen replace", DBH ~ a1*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 6, b1 = 2, b2 = -0.13))
   acmaDiameterFromHeightGslNlsDefault$sibbesenReplaceAbat = fit_gsl_nls("Sibbesen replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), acma2016, start = list(a1 = 0.5, a2 = 0, b1 = 2.4, b2 = -0.13), significant = FALSE)
@@ -509,7 +509,7 @@ if (acmaOptions$fitDbhMixed)
   acmaDiameterFromHeightMixed$ruarkRelHtPhysio = fit_nlme("Ruark RelHt physio", DBH ~ (a1 + a1r + a7 * sin(3.14159/180 * aspect) + a9 * relativeHeight)*(TotalHt - 1.37)^(b1 + b1p * isPlantation) * exp(b2 * (TotalHt - 1.37)), acma2016,
                                                           fixedFormula = a1 + a7 + a9 + b1 + b1p + b2 ~ 1, randomFormula = a1r ~ 1,
                                                           start = list(fixed = c(a1 = 1.2, a7 = -0.06, a9 = 0, b1 = 1.45, b1p = -0.064, b2 = 0.03)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
-  #acmaDiameterFromHeightMixed$schnute = fit_nlme("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/((Ha + Har)^b1 - 1.3^b1)), acma2016, 
+  #acmaDiameterFromHeightMixed$schnute = fit_nlme("Schnute inverse", DBH ~ -1/a1 * log(1 - (1 - exp(-a2))*(TotalHt^b1 - 1.37^b1)/((Ha + Har)^b1 - 1.37^b1)), acma2016, 
   #                                               fixedFormula = a1 + a2 + b1 + Ha ~ 1, randomFormula = Har ~ 1,
   #                                               start = list(fixed = c(a1 = 0.000003, a2 = 0.002, b1 = 1.13, Ha = 161)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
   #acmaDiameterFromHeightMixed$sharmaParton = fit_nlme("modified Sharma-Parton", DBH ~ (a1 + a1r) * (TotalHt - 1.37)^b1*(exp(b2*(tph/topHeight)^b3*(TotalHt - 1.37)) - 1)^b4, acma2016, 
@@ -663,7 +663,7 @@ if (htDiaOptions$includeInvestigatory)
 ## GAM smooth effects
 if (htDiaOptions$includeInvestigatory)
 {
-  umcaHeightGam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint) + 
+  acmaHeightGam = fit_gam("REML GAM", TotalHt ~ s(DBH, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint) + 
                             s(standBasalAreaPerHectare, bs = "ts", by = as.factor(isPlantation), k = 5, pc = gamConstraint) + 
                             #s(basalAreaLarger, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint) + # not significant
                             s(elevation, bs = "ts", k = 5, pc = gamConstraint) + 
@@ -671,13 +671,13 @@ if (htDiaOptions$includeInvestigatory)
                             #s(aspect, bs = "ts", k = 3, pc = gamConstraint) + # not significant
                             #s(topographicShelterIndex, bs = "ts", k = 4, pc = gamConstraint) + # not significant
                             s(relativeDiameter, bs = "ts", by = as.factor(isPlantation), k = 4, pc = gamConstraint), 
-                          data = umca2016physio, constraint = umca2016gamConstraint, folds = 1, repetitions = 1)
-  k.check(umcaHeightGam)
-  summary(umcaHeightGam)
+                          data = acma2016physio, constraint = acma2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(acmaHeightGam)
+  summary(acmaHeightGam)
   par(mfrow = c(2, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
-  plot.gam(umcaHeightGam, scale = 0)
+  plot.gam(acmaHeightGam, scale = 0)
   
-  umcaDbhGam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint) +
+  acmaDbhGam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint) +
                          s(standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 4, pc = gamConstraint),
                          #s(tallerApproxBasalArea, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint) + # not significant
                          #s(elevation, bs = "ts", k = 3, pc = gamConstraint) + # not significant
@@ -685,11 +685,11 @@ if (htDiaOptions$includeInvestigatory)
                          #s(aspect, bs = "ts", k = 3, pc = gamConstraint), # not significant
                          #s(topographicShelterIndex, bs = "ts", k = 3, pc = gamConstraint), # not significant
                          #s(relativeHeight, bs = "ts", by = as.factor(isPlantation), k = 3, pc = gamConstraint), # not significant
-                       data = umca2016physio, constraint = umca2016gamConstraint, folds = 1, repetitions = 1)
-  k.check(umcaDbhGam)
-  summary(umcaDbhGam)
+                       data = acma2016physio, constraint = acma2016gamConstraint, folds = 1, repetitions = 1)
+  k.check(acmaDbhGam)
+  summary(acmaDbhGam)
   par(mfrow = c(1, 4), mar = c(2.2, 2.2, 0.5, 0) + 0.1, mgp = c(1.5, 0.4, 0))
-  plot.gam(umcaDbhGam, scale = 0)
+  plot.gam(acmaDbhGam, scale = 0)
 }
 
 
