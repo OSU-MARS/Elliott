@@ -80,7 +80,7 @@ heightHistogram %>% group_by(bufferDistance, category) %>% summarise(trees = sum
 tileCounts %>% select(-starts_with("height"), -treetopQuad) %>% group_by(bufferDistance) %>% summarize(across(-tile, sum)) %>% 
   mutate(tileArea = if_else(bufferDistance == 0, 510 * tileStatOptions$tileArea, 51 * tileStatOptions$tileArea),
          treetopsPerHectare = treetops / tileArea)
-tileCounts %>% filter(tile %in% c("s04200w06840", "s04200w06810", "s04230w06810"))
+tileCounts %>% filter(tile %in% c("s04200w06840", "s04200w06810", "s04230w06810", "s04230w06840"))
 
 ggplot() +
   geom_histogram(aes(x = localMaxima, fill = bufferDistance, group = bufferDistance), tileCounts, binwidth = 10000) +

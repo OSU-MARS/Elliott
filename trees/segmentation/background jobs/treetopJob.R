@@ -2,7 +2,9 @@ source("trees/segmentation/treetops.R")
 
 handlers(global = TRUE)
 handlers("cli")
-plan(multisession, workers = 0.5 * future::availableCores()) # workers mostly run single threaded in sf, so fine to also use treetopOptions$rangerThreads = half cores
+# workers mostly run single threaded in sf, so fine to also use treetopOptions$rangerThreads = half cores
+# ~1.5 GB DDR/worker average, ~3 GB peak
+plan(multisession, workers = 0.5 * future::availableCores())
 
 get_tile_by_height_class = function(tileName, tileTreetops, tileMergePoints, tileNoisePoints, tileMaybeNoisePoints = NULL)
 {
@@ -34,8 +36,8 @@ stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki sta
                           make_compound_crs(6557, 8228)) %>% # for DSM v3, keep in sync with same code in treetopJob.R
                           # st_crs(6557)) %>% # for runs against DSM v3
   select(standID2016)
-treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 458k VSURF Pde m9n3.Rds") 
-forestTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1"
+treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 617k VSURF Pde m9n4.Rds") 
+forestTreetopsPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v2"
 
 treetopStartTime = Sys.time()
 with_progress({
@@ -133,5 +135,5 @@ forestTreetops %>%
             elliottTreetops1m = sum(if_else(is.na(standID2016) | (standID2016 >= 4000), 0, treetops)),
             elliottTreetops5m = sum(if_else(is.na(standID2016) | (standID2016 >= 4000) | (heightClassInM < 5), 0, treetops)), 
             totalTreetops1m = sum(treetops), totalTreetops5m = sum(if_else(heightClassInM >= 5, treetops, 0)))
-#writexl::write_xlsx(forestTreetops, file.path(forestTreetopsPath, "standsByHeightClass.xlsx")) # 7.5 MB
-#forestTreetops %>% filter(heightClassInM > 85) %>% arrange(desc(heightClassInM))
+writexl::write_xlsx(forestTreetops, file.path(forestTreetopsPath, "standsByHeightClass.xlsx")) # 7.5 MB
+forestTreetops %>% filter(heightClassInM > 85) %>% arrange(desc(heightClassInM))

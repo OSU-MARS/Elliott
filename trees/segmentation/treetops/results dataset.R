@@ -161,21 +161,23 @@ unnest_quinary_confusion_median = function(crossValidatedAccuracy)
   return(confusionMedian)
 }
 
-acceptedTreetops46dsm = bind_rows(read_accepted_treetops(acceptedTreetopsDsmPath, "s04200w06840.gpkg"),
-                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
-                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04230w06810.gpkg"))
-acceptedTreetops46chm = bind_rows(read_accepted_treetops(acceptedTreetopsChmPath, "s04200w06840 chm.gpkg"),
-                                  read_accepted_treetops(acceptedTreetopsChmPath, "s04200w06810 chm.gpkg"),
+acceptedTreetops46dsm = bind_rows(read_accepted_treetops(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), # has vertical CRS which causes bind_rows() to fail on CRS mismatch
+                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04200w06840.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04230w06810.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsDsmPath, "s04230w06840.gpkg"))
+acceptedTreetops46chm = bind_rows(read_accepted_treetops(acceptedTreetopsChmPath, "s04200w06810 chm.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsChmPath, "s04200w06840 chm.gpkg"),
                                   read_accepted_treetops(acceptedTreetopsChmPath, "s04230w06810 chm.gpkg"))
-acceptedTreetops46cmm = bind_rows(read_accepted_treetops(acceptedTreetopsCmmPath, "s04200w06840 cmm.gpkg"),
-                                  read_accepted_treetops(acceptedTreetopsCmmPath, "s04200w06810 cmm.gpkg"),
+acceptedTreetops46cmm = bind_rows(read_accepted_treetops(acceptedTreetopsCmmPath, "s04200w06810 cmm.gpkg"),
+                                  read_accepted_treetops(acceptedTreetopsCmmPath, "s04200w06840 cmm.gpkg"),
                                   read_accepted_treetops(acceptedTreetopsCmmPath, "s04230w06810 cmm.gpkg"))
 
 
 chm46 = rast(file.path(dsmPath, "chm.vrt"))
-pointsOfInterest46 = bind_rows(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06840.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04200w06840"),
-                               st_read(file.path(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04200w06810"),
-                               st_read(file.path(acceptedTreetopsDsmPath, "s04230w06810.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04230w06810"))
+pointsOfInterest46 = bind_rows(st_read(file.path(acceptedTreetopsDsmPath, "s04200w06810.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04200w06810"),
+                               st_read(file.path(acceptedTreetopsDsmPath, "s04200w06840.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04200w06840"),
+                               st_read(file.path(acceptedTreetopsDsmPath, "s04230w06810.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04230w06810"),
+                               st_read(file.path(acceptedTreetopsDsmPath, "s04230w06840.gpkg"), layer = "points of interest", quiet = TRUE) %>% mutate(tile = "s04230w06840"))
 
 missingOrAmbiguous46dsm = pointsOfInterest46 %>% filter(notes %in% c("point cloud ambiguous", "broken top obscured by branch", "reiterated leader obscured by branch", "snag lacking observable top", "top obscured by branch", "top obscured by noise", "top obscured by snag", "tree lacking observable top"))
 missingOrAmbiguous46dsm$height = 0.3048 * terra::extract(chm46, st_coordinates(missingOrAmbiguous46dsm))[, 1] # convert to metric
