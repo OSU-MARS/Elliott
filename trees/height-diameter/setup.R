@@ -1408,12 +1408,12 @@ plot_auc_bank = function(aucs, fillLabel = "median AUC", omitMab = FALSE, xLimit
   return(aucBank)
 }
 
-plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speciesLabel = NULL, distributionLegendPositionY = 1, maxTreesMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE)
+plot_exploratory = function(treesOrSnags, titleLetters = plotLetters, speciesLabel = NULL, distributionLegendPositionY = 1, maxMeasured = 400, omitLegends = FALSE, omitQuantiles = FALSE, omitXlabels = FALSE, pctYlimits = c(-50, 150))
 {
-  dbhQuantiles = liveUnbrokenTrees %>% mutate(diameterClass = 2.5 * (ceiling(DBH / 2.5) - 0.5)) %>% group_by(diameterClass) %>%
+  dbhQuantiles = treesOrSnags %>% mutate(diameterClass = 2.5 * (ceiling(DBH / 2.5) - 0.5)) %>% group_by(diameterClass) %>%
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), height = quantile(TotalHt, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(TotalHt, na.rm = TRUE), .groups = "drop") %>%
     pivot_wider(names_from = quantiles, values_from = height)
-  heightQuantiles = liveUnbrokenTrees %>% mutate(heightClass = 1 * (ceiling(TotalHt / 1) - 0.5)) %>% group_by(heightClass) %>%
+  heightQuantiles = treesOrSnags %>% mutate(heightClass = 1 * (ceiling(TotalHt / 1) - 0.5)) %>% group_by(heightClass) %>%
     reframe(count = n(), quantiles = c("min", "q025", "q10", "q20", "q25", "q30", "q40", "median", "q60", "q70", "q75", "q80", "q90", "q975", "max"), dbh = quantile(DBH, probs = c(0, 0.025, 0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 0.975, 1), na.rm = TRUE), mean = mean(DBH, na.rm = TRUE), .groups = "drop") %>%
     pivot_wider(names_from = quantiles, values_from = dbh)
 
@@ -1435,18 +1435,20 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
   
   heightPower = 1
   dbhPower = 1
+  treesOrSnagsFillLabel = if_else(speciesLabel != "snags", "trees", "snags")
+  treesOrSnagsYlabel = if_else(speciesLabel != "snags", "height, m, of unbroken stem", "height, m")
   exploratoryPlots = ggplot() +
-    geom_bin_2d(aes(x = DBH, y = TotalHt, fill = after_stat(count), weight = TreeCount), liveUnbrokenTrees %>% filter(is.na(TotalHt) == FALSE), binwidth = c(2.5, 1)) +
-    geom_path(aes(x = diameterClass, y = mean, color = "mean height", linetype = "mean height"), dbhQuantiles %>% filter(count > 10), na.rm = TRUE) +
-    #geom_path(aes(x = diameterClass, y = median, color = "median height", linetype = "median height"), dbhQuantiles %>% filter(count > 10), na.rm = TRUE) +
-    geom_path(aes(x = mean, y = heightClass, color = "mean DBH", linetype = "mean DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
-    #geom_path(aes(x = median, y = heightClass, color = "median DBH", linetype = "median DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
+    geom_bin_2d(aes(x = DBH, y = TotalHt, fill = after_stat(count), weight = TreeCount), treesOrSnags %>% filter(is.na(TotalHt) == FALSE), binwidth = c(2.5, 1)) +
+    geom_path(aes(x = diameterClass, y = mean, color = "mean height", linetype = "mean height"), dbhQuantiles %>% filter(count > 10), linewidth = 0.5, na.rm = TRUE) +
+    #geom_path(aes(x = diameterClass, y = median, color = "median height", linetype = "median height"), dbhQuantiles %>% filter(count > 10), linewidth = 0.5, na.rm = TRUE) +
+    geom_path(aes(x = mean, y = heightClass, color = "mean DBH", linetype = "mean DBH"), heightQuantiles %>% filter(count > 10), linewidth = 0.5, na.rm = TRUE) +
+    #geom_path(aes(x = median, y = heightClass, color = "median DBH", linetype = "median DBH"), heightQuantiles %>% filter(count > 10), linewidth = 0.5, na.rm = TRUE) +
     coord_cartesian(xlim = c(0, 250), ylim = c(0, 80)) +
-    labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(.(titleLetters[1])~.(speciesLabel))) +
-    #labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(bold(.(titleLetters[1]))~.(speciesLabel))) +
+    labs(x = dbhXlabel, y = treesOrSnagsYlabel, color = NULL, fill = paste0(treesOrSnagsFillLabel, "\nmeasured"), linetype = NULL, title = bquote(.(titleLetters[1])~.(speciesLabel))) +
+    #labs(x = dbhXlabel, y = treesOrSnagsYlabel, color = NULL, fill = paste0(treesOrSnagsFillLabel, "\nmeasured"), linetype = NULL, title = bquote(bold(.(titleLetters[1]))~.(speciesLabel))) +
     guides(color = guide_legend(order = 1), fill = guide_colorbar(order = 2), linetype = guide_legend(order = 1)) +
     scale_color_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("green2", "green2", "burlywood2", "burlywood2")) +
-    scale_fill_viridis_c(breaks = c(1, 3, 10, 33, 100, 330), limits = c(1, maxTreesMeasured), trans = "log10") +
+    scale_fill_viridis_c(breaks = c(1, 3, 10, 33, 100, 330), limits = c(1, maxMeasured), trans = "log10") +
     scale_linetype_manual(breaks = c("mean height", "median height", "mean DBH", "median DBH"), labels = c("mean\nheight", "median\nheight", "mean\nDBH", "median\nDBH"), values = c("solid", "longdash", "solid", "longdash")) +
     theme(legend.key.height = unit(0.95, "line"), legend.justification = c(1, 0), legend.position = treeLegendPosition, legend.position.inside = c(1, 0.04), legend.title = element_text(size = 9.5), legend.spacing.y = unit(0.25, "line"))
   if (omitQuantiles)
@@ -1470,7 +1472,7 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
       geom_path(aes(x = diameterClass, y = 100 * (q80 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       #geom_path(aes(x = diameterClass, y = 100 * (q90 - mean) / mean^heightPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       geom_path(aes(x = diameterClass, y = 100 * (max - mean) / mean^heightPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      coord_cartesian(xlim = c(0, 196), ylim = c(-50, 150)) +
+      coord_cartesian(xlim = c(0, 196), ylim = pctYlimits) +
       scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
       scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
       scale_linetype_manual(breaks = c("10% contour", "max or min"), values = c("dashed", "dotted")) +
@@ -1492,7 +1494,7 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
       geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
       geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-      coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
+      coord_cartesian(xlim = c(0, 80), ylim = pctYlimits) +
       guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
       scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
       scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
@@ -1774,6 +1776,7 @@ if (htDiaOptions$includeInvestigatory)
   #ggsave("trees/height-diameter/figures/Figure S05 stand density.png", height = 17, width = 20, units = "cm", dpi = figureDpi)
 
   # check plots for tree-level properties derived from stand-level properties
+  yLabel = 
   ggplot() +
     geom_segment(aes(x = 1.5, y = 0, xend = 1.5, yend = 3000), color = "grey80", linewidth = 0.3, linetype = "longdash") +
     geom_histogram(aes(x = relativeHeight, fill = speciesGroup), trees2016, binwidth = 0.05, na.rm = TRUE) +
@@ -2054,24 +2057,28 @@ if (htDiaOptions$includeInvestigatory)
     scale_fill_manual(breaks = levels(trees2016$speciesGroup), limits = levels(trees2016$speciesGroup), values = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1", "firebrick", "grey65"))
 
   ## Figures A1-4: species level exploratory plots
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)")) +
   plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
   #ggsave("trees/height-diameter/figures/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
   
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxMeasured = 150, omitLegends = TRUE) /
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxMeasured = 150, distributionLegendPositionY = 0.92, plotLetters = c("d)", "e)", "f)"), ) +
   plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
   #ggsave("trees/height-diameter/figures/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
     
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
+  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxMeasured = 150, plotLetters = c("d)", "e)", "f)"), omitLegends = TRUE) +
   plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
   #ggsave("trees/height-diameter/figures/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
   plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
   #ggsave("trees/height-diameter/figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  
+  snags2016 = trees2016 %>% filter(isLive == FALSE, is.na(DBH) == FALSE, is.na(height) == FALSE)
+  plot_exploratory(snags2016, speciesLabel = "snags", titleLetters = c(plotLetters[1], "", ""), pctYlimits = c(-75, 250))
+  ggsave("trees/height-diameter/figures/Elliott snag height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)  
 }
 
 

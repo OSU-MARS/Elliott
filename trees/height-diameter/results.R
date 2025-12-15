@@ -541,8 +541,8 @@ standVariableSelection %>% group_by(responseVariable, species) %>%
 
 
 ## Figure 1: overall dataset summary
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel = "conifer", maxTreesMeasured = 170, titleLetters = c(plotLetters[1], "", ""), omitLegends = TRUE, omitXlabels = TRUE) /
-plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxTreesMeasured = 170, titleLetters = c(plotLetters[2], "", "")) +
+plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer), speciesLabel = "conifer", maxMeasured = 170, titleLetters = c(plotLetters[1], "", ""), omitLegends = TRUE, omitXlabels = TRUE) /
+plot_exploratory(trees2016 %>% filter(isLiveUnbroken, isConifer == FALSE), speciesLabel = "broadleaf", maxMeasured = 170, titleLetters = c(plotLetters[2], "", "")) +
 plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
 #ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.png", height = 13, width = 20, units = "cm", dpi = 150)
 #ggsave("trees/height-diameter/figures/Figure 01 height-diameter distribution.tif", height = 13, width = 20, units = "cm", dpi = figureDpi, compression = "lzw+p")

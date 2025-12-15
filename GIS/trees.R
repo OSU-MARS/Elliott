@@ -130,29 +130,27 @@ if (treeOptions$recalcDbh)
   load("trees/height-diameter/data/PSME preferred models.Rdata")
   rm(alruHeightFromDiameterPreferred, psmeHeightFromDiameterPreferred)
   
-  # check snag classification
+  # check snag classification threshold
   snagThreshold = 0.25
   snagFraction = (elliottTrees$BrownTree + elliottTrees$GreyTree) / (elliottTrees$Unclassified + elliottTrees$Bare + elliottTrees$BareShadow + elliottTrees$BrownTree + elliottTrees$GreyTree + elliottTrees$Conifer + elliottTrees$ConiferShadow + elliottTrees$ConiferDeepShadow + elliottTrees$Hardwood + elliottTrees$HardwoodShadow + elliottTrees$HardwoodDeepShadow)
-  tibble(livePct = 100 * sum(snagFraction < snagThreshold) / length(snagFraction))
+  tibble(snagThreshold = snagThreshold, liveTreePercentage = 100 * sum(snagFraction < snagThreshold) / length(snagFraction))
   
-  startTime = Sys.time() # 40 s 9900X @ 11.8 M trees, 5950X 25 s dplyr + prediction time (~24 seconds for three nonlinear iterations) @ 12.3 M trees
-  elliottTreesMod = left_join(st_drop_geometry(elliottTrees) %>% mutate(x = st_coordinates(elliottTrees)[, "X"],
-                                                                        y = st_coordinates(elliottTrees)[, "Y"]),
+  # predict diameters
+  # Dataset limitations mean predictions are either as Douglas-fir or as red alder, see notes below.
+  startTime = Sys.time() # 40 s 9900X @ 11.8 M trees (potentially ~3 minutes if R is slow), 5950X 25 s dplyr + prediction time (~24 seconds for three nonlinear iterations) @ 12.3 M trees
+  elliottTreesMod = left_join(elliottTrees,
                               stands2022 %>% group_by(standID2016) %>% summarize(standArea = sum(standArea), isPlantation = any(isPlantation == 1)), # recombine portions of stands with isExternalBoundarySplit = 1
                               by = join_by("standID2016")) %>% # ~1 s for join
-    # for now, simple live tree-snag separation: iLand trees are only live trees, snags go to carbon and nitrogen pools
-    # for now, trees less than iLand's shrub layer depth (4 m by default) are not converted to saplings
-    filter((BrownTree + GreyTree) / (Unclassified + Bare + BareShadow + BrownTree + GreyTree + Conifer + ConiferShadow + ConiferDeepShadow + Hardwood + HardwoodShadow + HardwoodDeepShadow) < snagThreshold) %>%
-    rename(TotalHt = height) %>% # change height to TotalHt to integrate with DBH model fits
     # for now, simple conifer-hardwood separation
-    mutate(species = factor(if_else((Conifer + 0.7 * ConiferShadow + 0.5 * ConiferDeepShadow) > (Hardwood + 0.7 * HardwoodShadow + 0.5 * HardwoodDeepShadow), "PSME", if_else(TotalHt < 53, "ALRU", "PSME")), levels = c("PSME", "ALRU", "TSHE", "ACMA", "UMCA", "THPL", "other")), # block hardwood classification above 53 m as no hardwoods taller than 50 m are present in 2015-16 Elliott cruise data
-           resourceUnitX = as.integer(x / 100), # dropped in final select
-           resourceUnitY = as.integer(y / 100),
+    mutate(classification = factor(if_else((BrownTree + GreyTree) / (Unclassified + Bare + BareShadow + BrownTree + GreyTree + Conifer + ConiferShadow + ConiferDeepShadow + Hardwood + HardwoodShadow + HardwoodDeepShadow) < snagThreshold,
+                                           if_else((Conifer + 0.7 * ConiferShadow + 0.5 * ConiferDeepShadow) > (Hardwood + 0.7 * HardwoodShadow + 0.5 * HardwoodDeepShadow), "conifer", if_else(height < 53, "hardwood", "conifer")), "snag"), # block hardwood classification above 53 m as no hardwoods taller than 50 m are present in 2015-16 Elliott cruise data
+                                     levels = c("hardwood", "conifer", "snag")),
            # for now, assume all trees lacking stand IDs are on plantations outside the current boundary of stand ID polygons
            # TODO: this is probably wrong and needs to be rechecked after outer boundary of stand polygons is snapped to the iLand simulation area
            standArea = if_else(is.na(standID2016), 41619.9 - 41095.8, standArea), # standArea will be NA if standID is NA
            isPlantation = if_else(is.na(standID2016), 1, isPlantation), # isPlantation will be NA if standID is NA
            standID2016 = replace_na(standID2016, 0)) %>% # set default stand ID
+    rename(TotalHt = height) %>% # change height to TotalHt to integrate with DBH model fits
     group_by(standID2016) %>%
     arrange(desc(TotalHt), .by_group = TRUE) %>% # put tallest detected trees first in each stand for top height calculation: currently no detection of snags or broken tops
     mutate(treeID = 1E6 * standID2016 + row_number(), # generate unique IDs within 2016 stands: permits 999,999 trees per stand (max segmented is about 432,000 after filtering) as stand ID is four positive digits (32 bit unsigned int max is 4294 967 296 => largest stand ID in .feather is 4294)
@@ -162,9 +160,9 @@ if (treeOptions$recalcDbh)
            topHeight = sum(topHeightWeight * TotalHt, na.rm = TRUE) / sum(topHeightWeight, na.rm = TRUE), # m, tallest 100 trees per hectare
            relativeHeight = TotalHt / topHeight) %>%
     select(-measureTreeTphContribution) %>%
-    group_by(species) %>%
-    mutate(dbhBootstrap = case_when(cur_group()$species == "PSME" ~ mgcv::predict.gam(psmeDiameterFromHeightPreferred$gam, pick(everything())),
-                                    cur_group()$species == "ALRU" ~ predict(alruDiameterFromHeightPreferred$ruark, pick(everything()))),
+    group_by(classification) %>%
+    mutate(dbhBootstrap = case_when(cur_group()$classification %in% c("conifer", "snag") ~ mgcv::predict.gam(psmeDiameterFromHeightPreferred$gam, pick(everything())), # as no better option is available, assume all live conifers and all snags visible in aerial imagery and aerial LiDAR are Douglas-fir
+                                    cur_group()$classification == "hardwood" ~ predict(alruDiameterFromHeightPreferred$ruark, pick(everything()))), # as no better option is available, assume all hardwoods are red alder
            # initial estimate of tree's basal area in m²
            # For now, treat basal area NAs as zero when totaling stand basal area. This is correct for trees shorter than breast height 
            # (where DBH is undefined) and prevents NAs from trees below DBH or with DBH prediction issues from propagating to entire stands.
@@ -177,10 +175,10 @@ if (treeOptions$recalcDbh)
            basalAreaAdjustmentFactor = if_else(standBasalAreaApprox <= 125, 1, 125 / standBasalAreaApprox),
            standBasalAreaApprox = basalAreaAdjustmentFactor * standBasalAreaApprox,
            tallerApproxBasalArea = basalAreaAdjustmentFactor * cumsum(lag(basalArea, default = 0)) / standArea) %>%  # basal area of taller trees in m²/ha
-    group_by(species) %>%
+    group_by(classification) %>%
     # avoid generalized GAMs due to tendency to out of range predictions
-    mutate(dbh = case_when(cur_group()$species == "PSME" ~ predict(psmeDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())),
-                           cur_group()$species == "ALRU" ~ predict(alruDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())))) %>%
+    mutate(dbh = case_when(cur_group()$classification %in% c("conifer", "snag") ~ predict(psmeDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())),
+                           cur_group()$classification == "hardwood" ~ predict(alruDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())))) %>%
            # basal areas updated below
     group_by(standID2016) %>%
     arrange(desc(TotalHt), .by_group = TRUE) %>% 
@@ -192,41 +190,46 @@ if (treeOptions$recalcDbh)
            standBasalAreaApprox = basalAreaAdjustmentFactor * standBasalAreaApprox,
            tallerApproxBasalArea = basalAreaAdjustmentFactor * cumsum(lag(basalArea, default = 0)) / standArea) %>%
     # further iteration results in small changes at most percentiles but drives the smallest <0.5% of trees to negative DBH
-    #group_by(species) %>%
-    #mutate(dbh = case_when(cur_group()$species == "PSME" ~ predict(psmeDiameterFromHeightPreferred$, pick(everything())),
-    #                       cur_group()$species == "ALRU" ~ predict(alruDiameterFromHeightPreferred$, pick(everything()))) %>%
+    #group_by(classification) %>%
+    #mutate(dbh = case_when(cur_group()$classification %in% c("conifer", "snag") ~ predict(psmeDiameterFromHeightPreferred$, pick(everything())),
+    #                       cur_group()$classification == "hardwood" ~ predict(alruDiameterFromHeightPreferred$, pick(everything()))) %>%
     #group_by(standID2016) %>%
     #mutate(standBasalAreaInitial = standBasalAreaApprox,
     #       tallerApproxBasalAreaInitial = tallerApproxBasalArea,
     #       if_else(TotalHt >= 1.37, replace_na(basalArea = pi/4 * (0.01 * dbh)^2, 0), 0),
     #       standBasalAreaApprox = 1 / 1 * sum(basalArea) / standArea,
     #       tallerApproxBasalArea = cumsum(lag(basalArea, default = 0)) / standArea) %>%
-    #group_by(species) %>%
-    #mutate(dbh2 = case_when(cur_group()$species == "PSME" ~ predict(psmeDiameterFromHeightPreferred$, pick(everything())),
-    #                        cur_group()$species == "ALRU" ~ predict(alruDiameterFromHeightPreferred$, pick(everything()))) %>%
+    #group_by(classification) %>%
+    #mutate(dbh2 = case_when(cur_group()$classification %in% c("conifer", "snag") ~ predict(psmeDiameterFromHeightPreferred$, pick(everything())),
+    #                        cur_group()$classification == "hardwood" ~ predict(alruDiameterFromHeightPreferred$, pick(everything()))) %>%
     #group_by(standID2016) %>%
     #mutate(standBasalArea2 = standBasalAreaApprox,
     #       tallerApproxBasalArea2 = tallerApproxBasalArea,
     #       if_else(TotalHt >= 1.37, replace_na(basalArea = pi/4 * (0.01 * dbh2)^2, 0), 0),
     #       standBasalAreaApprox = 1 / 1 * sum(basalArea) / standArea,
     #       tallerApproxBasalArea = cumsum(lag(basalArea, default = 0)) / standArea) %>%
-    #group_by(species) %>%
-    #mutate(dbh = case_when(cur_group()$species == "PSME" ~ predict(psmeRuarkAbatPhysio, pick(everything())),
-    #                       cur_group()$species == "ALRU" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
-    #                       cur_group()$species == "TSHE" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
+    #group_by(classification) %>%
+    #mutate(dbh = case_when(cur_group()$classification %in% c("conifer", "snag") ~ predict(psmeRuarkAbatPhysio, pick(everything())),
+    #                       cur_group()$classification == "hardwood" ~ predict(alruRuarkAbatPhysioRelHt, pick(everything())), # for now, approximate all hardwoods as red alder: all predictions physically possible
+    #                       cur_group()$classification == "TSHE" ~ predict(tsheRuarkAbatPhysio, pick(everything())))) %>%
     ungroup() %>%
     rename(height = TotalHt)
   Sys.time() - startTime
-  
+
   # check DBH imputation: all trees taller than breast height should have DBH > 0
   # For now, trees less than breast height are retained as it's unclear if they should be filtered out.
-  elliottTreesMod %>% group_by(species) %>% summarize(trees = n(), inputNA = sum(is.na(height) | is.na(isPlantation) | is.na(slope) | is.na(aspect)), 
-                                                      subBreastHt = sum(height < 1.37), bootstrapNa = sum(is.na(dbhBootstrap)), bootstrapBAna = sum(is.na(standBasalAreaBootstrap) | is.na(tallerApproxBasalAreaBootstrap)), isNegativeOrZero = sum(dbh <= 0, na.rm = TRUE), na = sum(is.na(dbh)), isOversize = sum(dbh > 300, na.rm = TRUE), pctValid = 100 * (trees - isNegativeOrZero - na - isOversize) / trees)
+  st_drop_geometry(elliottTreesMod) %>% group_by(classification) %>% summarize(trees = n(), inputNA = sum(is.na(height) | is.na(isPlantation) | is.na(slope) | is.na(aspect)), 
+                                                                               subBreastHt = sum(height < 1.37), bootstrapDbhNA = sum(is.na(dbhBootstrap)), bootstrapBAna = sum(is.na(standBasalAreaBootstrap) | is.na(tallerApproxBasalAreaBootstrap)), dbhNegativeOrZero = sum(dbh <= 0, na.rm = TRUE), dbhNA = sum(is.na(dbh)), isOversize = sum(dbh > 300, na.rm = TRUE), pctValid = 100 * (trees - dbhNegativeOrZero - dbhNA - isOversize) / trees)
+  st_drop_geometry(elliottTreesMod) %>% filter(standID2016 == 0) %>% summarize(treesInDefaultStand = n()) # only 1
   # setdiff(unique(elliottTrees$standID2016), unique(stands2022$standID2016)) # missing stand information is a common cause of NAs
 
-  saveRDS(elliottTreesMod, file = file.path(treeOptions$dataPath, "treetops", "trees rf v1.Rds")) # ~2 minutes, writes 1.1 GB
+  #saveRDS(elliottTreesMod, file = file.path(treeOptions$dataPath, "treetops", "trees rf v1.Rds")) # ~2 minutes, writes 1.1 GB
+  startTime = Sys.time()
+  st_write(elliottTreesMod %>% select(tile, standID2016, treeID, classification, height, dbh), dsn = file.path(treeOptions$dataPath, "treetops", "trees and snags rf v1+v1.gpkg"), layer = "trees and snags 2021 rf v1") # minutes, writes 1.7 GB
+  Sys.time() - startTime
 } else {
-  elliottTreesMod = readRDS(file.path(treeOptions$dataPath, "treetops", "trees rf v1.Rds"))
+  #elliottTreesMod = readRDS(file.path(treeOptions$dataPath, "treetops", "trees rf v1.Rds"))
+  elliottTreesMod = st_read(file.path(treeOptions$dataPath, "treetops", "trees and snags rf v1+v1.gpkg"), layer = "trees and snags 2021 rf v1", quiet = TRUE)
 }
 
 
@@ -234,15 +237,23 @@ if (treeOptions$recalcDbh)
 elliottTreesMod %>% summarize(naStand = sum(is.na(standID2016)), naTree = sum(is.na(treeID)), naSpecies = sum(is.na(species)), naHeight = sum(is.na(height)), naDbh = sum((height >= 1.37) & is.na(dbh))) # should all be zero for usable iLand tree list
 elliottTreesMod %>% summarize(ruXbelow = sum(x <= 106000), ruXabove = sum(x >= 131700), ruYbelow = sum(y <= 194100), ryYabove = sum(y >= 222200)) # check against resource unit grid bounds (Elliott.xml <resourceUnitFile>), must be zero for usable iLand tree list
 
-elliottTreesArrow = arrow_table(elliottTreesMod %>%
-                                  filter(height >= 1.37) %>%  # could remove remove ~2 M trees below iLand's definition of tree height as 4.0 m (TODO: translate these rows to iLand saplings)
+startTime = Sys.time()
+elliottTreesArrow = arrow_table(st_drop_geometry(elliottTreesMod %>% mutate(x = st_coordinates(elliottTrees)[, "X"], # ~17 s conversion to Arrow
+                                                                            y = st_coordinates(elliottTrees)[, "Y"])) %>%
+                                  # for now, simple live tree-snag separation: iLand trees are only live trees, snags go to carbon and nitrogen pools
+                                  # for now, trees less than iLand's shrub layer depth (4 m by default) are not converted to saplings
+                                  # could remove remove ~2 M trees below iLand's definition of tree height as 4.0 m (TODO: translate these rows to iLand saplings)
+                                  filter(height >= 1.37, classification != "snag") %>%
                                   filter(y > 194100) %>% # temporary workaround for <20 m spillover at southernmost edge of resource unit grid
-                                  mutate(fiaCode = case_match(as.character(species), "PSME" ~ 202, "ALRU" ~ 351, "TSHE" ~ 263)) %>% # case_match() breaks on factors as of dplyr 1.1.4 (2023-12)
-                                  arrange(resourceUnitY, resourceUnitX, species, y, x) %>%
+                                  mutate(fiaCode = case_match(as.character(classification), "conifer" ~ 202, "hardwood" ~ 351), # for lack of a better option, species dub all conifers as Douglas-fir and all hardwoods as red alder ("TSHE" ~ 263)
+                                         resourceUnitX = as.integer(x / 100), # dropped in final select
+                                         resourceUnitY = as.integer(y / 100)) %>% # case_match() breaks on factors as of dplyr 1.1.4 (2023-12)
+                                  arrange(resourceUnitY, resourceUnitX, classification, y, x) %>%
                                   rename(standID = standID2016) %>%
                                   select(standID, treeID, fiaCode, dbh, height, x, y),
                                 schema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
                                                 dbh = float32(), height = float32(), x = float32(), y = float32()))
+Sys.time() - startTime
 write_feather(elliottTreesArrow, "iLand/init/ESRF trees 2025-05-06.feather", compression = "uncompressed") # 448 MB, leave uncompressed for considerably faster iLand startup
 
 if (treeOptions$includeInvestiatory)
@@ -319,8 +330,8 @@ if (treetopOptions$includeInvestigatory)
   #print(elliottTreesMod %>% select(standID2016, standArea, species, height, topHeightTph, topHeightWeight, topHeight), n = 750)
   #elliottStandsMod %>% filter(standID2016 == 12) %>% select(standID2016, tph, segmentedTph, topHeight, segmentedTopHeight)
   tibble(tph = cor(drop_na(elliottStandsMod %>% select(tph, segmentedTph)))[2,1], topHeight = cor(drop_na(elliottStandsMod %>% select(topHeight, segmentedQmd)))[2,1], ba = cor(drop_na(elliottStandsMod %>% select(standBasalAreaPerHectare, standBasalAreaApprox.y)))[2,1], qmd = cor(drop_na(elliottStandsMod %>% select(qmd, segmentedQmd)))[2,1])
-  elliottTreesMod %>% group_by(species) %>% summarize(trees = n(), minDbh = min(dbh), maxDbh = max(dbh), minHt = min(height), maxHt = max(height), maxRelHt = max(relativeHeight), minRelHt = min(relativeHeight), 
-                                                      naDbh = sum(is.na(dbh)), underDbh = sum(dbh < 0.3), naHt = sum(is.na(height)), naTopHt = sum(is.na(topHeight)), underHt = sum(height < 1.37), overAba = sum(tallerApproxBasalArea > standBasalAreaApprox), naRelHt = sum(is.na(relativeHeight)), naX = sum(is.na(x)), naY = sum(is.na(y)))
+  elliottTreesMod %>% group_by(classification) %>% summarize(trees = n(), minDbh = min(dbh), maxDbh = max(dbh), minHt = min(height), maxHt = max(height), maxRelHt = max(relativeHeight), minRelHt = min(relativeHeight), 
+                                                             naDbh = sum(is.na(dbh)), underDbh = sum(dbh < 0.3), naHt = sum(is.na(height)), naTopHt = sum(is.na(topHeight)), underHt = sum(height < 1.37), overAba = sum(tallerApproxBasalArea > standBasalAreaApprox), naRelHt = sum(is.na(relativeHeight)), naX = sum(is.na(x)), naY = sum(is.na(y)))
   speciesLimits = get_species_limits(elliottTreesMod %>% rename(TotalHt = height, DBH = dbh) %>% mutate(speciesGroup = factor(if_else(species == "HW", "RA", species), levels = c("DF", "RA", "WH", "BM", "OM", "RC", "other")))) # get_species_limits() in height-diameter/setup.R
   elliottTreesMod %>% mutate(overDbh = dbh > speciesLimits$dbhMax, underTaper = (height / (0.01 * dbh)) < speciesLimits$heightDiameterRatioMin, overTaper = (height / (0.01 * dbh)) > speciesLimits$heightDiameterRatioMax, outOfRangeHt = height > speciesLimits$heightMax) %>% group_by(species) %>% summarize(n = n(), outOfRangeHt = sum(outOfRangeHt), overDbh = sum(overDbh), underTaper = sum(underTaper), overTaper = sum(overTaper))
   elliottTreesMod %>% reframe(quantiles = c(0, 0.005, 0.01, 0.05, 0.2, 0.5, 0.8, 0.95, 0.99, 0.995, 1), height = quantile(height, probs = quantiles), dbhBootstrap = quantile(dbhBootstrap, probs = quantiles), dbh = quantile(dbh, probs = quantiles))
