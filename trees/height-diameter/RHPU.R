@@ -163,6 +163,7 @@ if (htDiaOptions$includeInvestigatory)
   #print(rhpuHeightFromDiameterResults %>% select(-responseVariable, -species, -fixedWeight, -n, -power, -significant, -contains("NaturalRegen"), -contains("Plantation")), n = 30)
   ggplot() +
     geom_point(aes(x = rhpu2016$DBH, y = rhpu2016$TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
+    geom_line(aes(x = rhpu2016$DBH, y = predict(rhpuHeightFromDiameter$linear), color = "linear", group = rhpu2016$isPlantation), alpha = 0.5)
     #geom_line(aes(x = rhpu2016$DBH, y = predict(rhpuHeightFromDiameter$sharmaZhang), color = "Sharma-Zhang", group = rhpu2016$isPlantation), alpha = 0.5) +
     #geom_line(aes(x = rhpu2016$DBH, y = predict(rhpuHeightFromDiameter$sharmaParton), color = "Sharma-Parton", group = rhpu2016$isPlantation), alpha = 0.5) +
     #geom_line(aes(x = rhpu2016$DBH, y = predict(rhpuHeightFromDiameter$chapmanRichards), color = "Chapman-Richards", group = rhpu2016$isPlantation)) +

@@ -15,9 +15,9 @@ speciesGroupColors = c("forestgreen", "red2", "blue2", "green3", "mediumorchid1"
 # if (exists("umcaResults") == FALSE) { load("trees/height-diameter/data/UMCA results.Rdata") }
 # if (exists("otherResults") == FALSE) { load("trees/height-diameter/data/other results.Rdata") }
 if (exists("PSME Results") == FALSE) { load("data/PSME results.Rdata") }
-if (exists("rhpuResults") == FALSE) { load("data/arme results.Rdata") }
-if (exists("rhpuResults") == FALSE) { load("data/pisi results.Rdata") }
-if (exists("rhpuResults") == FALSE) { load("data/arme results.Rdata") }
+if (exists("rhpuResults") == FALSE) { load("data/rhpu results.Rdata") }
+if (exists("pisiResults") == FALSE) { load("data/pisi results.Rdata") }
+if (exists("armeResults") == FALSE) { load("data/arme results.Rdata") }
 ## assemble results tibbles from individual species data
 # heightDiameterResults = bind_rows(psmeResults, alruResults, tsheResults, acmaResults,
 #                                   umcaResults, thplResults, otherResults) %>%
@@ -37,23 +37,32 @@ if (exists("rhpuResults") == FALSE) { load("data/arme results.Rdata") }
 #   ungroup()
 
 heightDiameterResults = bind_rows(rhpuResults,armeResults,pisiResults,psmeResults) %>%
-  mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name)), #simply paste the names of the model from the tibble as required
+  mutate(baseName = if_else(word(name) %in% c("REML", "modified", "unified"), paste(word(name, 1), word(name, 2)), word(name)), #check the words in name column, IF the name contains any of the three: "REML", "modified", "unified", paste the first word of the name and secod word of the name, ELSE paste all the words in the name.
          species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar","cascara buckthorn","sitka spruce","pacific madrone", "other species"), levels = c("PSME", "alru2", "tshe", "acma3", "umca", "thpl", "rhpu","pisi","arme", "other")),
          speciesFraction = recode(species, "Douglas-fir" = 0.750, "red alder" = 0.101, "western hemlock" = 0.056, "bigleaf maple" = 0.029, "Oregon myrtle" = 0.025, "western redcedar" = 0.013, "cascara buckthorn"= 0.007, "sitka spruce"=0.006, "pacific madrone" = 0.004,"other species" = 0.009),
-         isBaseForm = (str_detect(name, "Sharma-") == FALSE) & (str_detect(name, "ABA\\+T") == FALSE) & (str_detect(name, "BA\\+L") == FALSE) & (str_detect(name, "physio") == FALSE) & (str_detect(name, "RelDbh") == FALSE) & (str_detect(name, "RelHt") == FALSE),
+         isBaseForm = (str_detect(name, "Sharma-") == FALSE) & (str_detect(name, "ABA\\+T") == FALSE) & (str_detect(name, "BA\\+L") == FALSE) & (str_detect(name, "physio") == FALSE) & (str_detect(name, "RelDbh") == FALSE) & (str_detect(name, "RelHt") == FALSE), #str_detect()--string detect
          hasPhysio = str_detect(name, "physio"),
          hasStand = str_detect(name, "ABA\\+T") | str_detect(name, "BA\\+L"),
          hasRelative = str_detect(name, "RelDbh") | str_detect(name, "RelHt"),
          significant = as.logical(significant), # since R lacks NA_logical_ significant can end up being either of type double (0/1/NA_real_) or logical (TRUE/FALSE), standardize back to logical (TRUE/FALSE/NA)
          weighting = if_else(fitting %in% c("gnls", "nlrob"), "reweighted", "fixed weights"),
          sizeShapeAlpha = as.factor(if_else(significant == TRUE, weighting, "not significant"))) %>%
-  group_by(fitSet, fixedWeight, responseVariable, species) %>%
-  mutate(nFits = n(),
+  group_by(fitSet, fixedWeight, responseVariable, species) %>% #groups based on unique combination of these, if I have 2 fitSet, 3 fixedWeight, 2 responseVariable, 4 species, I will get 2*3*2*4 =48 groups within the data.
+  mutate(nFits = n(), # in each of these groups, create a column nFits and put a value equal to the length of the data frame.
          deltaAicN = aic/nValidation - min(aic/nValidation, na.rm = TRUE)) %>% # ΔAIC within response variable and species, needed for AUCs and figures
   ungroup()
 
 # report duplicate naming and fit failures
 heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>% summarize(n = n(), .groups = "drop") %>% filter(n != htDiaOptions$folds * htDiaOptions$repetitions)
+# A tibble: 4 × 5
+# fitSet  responseVariable species           name                n
+# <chr>   <chr>            <fct>             <chr>           <int>
+#   1 primary DBH              Douglas-fir       Schnute inverse     1
+# 2 primary DBH              cascara buckthorn Schnute inverse     1
+# 3 primary DBH              sitka spruce      Schnute inverse     1
+# 4 primary DBH              pacific madrone   Schnute inverse     1
+
+#this tells us that, the Schnute inverse model did not run the 10*10 fits for each model within the species.
 
 # heightDiameterCoefficients = left_join(bind_rows(psmeCoefficients, alruCoefficients, tsheCoefficients, acmaCoefficients, # ~28 s
 #                                                  umcaCoefficients, thplCoefficients, otherCoefficients) %>%
@@ -64,14 +73,14 @@ heightDiameterResults %>% group_by(fitSet, responseVariable, species, name) %>% 
 #   select(-weighting, -sizeShapeAlpha, -nFits, -nTaperImplausible, -speciesFraction) %>%
 #   relocate(responseVariable, species, fitSet, fixedWeight, name, significant, isBaseForm, hasRelative, hasStand, hasPhysio, fitting, repetition, fold, nObservations, nValidation, fitTimeInS, isConverged, effectiveDegreesOfFreedom, nNonPhysical, mab, mapb, mae, mape, rmse, rmspe, aic, deltaAicN, nse, meanAbsolutePlantationEffect,	meanAbsolutePercentPlantationEffect, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
 
-heightDiameterCoefficients = left_join(bind_rows(rhpuCoefficients,pisiCoefficients,armeCoefficients,psmeCoefficients # ~28 s
+heightDiameterCoefficients = left_join(bind_rows(psmeCoefficients,rhpuCoefficients,pisiCoefficients,armeCoefficients # ~28 s
                                                  ) %>%
                                          mutate(species = factor(species, labels = c("Douglas-fir", "red alder", "western hemlock", "bigleaf maple", "Oregon myrtle", "western redcedar","cascara buckthorn","sitka spruce","pacific madrone", "other species"), levels = c("psme", "alru2", "tshe", "acma3", "umca", "thpl","rhpu","pisi","arme", "other"))),
                                        heightDiameterResults %>% select(-fitting, -fixedWeight, -significant), # no need to join duplicate columns
                                        by = join_by(fitSet, responseVariable, species, name, repetition, fold)) %>%
   mutate(isConverged = as.logical(isConverged)) %>%
   select(-weighting, -sizeShapeAlpha, -nFits, -nTaperImplausible, -speciesFraction) %>%
-  relocate(responseVariable, species, fitSet, fixedWeight, name, significant, isBaseForm, hasRelative, hasStand, hasPhysio, fitting, repetition, fold, nObservations, nValidation, fitTimeInS, isConverged, effectiveDegreesOfFreedom, nNonPhysical, mab, mapb, mae, mape, rmse, rmspe, aic, deltaAicN, nse, meanAbsolutePlantationEffect,	meanAbsolutePercentPlantationEffect, a0, a1, a1p, a2, a2p, a3, a3p, a4, a8, a9, a9p, a10, b1, b1p, b2, b2p, b3, b4)
+  relocate(responseVariable, species, fitSet, fixedWeight, name, significant, isBaseForm, hasRelative, hasStand, hasPhysio, fitting, repetition, fold, nObservations, nValidation, fitTimeInS, isConverged, effectiveDegreesOfFreedom, nNonPhysical, mab, mapb, mae, mape, rmse, rmspe, aic, deltaAicN, nse, meanAbsolutePlantationEffect,	meanAbsolutePercentPlantationEffect, a0, a1, a1p, a2, a2p, a3, a3p, a4, a5, a6, a7, a8, a9, a9p, a10, a10p, b1, b1p, b2, b2p, b3, b3p, b4, b4p)
 #write_xlsx(heightDiameterCoefficients %>% 
 #             filter(fitSet == "primary", is.na(fixedWeight)) %>%
 #             select(-baseName, -fitSet, -fixedWeight, -aict, -bic, -bict, -bias, -ends_with("NaturalRegen"), -ends_with("Plantation"), -adaptiveWeightFraction) %>% # drop diagnostic columns
@@ -99,30 +108,263 @@ primaryResults %>% group_by(fitSet, species) %>% summarize(deltaAicN = sum(is.na
 # 16                         20.4
 
 
+######################################## 
+
+#########NOT USED
+library(dplyr)
+library(purrr)
+library(tibble)
+library(WeightedROC)
+
+# 1. a robust pairwise_auc() that (a) skips degenerate cases, (b) jitters ties,
+#    (c) catches errors and returns NA if needed
+pairwise_auc <- function(a, b, metric, lower_is_better = TRUE){
+  # assemble
+  df <- tibble(
+    guess = c(a[[metric]], b[[metric]]),
+    label = c(rep(0, nrow(a)), rep(1, nrow(b)))
+  ) %>% 
+    filter(!is.na(guess), !is.na(label))
+  
+  # need at least two labels *and* two distinct guesses
+  if(length(unique(df$label)) < 2 || length(unique(df$guess)) < 2){
+    return(NA_real_)
+  }
+  
+  # force numeric labels, break ties
+  df$label <- as.integer(df$label)
+  df$guess <- jitter(df$guess, factor = 1e-8)
+  
+  # compute AUC, catching any monotonicity errors
+  roc_obj <- WeightedROC(df$guess, df$label)
+  tryCatch(
+    WeightedAUC(roc_obj),
+    error = function(e) NA_real_
+  )
+}
+
+# 2. now loop over each responseVariable/species group, and for each model form
+#    compute its AUC vs. the union of all *other* fits in the same group
+auc_summary <- primaryResults %>%
+  filter(nse != -Inf) %>%
+  group_by(responseVariable, species) %>%
+  group_map(
+    ~ {
+      df_grp <- .x
+      model_names <- unique(df_grp$name)
+      map_dfr(model_names, function(mn){
+        this_fit  <- filter(df_grp, name == mn)
+        others    <- filter(df_grp, name != mn)
+        tibble(
+          responseVariable = df_grp$responseVariable[1],
+          species          = df_grp$species[1],
+          name             = mn,
+          aucMab   = pairwise_auc(this_fit, others, "mab",  lower_is_better = TRUE),
+          aucMae   = pairwise_auc(this_fit, others, "mae",  lower_is_better = TRUE),
+          aucRmse  = pairwise_auc(this_fit, others, "rmse", lower_is_better = TRUE),
+          aucNse   = pairwise_auc(this_fit, others, "nse",  lower_is_better = FALSE)
+        )
+      })
+    },
+    .keep = TRUE
+  ) %>%
+  bind_rows()
+
+# 3. inspect the result
+print(auc_summary, n = 50)
+
+
+
+
+#######################################
+
+##########USED PAIRWISE AUCS
+# Load required libraries
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+# STEP 1: Reshape to long format
+auc_long <- auc_summary %>%
+  pivot_longer(
+    cols = c(aucMab, aucMae, aucRmse, aucNse),
+    names_to = "metric",
+    values_to = "auc_value"
+  )
+
+# STEP 2: Loop over combinations of responseVariable and species
+combo_list <- unique(auc_long[, c("responseVariable", "species")])
+
+# Optional: Create directory to save plots
+# dir.create("AUC_heatmaps", showWarnings = FALSE)
+
+# STEP 3: Loop and plot
+for (i in seq_len(nrow(combo_list))) {
+  
+  rv <- combo_list$responseVariable[i]
+  sp <- combo_list$species[i]
+  
+  plot_data <- auc_long %>%
+    filter(responseVariable == rv, species == sp)
+  
+  p <- ggplot(plot_data, aes(x = metric, y = reorder(name, auc_value), fill = auc_value)) +
+    geom_tile(color = "white") +
+    scale_fill_viridis_c(option = "C", direction = -1) +
+    scale_x_discrete(expand = c(0, 0)) +  # compress horizontally
+    scale_y_discrete(expand = c(0, 0)) +  # compress vertically
+    labs(
+      title = paste("Metrics Heatmap:", rv, "-", sp),
+      x = "Metric",
+      y = "Model",
+      fill = "AUC Value"
+    ) +
+    theme_minimal(base_size = 14) +
+    theme(
+      axis.text.y = element_text(size = 10),
+      axis.text.x = element_text(size = 8),
+      plot.title = element_text(hjust = 0.5, face = "bold", size = 16),
+      legend.position = "right"
+    ) +
+    coord_fixed(ratio = 0.3)  # adjust height vs width
+  
+  
+  print(p)  # Show in RStudio
+  
+  # Optional: Save to PNG — uncomment this line if you want to save
+  ggsave(
+    filename = paste0("AUC_", gsub(" ", "_", rv), "_", gsub(" ", "_", sp), ".jpeg"),
+    plot = p, width =6, height = 8, dpi = 300
+    # path = "AUC_heatmaps"  # if using a subfolder
+  )
+}
+
+
+
+#############################################
+
+#########USED-PREFERRED MODELS
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# STEP 1: Reshape to long format
+auc_long <- auc_summary %>%
+  pivot_longer(cols = c(aucMab, aucMae, aucRmse, aucNse),
+               names_to = "metric", values_to = "auc_value")
+
+# STEP 2: Keep only models common to all species within each responseVariable
+common_models <- auc_long %>%
+  group_by(responseVariable, name) %>%
+  summarise(n_species = n_distinct(species), .groups = "drop") %>%
+  inner_join(auc_long %>% count(responseVariable, species) %>% group_by(responseVariable) %>% summarise(n_species = n()), 
+             by = "responseVariable") %>%
+  filter(n_species.x == n_species.y) %>%
+  select(responseVariable, name)
+
+auc_long_common <- auc_long %>%
+  semi_join(common_models, by = c("responseVariable", "name"))
+
+# STEP 3: Rank each metric appropriately
+auc_ranked <- auc_long_common %>%
+  group_by(responseVariable, species, metric) %>%
+  mutate(rank = case_when(
+    metric %in% c("aucMab", "aucMae", "aucRmse") ~ rank(auc_value),     # lower is better
+    metric == "aucNse" ~ rank(-auc_value),                              # higher is better
+    TRUE ~ NA_real_
+  )) %>%
+  ungroup()
+
+# STEP 4: Calculate total rank and select top 3 models per species/response
+auc_total_rank <- auc_ranked %>%
+  group_by(responseVariable, species, name) %>%
+  summarise(total_rank = sum(rank), mean_auc = mean(auc_value, na.rm = TRUE), .groups = "drop")
+
+top_models <- auc_total_rank %>%
+  group_by(responseVariable, species) %>%
+  slice_min(total_rank, n = 3) %>%
+  mutate(is_top = TRUE) %>%
+  ungroup()
+
+# STEP 5: Prepare final plot data
+plot_data <- auc_ranked %>%
+  left_join(top_models %>% select(responseVariable, species, name, is_top), 
+            by = c("responseVariable", "species", "name")) %>%
+  mutate(is_top = if_else(is.na(is_top), FALSE, is_top))
+
+# Order models by average AUC for consistent y-axis
+avg_auc <- plot_data %>%
+  group_by(name) %>%
+  summarise(avg_auc = mean(auc_value, na.rm = TRUE), .groups = "drop")
+
+plot_data <- plot_data %>%
+  left_join(avg_auc, by = "name")
+
+# STEP 6: Plot for each responseVariable
+unique_vars <- unique(plot_data$responseVariable)
+
+for (rv in unique_vars) {
+  plot_subset <- plot_data %>% filter(responseVariable == rv)
+  
+  p <- ggplot(plot_subset, aes(x = species, y = reorder(name, avg_auc), fill = auc_value)) +
+    geom_tile(color = "white") +
+    geom_tile(data = plot_subset %>% filter(is_top), color = "black", size = 1.1) +
+    scale_fill_viridis_c(option = "C", direction = -1, na.value = "grey90") +
+    facet_wrap(~ metric, nrow = 1) +
+    labs(
+      title = paste("Model Performance Heatmap (Top 3) —", rv),
+      x = "Species", y = "Model", fill = "AUC Value"
+    ) +
+    theme_minimal(base_size = 13) +
+    theme(
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+      axis.text.y = element_text(size = 5),
+      strip.text = element_text(size = 11, face = "bold"),
+      plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+    )
+  
+  print(p)
+  
+  ggsave(filename = paste0("Top3_Models_", gsub(" ", "_", rv), ".jpeg"),
+         plot = p, width = 10, height = 8, dpi = 300)
+}
+
+
+################################
+
+
 with_progress({
   crossValidatedModelCount = primaryResults %>% group_by(responseVariable, species) %>% summarize(n = n_distinct(name), .groups = "drop")
   progressBar = progressor(steps = sum(crossValidatedModelCount$n))
   heightDiameterModelAucs = primaryResults %>%
+  # fitResults = primaryResults %>% #added later
+  #   filter(nse != -Inf) %>% #added later
     group_by(responseVariable, species, name) %>%
     group_split() %>%
     future_map_dfr(function(fitResults) #future_map_dfr applies a function to multiple data frames created from above group_by function.
     {
+      #fitResults=heightDiameterModelAucs[[1]] #added code to test line by line
       if ((nrow(fitResults) == 1) | all(is.na(fitResults$nse)))
       {
         # no distribution to compare to since this model has only a no fit result or wasn't cross validated
         progressBar(str_pad(paste(fitResults$responseVariable[1], fitResults$species[1], fitResults$name[1]), 60, "right"))
-        return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
-                      otherModelName = NA_character_, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1], hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1], hasRelative = fitResults$hasRelative[1],
-                      aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucNse = NA_real_, aucRmse = NA_real_,
-                      speciesFraction = fitResults$speciesFraction[1]))
+        # return(tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
+        #               otherModelName = NA_character_, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1], hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1], hasRelative = fitResults$hasRelative[1],
+        #               aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucNse = NA_real_, aucRmse = NA_real_,
+        #               speciesFraction = fitResults$speciesFraction[1]))
+        library(tibble) #create a tibble to see how does it look
+        tibble_x=tibble(responseVariable = fitResults$responseVariable[1], species = fitResults$species[1], name = fitResults$name[1],
+                        otherModelName = NA_character_, fitting = fitResults$fitting[1], isBaseForm = fitResults$isBaseForm[1], hasPhysio = fitResults$hasPhysio[1], hasStand = fitResults$hasStand[1], hasRelative = fitResults$hasRelative[1],
+                        aucDeltaAicN = NA_real_, aucMab = NA_real_, aucMae = NA_real_, aucNse = NA_real_, aucRmse = NA_real_,
+                        speciesFraction = fitResults$speciesFraction[1])
       }
       
       # get all other cross-validation results for this response variable and species
       # Assumes no names are shared across fittings in the results set.
-      matchingFitResults = primaryResults %>% filter(responseVariable == fitResults$responseVariable[1], species == fitResults$species[1])
+      matchingFitResults = primaryResults %>% filter(responseVariable == fitResults$responseVariable[1], species == fitResults$species[1]) #for one set of species and response variable
       matchingModelNames = unique(matchingFitResults$name)
       pairwiseAucs = bind_rows(lapply(matchingModelNames, function(otherModelName) 
       {
+        otherModelName=matchingFitResults$name
         otherFitResults = matchingFitResults %>% filter(name == otherModelName)
         
         if ((nrow(otherFitResults) == 1) | all(is.na(otherFitResults$nse)))

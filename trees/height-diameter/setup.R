@@ -1444,7 +1444,7 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
     #geom_path(aes(x = diameterClass, y = median, color = "median height", linetype = "median height"), dbhQuantiles %>% filter(count > 10), na.rm = TRUE) +
     geom_path(aes(x = mean, y = heightClass, color = "mean DBH", linetype = "mean DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
     #geom_path(aes(x = median, y = heightClass, color = "median DBH", linetype = "median DBH"), heightQuantiles %>% filter(count > 10), na.rm = TRUE) +
-    coord_cartesian(xlim = c(0, 250), ylim = c(0, 80)) +
+    coord_cartesian(xlim = c(0, 250), ylim = c(0, 40)) +
     labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(.(titleLetters[1])~.(speciesLabel))) +
     #labs(x = dbhXlabel, y = "height, m, of unbroken stem", color = NULL, fill = "trees\nmeasured", linetype = NULL, title = bquote(bold(.(titleLetters[1]))~.(speciesLabel))) +
     guides(color = guide_legend(order = 1), fill = guide_colorbar(order = 2), linetype = guide_legend(order = 1)) +
@@ -1495,7 +1495,7 @@ plot_exploratory = function(liveUnbrokenTrees, titleLetters = plotLetters, speci
     geom_path(aes(x = heightClass, y = 100 * (q80 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
     #geom_path(aes(x = heightClass, y = 100 * (q90 - mean) / mean^dbhPower, color = "10% contour", linetype = "10% contour"), na.rm = TRUE, linewidth = 0.3) +
     geom_path(aes(x = heightClass, y = 100 * (max - mean) / mean^dbhPower, color = "max or min", linetype = "max or min"), na.rm = TRUE, linewidth = 0.3) +
-    coord_cartesian(xlim = c(0, 80), ylim = c(-50, 150)) +
+    coord_cartesian(xlim = c(0, 0), ylim = c(-50, 150)) +
     guides(alpha = guide_legend(order = 1, override.aes = list(fill = "grey30")), color = guide_legend(order = 2), linetype = guide_legend(order = 2)) +
     scale_alpha_manual(breaks = c("95% probability", "80% probability", "50% probability"), values = c(0.1, 0.2, 0.3)) +
     scale_color_manual(breaks = c("10% contour", "max or min"), values = c("grey50", "grey70")) +
@@ -2105,32 +2105,14 @@ if (htDiaOptions$includeInvestigatory) {
   
   ## Figures A1-4: species level exploratory plots
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "DF"), speciesLabel = "Douglas-fir", maxTreesMeasured = 150, omitLegends = TRUE, omitXlabels = TRUE) /
-    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RA"), speciesLabel = "red alder", maxTreesMeasured = 150, distributionLegendPositionY = 0.92) +
+    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "SS"), speciesLabel = "sitka spruce", maxTreesMeasured = 150, distributionLegendPositionY = 0.92) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("figures/Figure A1 PSME-ALRU2.png", height = 13, width = 20, units = "cm", dpi = 250)
-  
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "WH"), speciesLabel = "western hemlock", maxTreesMeasured = 150, omitLegends = TRUE) /
-    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "BM"), speciesLabel = "bigleaf maple", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, ) +
-    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("figures/Figure A2 TSHE-ACMA3.png", height = 13, width = 20, units = "cm", dpi = 250)
-  
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "OM"), speciesLabel = "Oregon myrtle", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
-    plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "RC"), speciesLabel = "western redcedar", maxTreesMeasured = 150, omitLegends = TRUE) +
-    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("figures/Figure A3 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
-  
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "other"), speciesLabel = "other species ", distributionLegendPositionY = 0.92) +
-    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("figures/Figure A4 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  ggsave("figures/Figure A1 PSME-PISI.png", height = 13, width = 20, units = "cm", dpi = 250)
   
   plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "CB"), speciesLabel = "Cascara buckthorn", maxTreesMeasured = 150, distributionLegendPositionY = 0.92, omitXlabels = TRUE) /
     plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "PM"), speciesLabel = "Pacific madrone", maxTreesMeasured = 150, omitLegends = TRUE) +
     plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("figures/Figure A5 UMCA-THPL.png", height = 13, width = 20, units = "cm", dpi = 250)
-  
-  plot_exploratory(trees2016 %>% filter(isLiveUnbroken, speciesGroup == "SS"), speciesLabel = "sitka spruce ", distributionLegendPositionY = 0.92) +
-    plot_annotation(theme = theme(plot.margin = margin(1, 1, 1, 1, "pt")))
-  ggsave("figures/Figure A6 other species.png", height = 1/3*(18 - 1) + 1, width = 20, units = "cm", dpi = 250)
+  ggsave("figures/Figure A2 RHPU-ARME.png", height = 13, width = 20, units = "cm", dpi = 250)
   
 }
 
