@@ -420,7 +420,7 @@ plotHeights = left_join(plotHeights, plotMetrics2021, by = c("plot")) # join LiD
 
 # TODO: audit stand area flow for accuracy with respect to isExternalBoundarySplit
 elliottTreesReadStart = Sys.time() # ~29s, 9900X
-trees2021lidar = readRDS(file.path(abaOptions$dataPath, "treetops", "trees rf v1.Rds")) %>% # LiDAR identified treetops from Get-Treetops and trees.R
+trees2021lidar = readRDS(file.path(abaOptions$dataPath, "treetops", "trees rf v2.Rds")) %>% # LiDAR identified treetops from Get-Treetops and trees.R
   mutate(abaGridX = floor(1/abaGrid$size * (x - abaGrid$originX)), # ABA grid origin and cell size from GIS/Trees/Elliott ABA grid 20 m.gpkg
          abaGridY = floor(1/20 * (y - abaGrid$originY))) %>%
     rename(segmentationID = treeID) %>% # because treeID is changed to each detected treetop's height rank below
@@ -487,9 +487,9 @@ if (abaOptions$recalcAbaCellOccupancy)
 
   abaCells = left_join(abaCellTreesByStand, abaCellTrees, by = c("abaGridX", "abaGridY")) %>%
     relocate(abaGridX, abaGridY, stands, n)
-  saveRDS(abaCells, file = file.path(abaOptions$dataPath, "treetops", "trees by ABA cell rf v1.Rds")) # 83 MB
+  saveRDS(abaCells, file = file.path(abaOptions$dataPath, "treetops", "trees by ABA cell rf v2.Rds")) # 83 MB
 } else {
-  abaCells = readRDS(file.path(abaOptions$dataPath, "treetops", "trees by ABA cell rf v1.Rds"))
+  abaCells = readRDS(file.path(abaOptions$dataPath, "treetops", "trees by ABA cell rf v2.Rds"))
 }
 
 abaMetrics = as.data.frame(project(rast("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/metrics/grid metrics 20 m.tif"), crs("epsg:6556"), threads = TRUE), xy = TRUE, na.rm = NA) # ~5 s
@@ -845,8 +845,9 @@ if (abaOptions$includeInvestigatory)
 }
 
 
-## move non-NIR treetop tiles surrounding the Elliott to subdirectory
-# Makes the treetop footprint match the NIR utilizing classification space.
+## move non-NIR treetop tiles from ranger and crown tiles from Get-Crowns to subdirectory
+# Makes the treetop footprint match the hardwood-conifer-snag classification space where near-infrared based predictors are available. This step is needed
+# so the extents of the treetop virtual vector, crown virtual raster, and classification virtual raster all match, enabling Merge-Treetops to proceed.
 if (abaOptions$includeSetup)
 {
   library(stringr)
@@ -854,13 +855,13 @@ if (abaOptions$includeSetup)
   surrounding1path = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tiles surrounding distance 1"
   surroundingTileNames = str_remove(list.files(surrounding1path, "\\.las$"), "\\.las$")
 
-  crownTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/crowns rf v1"
+  crownTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/crowns rf v2"
   surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif"))
   moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif")))
-  surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif.aux.xml"))
-  moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif.aux.xml")))
+  #surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif.aux.xml"))
+  #moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif.aux.xml")))
   
-  treetopTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1"
+  treetopTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v2"
   surroundingTreetopTiles = file.path(treetopTilePath, paste0(surroundingTileNames, ".gpkg"))
   moveResult = file.rename(surroundingTreetopTiles, file.path(treetopTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".gpkg")))
 }
@@ -870,7 +871,7 @@ if (abaOptions$includeInvestigatory)
 {
   library(sf)
   
-  s04230w06810tops = st_read("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/treetops rf v1 s04230w06810.gpkg", quiet = TRUE) %>%
+  s04230w06810tops = st_read("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/treetops rf v2 s04230w06810.gpkg", quiet = TRUE) %>%
     mutate(cells = Unclassified + Bare + BareShadow + BrownTree + GreyTree + Conifer + ConiferShadow + ConiferDeepShadow + Hardwood + HardwoodShadow + HardwoodDeepShadow)
 
   ggplot() +

@@ -294,9 +294,7 @@ if (umcaOptions$fitDbh)
   
   umcaDiameterFromHeight$chapmanReplace = fit_gsl_nls("Chapman-Richards replace", DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 20, b1 = 0.1, b2 = 0.6)) # subject to a1-b1 evaporation, NaN-inf with nls() at multiple nls_multstart() points, NaN-inf with nlrob(), job NaN-inf with gsl_nls()
   umcaDiameterFromHeight$chapmanReplaceAbat = fit_gsl_nls("Chapman-Richards replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 18, a2 = 0, b1 = 0.1, b2 = 0.6), significant = FALSE) # a2 not significant, a1-b1 parameter evaporation, NaN-inf with nls(), step factor with nlrob(), step factor with default gsl_nls tolerance
-  umcaDiameterFromHeight$chapmanReplaceBal = fit_gsl_nls("Chapman-Richards replace BA+L", DBH ~ (a1 + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 1, a2 = -0.005, b1 = 1.9, b2 = 0.3)) # NaN-inf with nls(), step factor with nlrob()
-  umcaDiameterFromHeight$chapmanReplaceBalRelHt = fit_gsl_nls("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 0.4, a2 = -0.012, a3 = 0.01, a9 = -0.3, b1 = 2.7, b2 = 0.23)) # step factor with nls() and nlrob()
-  umcaDiameterFromHeight$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, start = list(a1 = 0.9, a9 = -0.6, b1 = 1.8, b2 = 0.3)) # step factor with nls(), step factor with nlrob()
+  umcaDiameterFromHeight$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, start = list(a1 = 18, a9 = 0, b1 = 0.1, b2 = 0.6), significant = FALSE) # a9 not significant
   umcaDiameterFromHeight$chapmanRichards = fit_gsl_nls("Chapman-Richards inverse", DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, start = list(a1 = 34, b1 = -0.047, b2 = 1.43, b2p = -0.15), control = gsl_nls_control(maxiter = 250, xtol = 1E-5)) # a1-b1 parameter evaporation, b2p debatable
   umcaDiameterFromHeight$chapmanRichardsAbat = fit_gsl_nls("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, start = list(a1 = 35, a2 = -3, b1 = -0.01, b2 = 0.9, b2p = -0.2), control = gsl_nls_control(maxiter = 250, xtol = 1E-5), significant = FALSE) # a2 not significant, a1-b1 parameter evaporation
   umcaDiameterFromHeight$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), umca2016, start = list(a1 = 58.6, a5 = -52.7, b1 = -0.0637, b2 = 0.9), control = gsl_nls_control(maxiter = 250, xtol = 1E-5), significant = FALSE) # a1p, a4, a5, a6, a7, a8, b1p, b2p not significant, a1+a5-b1 parameter evaporation
@@ -327,7 +325,7 @@ if (umcaOptions$fitDbh)
   umcaDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a4 * elevation + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), umca2016, start = list(a1 = 4.2, a4 = 0, a9 = -3, b1 = 0.53, b2 = 0.20)) # a4 not significant
   umcaDiameterFromHeight$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, umca2016, start = list(a1 = -200, b1 = 0.027, b2 = 0.8), control = gsl_nls_control(maxiter = 500)) # NaN-inf with nlrob()
   #lapply(umcaDiameterFromHeight$sibbesenReplaceAbatRelHt$fit, confint2, level = 0.99)
-  #lapply(umcaDiameterFromHeight$sibbesenReplaceAbat$fit, get_model_coefficients)
+  #bind_rows(lapply(umcaDiameterFromHeight$sibbesenReplaceAbat$fit, get_model_coefficients))
   
   if (umcaOptions$fitDbhNlrob)
   {
@@ -360,7 +358,7 @@ if (umcaOptions$fitDbh)
   
   umcaDiameterFromHeightGslNlsDefault = list(chapmanReplace = fit_gsl_nls("Chapman-Richards replace", DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016defaultWeight, start = list(a1 = 20, b1 = 0.1, b2 = 0.6), control = gsl_nls_control(maxiter = 250, xtol = 0.002))) # a1-b1 evaporation
   umcaDiameterFromHeightGslNlsDefault$chapmanReplaceAbat = fit_gsl_nls("Chapman-Richards replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016defaultWeight, start = list(a1 = 20, a2 = 0, b1 = 0.1, b2 = 0.6), control = gsl_nls_control(maxiter = 250, xtol = 0.005), significant = FALSE) # a1-b1 evaporation
-  umcaDiameterFromHeightGslNlsDefault$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016defaultWeight, start = list(a1 = 0.9, a9 = -0.6, b1 = 1.8, b2 = 0.3), control = gsl_nls_control(maxiter = 250, xtol = 0.002)) # a1 and b1 both tend to zero
+  umcaDiameterFromHeightGslNlsDefault$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * relativeHeight)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016defaultWeight, start = list(a1 = 18, a9 = 0, b1 = 0.1, b2 = 0.6), significant = FALSE) # a9 not significant
   umcaDiameterFromHeightGslNlsDefault$chapmanRichards = fit_gsl_nls("Chapman-Richards inverse", DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016defaultWeight, start = list(a1 = 34, b1 = -0.047, b2 = 1.43, b2p = -0.15), control = gsl_nls_control(maxiter = 500, xtol = 0.002))
   umcaDiameterFromHeightGslNlsDefault$chapmanRichardsAbat = fit_gsl_nls("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016defaultWeight, start = list(a1 = 25, a2 = -1, b1 = -0.01, b2 = 1.5, b2p = -0.2), control = gsl_nls_control(maxiter = 500, xtol = 0.001), significant = FALSE) # susceptible to a1-b1 evaporation
   umcaDiameterFromHeightGslNlsDefault$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a5 * sin(3.14159/180 * slope))*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), umca2016defaultWeightPhysio, start = list(a1 = 58.6, a5 = -52.7, b1 = -0.0637, b2 = 0.9), control = gsl_nls_control(maxiter = 500, xtol = 0.001), significant = FALSE) # a1-b1 evaporation
@@ -408,7 +406,6 @@ if (htDiaOptions$includeInvestigatory)
     geom_point(aes(x = DBH, y = TotalHt), alpha = 0.10, color = "grey25", shape = 16) +
     #geom_line(aes(x = predict(umcaDiameterFromHeight$chapmanReplace), y = TotalHt, color = "Chapman-Richards replace", group = isPlantation)) +
     #geom_line(aes(x = predict(umcaDiameterFromHeight$chapmanReplaceAbat), y = TotalHt, color = "Chapman-Richards replace approximate BA+L", group = isPlantation), alpha = 0.5) +
-    #geom_line(aes(x = predict(umcaDiameterFromHeight$chapmanReplaceBal), y = TotalHt, color = "Chapman-Richards replace BA+L", group = isPlantation), alpha = 0.5) +
     #geom_line(aes(x = predict(umcaDiameterFromHeight$chapmanRichards), y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
     #geom_line(aes(x = predict(umcaDiameterFromHeight$michaelisMentenReplace), y = TotalHt, color = "Michaelis-Menten replace", group = isPlantation)) +
     #geom_line(aes(x = predict(umcaDiameterFromHeight$naslund), y = TotalHt, color = "Näslund", group = isPlantation)) +
@@ -444,15 +441,9 @@ if (umcaOptions$fitDbhMixed)
   #umcaDiameterFromHeightMixed = list(chapmanReplaceAbat = fit_nlme("Chapman-Richards replace ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016,
   #                                                                 fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
   #                                                                 start = list(fixed = c(a1 = 18, a2 = 0, b1 = 0.1, b2 = 0.6)), control = nlmeControl(maxIter = 100, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE)) # singularity in backsolve
-  #umcaDiameterFromHeightMixed$chapmanReplaceBal = fit_nlme("Chapman-Richards replace BA+L", DBH ~ (a1 + a1r + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, 
-  #                                                         fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
-  #                                                         start = list(fixed = c(a1 = 1, a2 = -0.005, b1 = 1.9, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
-  #umcaDiameterFromHeightMixed$chapmanReplaceBalRelHt = fit_nlme("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a1r + a2 * basalAreaLarger + a3 * standBasalAreaPerHectare + a9 * relativeHeight) * (exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, 
-  #                                                              fixedFormula = a1 + a2 + a3 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
-  #                                                              start = list(fixed = c(a1 = 0.4, a2 = -0.012, a3 = 0.01, a9 = -0.3, b1 = 2.7, b2 = 0.23)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 1E-3)) # step halving
-  #umcaDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), umca2016, 
+  #umcaDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)) - 1)^b2, umca2016, 
   #                                                           fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
-  #                                                           start = list(fixed = c(a1 = 0.9, a9 = -0.6, b1 = 1.8, b2 = 0.3)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001))
+  #                                                           start = list(fixed = c(a1 = 18, a9 = 0, b1 = 0.1, b2 = 0.6)), control = nlmeControl(tolerance = 0.01, pnlsTol = 1, msTol = 0.001))
   #umcaDiameterFromHeightMixed = list(chapmanRichards = fit_nlme("Chapman-Richards inverse", DBH ~ (a1 + a1r)*log(1 - pmin(b1*(TotalHt - 1.37)^(b2 + b2p * isPlantation), 0.9999)), umca2016, 
   #                                                              fixedFormula = a1 + b1 + b2 + b2p ~ 1, randomFormula = a1r ~ 1, 
   #                                                              start = list(fixed = c(a1 = 34, b1 = -0.047, b2 = 1.43, b2p = -0.15)), control = nlmeControl(maxiter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001))) # step halving

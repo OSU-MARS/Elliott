@@ -26,21 +26,22 @@ if (treeOptions$rebuildTreeList)
   # - rename the sampled column to elevation (layer properties -> fields -> edit)
   # - persist sampled layer to a GeoPackage to create a spatial index (creating a spatial index with the toolbox function either hangs or is very slow)
   # - select by location within the iLand simulation boundary (11.8 M trees)
-  # - export selected in EPSG:6556 to treetops 400 m rf v1 (transitory).gpkg with layer name treetops merged 400 m
+  # - export selected in EPSG:6556 to treetops 400 m rf v2 (transitory).gpkg with layer name treetops merged 400 m
   
   # reproject trees and crop
-  #elliottILandResourceUnitBoundary = st_read("iLand/gis/Elliott + Hakki 400 m buffer resource unit snapped.gpkg", quiet = TRUE)
-  #mergedTreeReadStart = Sys.time() # 1.4 minute load + 1 minute transform, 9900X @ 2 GB (12.3 million trees)
-  #mergedTrees = st_transform(st_read(file.path(treeOptions$dataPath, "treetops/treetops merged rf v1.gpkg"), quiet = TRUE), crs = st_crs(6556))
-  #Sys.time() - mergedTreeReadStart
+  elliottILandResourceUnitBoundary = st_read("iLand/gis/Elliott + Hakki 400 m buffer resource unit snapped.gpkg", quiet = TRUE)
+  mergedTreeReadStart = Sys.time() # 1.4 minute load + 1 minute transform, 9900X @ 2 GB (12.3 million trees)
+  elliottTrees = st_transform(st_read(file.path(treeOptions$dataPath, "treetops/treetops merged rf v2 (transitory).gpkg"), quiet = TRUE), crs = st_crs(6556))
+  Sys.time() - mergedTreeReadStart # 2.6 minutes, 9950X
   
-  #st_write(mergedTrees, file.path(treeOptions$dataPath, "treetops/treetops merged rf v1 6556 (transitory).gpkg"))
-  #iLandTreeIntersectStart = Sys.time() # >50 minutes since runs single threaded, apparently without spatial indexing, 9900X (crop() in terra 1.7-55 appears computationally intractable)
-  #mergedTrees400 = st_intersection(mergedTrees, elliottILandResourceUnitBoundary)
-  #Sys.time() - iLandTreeIntersectStart
+  #st_write(elliottTrees, file.path(treeOptions$dataPath, "treetops/treetops merged rf v2 6556 (transitory).gpkg"))
+  iLandTreeIntersectStart = Sys.time() # >50 minutes since runs single threaded, apparently without spatial indexing, 9900X (crop() in terra 1.7-55 appears computationally intractable)
+  elliottTrees = st_intersection(elliottTrees, elliottILandResourceUnitBoundary)
+  Sys.time() - iLandTreeIntersectStart
+  st_write(elliottTrees, "treetops 400 m rf v2 (transitory).gpkg", layer = "treetops merged 400 m")
   
   # requires 72 GB DDR @ 11.8 M trees
-  elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v1 (transitory).gpkg"), layer = "treetops merged 400 m", quiet = TRUE) # ~35 s to load with terra::vect() but z is dropped, so 2.7 min with st_read()
+  elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 (transitory).gpkg"), layer = "treetops merged 400 m", quiet = TRUE) # ~35 s to load with terra::vect() but z is dropped, so 2.7 min with st_read()
   elliottTrees$elevation = 0.3048 * elliottTrees$elevation # CRS is metric from QGIS export but field values need conversion
   elliottTrees$height = 0.3048 * elliottTrees$height
   elliottTrees$radius = 0.3048 * elliottTrees$radius
@@ -87,16 +88,16 @@ if (treeOptions$rebuildTreeList)
   Sys.time() - physiographicExtractStart
   
   # 2.3 GB on disk @ 11.8 M trees
-  writeVector(elliottTrees, file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v1 predictors (transitory).gpkg"), layer = "treetops", overwrite = TRUE)
+  writeVector(elliottTrees, file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", overwrite = TRUE)
 }
 
 # read trees even if treeOptions$rebuildTreeList == TRUE to switch from terra to sf
 elliottTreeReadStart = Sys.time() # 61 s, ~8 GB in memory
-elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v1 predictors (transitory).gpkg"), layer = "treetops", quiet = TRUE)
+elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", quiet = TRUE)
 Sys.time() - elliottTreeReadStart
 
 #elliottTreeReadStart = Sys.time() # 36 s, ~32 GB in memory
-#elliottTrees = vect(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v1 predictors (transitory).gpkg"), layer = "treetops")
+#elliottTrees = vect(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops")
 #Sys.time() - elliottTreeReadStart
 
 
@@ -223,13 +224,13 @@ if (treeOptions$recalcDbh)
   st_drop_geometry(elliottTreesMod) %>% filter(standID2016 == 0) %>% summarize(treesInDefaultStand = n()) # only 1
   # setdiff(unique(elliottTrees$standID2016), unique(stands2022$standID2016)) # missing stand information is a common cause of NAs
 
-  #saveRDS(elliottTreesMod, file = file.path(treeOptions$dataPath, "treetops", "trees rf v1.Rds")) # ~2 minutes, writes 1.1 GB
+  #saveRDS(elliottTreesMod, file = file.path(treeOptions$dataPath, "treetops", "trees rf v2.Rds")) # ~2 minutes, writes 1.1 GB
   startTime = Sys.time()
-  st_write(elliottTreesMod %>% select(tile, standID2016, treeID, classification, height, dbh), dsn = file.path(treeOptions$dataPath, "treetops", "trees and snags rf v1+v1.gpkg"), layer = "trees and snags 2021 rf v1") # minutes, writes 1.7 GB
+  st_write(elliottTreesMod %>% select(tile, standID2016, treeID, classification, height, dbh), dsn = file.path(treeOptions$dataPath, "treetops", "trees and snags rf v2.gpkg"), layer = "trees and snags 2021 rf v2") # minutes, writes 1.7 GB
   Sys.time() - startTime
 } else {
-  #elliottTreesMod = readRDS(file.path(treeOptions$dataPath, "treetops", "trees rf v1.Rds"))
-  elliottTreesMod = st_read(file.path(treeOptions$dataPath, "treetops", "trees and snags rf v1+v1.gpkg"), layer = "trees and snags 2021 rf v1", quiet = TRUE)
+  #elliottTreesMod = readRDS(file.path(treeOptions$dataPath, "treetops", "trees rf v2.Rds"))
+  elliottTreesMod = st_read(file.path(treeOptions$dataPath, "treetops", "trees and snags rf v2+v1.gpkg"), layer = "trees and snags 2021 rf v2", quiet = TRUE)
 }
 
 

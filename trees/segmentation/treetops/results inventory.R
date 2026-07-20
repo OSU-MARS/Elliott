@@ -45,7 +45,7 @@ radius2021 = left_join(read_xlsx("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/tre
   filter(isBuffer == 0) %>%
   mutate(treetops = treetops * onForestFraction) # basic adjustment for boundary crossing stands, TODO: differentiate on and off forest parts of stands in GIS and exclude off forest treetops when compiling standsByHeightClass
 
-randomForest2021 = left_join(read_xlsx("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v1/standsByHeightClass.xlsx"),
+randomForest2021 = left_join(read_xlsx("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/rf v2/standsByHeightClass.xlsx"),
                              elliottStands2022 %>% select(standID2016, onForestArea, onForestFraction, standAge2016, vegStrata, isPlantation, isBuffer),
                              by = join_by(standID2016)) %>%
   filter(isBuffer == 0) %>%

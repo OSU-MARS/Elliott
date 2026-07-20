@@ -311,9 +311,7 @@ if (thplOptions$fitDbh)
   
   thplDiameterFromHeight$chapmanReplace = fit_gsl_nls("Chapman-Richards replace", DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016, start = list(a1 = 200, b1 = 0.01, b2 = 0.95), control = gsl_nls_control(maxiter = 500, xtol = 1E-5)) # a1p, b1p, b2p not significant, a1-b1 parameter evaporation: singular gradient with nls(), no convergence from nls_multstart(), NaN-inf with nlrob()
   thplDiameterFromHeight$chapmanReplaceAbat = fit_gsl_nls("Chapman-Richards replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016, start = list(a1 = 200, a2 = 0, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 500), significant = FALSE) # NaN-inf with nls() and nlrob
-  thplDiameterFromHeight$chapmanReplaceBal = fit_gsl_nls("Chapman-Richards replace BA+L", DBH ~ (a1 + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, start = list(a1 = 200, a2 = -10, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 300), significant = FALSE) # step size with nls() and nlrob()
-  thplDiameterFromHeight$chapmanReplaceBalRelHt = fit_gsl_nls("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a2 * basalAreaLarger + a9 * pmin(relativeHeight, 1.5)) * (exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, start = list(a1 = 10, a2 = 0, a9 = 2.3, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 250, xtol = 0.001), significant = FALSE) # a2, a3 not significant, a1-b1 parameter evaporation: nlrob() step factor with either a2 or a3
-  thplDiameterFromHeight$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, start = list(a1 = 100, a9 = 2.3, b1 = 0.01, b2 = 0.8), control = gsl_nls_control(maxiter = 500)) # step size with nls(), >500 iterations with nlrob()
+  thplDiameterFromHeight$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016, start = list(a1 = 200, a9 = 0, b1 = 0.01, b2 = 0.8), significant = FALSE) # a9 not significant, potential a1-b1 evaporation step size with nls(), >500 iterations with nlrob()
   thplDiameterFromHeight$chapmanRichards = fit_gsl_nls("Chapman-Richards inverse", DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), thpl2016, start = list(a1 = -200, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 250)) # a1p and b2p not significant, poor convergence with b1p, step factor with nlrob()
   thplDiameterFromHeight$chapmanRichardsAbat = fit_gsl_nls("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), thpl2016, start = list(a1 = -200, a2 = 0, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 500), significant = FALSE) # a1p, b1p not significant, step factor with nlrob()
   thplDiameterFromHeight$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), thpl2016, start = list(a1 = -70, a1p = 40, a8 = 0.3, b1 = 0.01, b1p = 0.03, b2 = 0.55), control = gsl_nls_control(maxiter = 250, xtol = 5E-5)) # no physiographic effects significant, a1-b1 parameter evaporation: step factor with nlrob()
@@ -344,7 +342,7 @@ if (thplOptions$fitDbh)
   thplDiameterFromHeight$sibbesenReplaceRelHtPhysio = fit_gsl_nls("Sibbesen replace RelHt physio", DBH ~ (a1 + a8 * topographicShelterIndex + a9 * relativeHeight)*(TotalHt - 1.37)^(b1*(TotalHt - 1.37)^b2), thpl2016, start = list(a1 = 3.6, a8 = -0.01, a9 = 0.7, b1 = 0.7, b2 = 0.1), significant = FALSE) # a9 not significant
   thplDiameterFromHeight$weibull = fit_gsl_nls("Weibull inverse", DBH ~ (a1*log(1 - pmin(b1*(TotalHt - 1.37), 0.9999)))^b2, thpl2016, start = list(a1 = -300, b1 = 0.04, b2 = 0.55), control = gsl_nls_control(maxiter = 250, xtol = 1E-4)) # a1p, b1p, b2p not significant, a1-b1 parameter evaporation: NaN-inf with nlrob()
   #lapply(thplDiameterFromHeight$chapmanReplaceAbat$fit, confint2, level = 0.99)
-  #lapply(thplDiameterFromHeight$chapmanReplaceAbat$fit, get_model_coefficients)
+  #bind_rows(lapply(thplDiameterFromHeight$chapmanReplaceAbat$fit, get_model_coefficients))
   
   if (thplOptions$fitDbhNlrob)
   {
@@ -376,7 +374,7 @@ if (thplOptions$fitDbh)
   
   thplDiameterFromHeightGslNlsDefault = list(chapmanReplace = fit_gsl_nls("Chapman-Richards replace", DBH ~ a1*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016defaultWeight, start = list(a1 = 200, b1 = 0.01, b2 = 0.95), control = gsl_nls_control(maxiter = 250, xtol = 1E-5)))
   thplDiameterFromHeightGslNlsDefault$chapmanReplaceAbat = fit_gsl_nls("Chapman-Richards replace ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016defaultWeight, start = list(a1 = 200, a2 = 0, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 500), significant = FALSE)
-  thplDiameterFromHeightGslNlsDefault$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016defaultWeight, start = list(a1 = 100, a9 = 2.3, b1 = 0.01, b2 = 0.8), control = gsl_nls_control(maxiter = 500))
+  thplDiameterFromHeightGslNlsDefault$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016defaultWeight, start = list(a1 = 200, a9 = 0, b1 = 0.01, b2 = 0.8), significant = FALSE)
   thplDiameterFromHeightGslNlsDefault$chapmanRichards = fit_gsl_nls("Chapman-Richards inverse", DBH ~ a1*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), thpl2016defaultWeight, start = list(a1 = -200, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 250))
   thplDiameterFromHeightGslNlsDefault$chapmanRichardsAbat = fit_gsl_nls("Chapman-Richards inverse ABA+T", DBH ~ (a1 + a2 * tallerApproxBasalArea)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), thpl2016defaultWeight, start = list(a1 = -200, a2 = 0, b1 = 0.01, b2 = 1.0), control = gsl_nls_control(maxiter = 500), significant = FALSE)
   thplDiameterFromHeightGslNlsDefault$chapmanRichardsPhysio = fit_gsl_nls("Chapman-Richards inverse physio", DBH ~ (a1 + a1p * isPlantation + a8 * topographicShelterIndex)*log(1 - pmin((b1 + b1p * isPlantation)*(TotalHt - 1.37)^b2, 0.9999)), thpl2016defaultWeightPhysio, start = list(a1 = -70, a1p = 40, a8 = 0.3, b1 = 0.01, b1p = 0.03, b2 = 0.55), control = gsl_nls_control(maxiter = 250, xtol = 5E-5))
@@ -425,7 +423,6 @@ if (htDiaOptions$includeInvestigatory)
     #geom_line(aes(x = predict(thplDiameterFromHeight$sharmaParton), y = TotalHt, color = "modified Sharma-Parton", group = isPlantation), alpha = 0.5) +
     #geom_line(aes(x = predict(thplDiameterFromHeight$chapmanReplace), y = TotalHt, color = "Chapman-Richards replace", group = isPlantation)) +
     #geom_line(aes(x = predict(thplDiameterFromHeight$chapmanReplaceAbat), y = TotalHt, color = "Chapman-Richards replace approximate BA+L", group = isPlantation), alpha = 0.5) +
-    #geom_line(aes(x = predict(thplDiameterFromHeight$chapmanReplaceBal), y = TotalHt, color = "Chapman-Richards replace BA+L", group = isPlantation), alpha = 0.5) +
     #geom_line(aes(x = predict(thplDiameterFromHeight$chapmanRichards), y = TotalHt, color = "Chapman-Richards", group = isPlantation)) +
     #geom_line(aes(x = predict(thplDiameterFromHeight$michaelisMentenReplace), y = TotalHt, color = "Michaelis-Menten replace", group = isPlantation)) +
     #geom_line(aes(x = predict(thplDiameterFromHeight$naslund), y = TotalHt, color = "Näslund", group = isPlantation)) +
@@ -460,15 +457,9 @@ if (thplOptions$fitDbhMixed)
   thplDiameterFromHeightMixed$chapmanReplaceAbat = fit_nlme("Chapman-Richards replace ABA+T", DBH ~ (a1 + a1r + a2 * tallerApproxBasalArea)*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016, 
                                                             fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
                                                             start = list(fixed = c(a1 = 200, a2 = 0, b1 = 0.01, b2 = 1.0)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # singularity in backsolve
-  #thplDiameterFromHeightMixed$chapmanReplaceBal = fit_nlme("Chapman-Richards replace BA+L", DBH ~ (a1 + a1r + a2 * basalAreaLarger) * (exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, 
-  #                                                         fixedFormula = a1 + a2 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
-  #                                                         start = list(fixed = c(a1 = 200, a2 = -10, b1 = 0.01, b2 = 1.0)), control = nlmeControl(maxIter = 300, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
-  #thplDiameterFromHeightMixed$chapmanReplaceBalRelHt = fit_nlme("Chapman-Richards replace BA+L RelHt", DBH ~ (a1 + a1r + a2 * basalAreaLarger + a9 * pmin(relativeHeight, 1.5)) * (exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, 
-  #                                                              fixedFormula = a1 + a2 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
-  #                                                              start = list(fixed = c(a1 = 10, a2 = 0, a9 = 2.3, b1 = 0.01, b2 = 1.0)), control = nlmeControl(maxIter = 250, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # singularity in backsolve
-  #thplDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, 
+  #thplDiameterFromHeightMixed$chapmanReplaceRelHt = fit_nlme("Chapman-Richards replace RelHt", DBH ~ (a1 + a1r + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016, 
   #                                                           fixedFormula = a1 + a9 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
-  #                                                           start = list(fixed = c(a1 = 100, a9 = 2.3, b1 = 0.01, b2 = 0.8)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # step halving
+  #                                                           start = list(fixed = c(a1 = 200, a9 = 0, b1 = 0.01, b2 = 0.8)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001), significant = FALSE) # step halving
   thplDiameterFromHeightMixed$chapmanRichards = fit_nlme("Chapman-Richards inverse", DBH ~ (a1 + a1r)*log(1 - pmin(b1*(TotalHt - 1.37)^b2, 0.9999)), thpl2016, 
                                                          fixedFormula = a1 + b1 + b2 ~ 1, randomFormula = a1r ~ 1, 
                                                          start = list(fixed = c(a1 = -200, b1 = 0.01, b2 = 1.0)), control = nlmeControl(maxIter = 500, tolerance = 0.01, pnlsTol = 1, msTol = 0.001)) # max iterations
@@ -640,7 +631,7 @@ if (thplOptions$fitHeight & thplOptions$fitDbh)
   #AIC(thplHeightFromDiameterPreferred$hossfeld, thplHeightFromDiameterPreferred$michaelisMenten, thplHeightFromDiameterPreferred$prodan, thplHeightFromDiameterPreferred$ratkowsky)
   
   thplDiameterFromHeightPreferred = list(gam = fit_gam("REML GAM", DBH ~ s(TotalHt, bs = "ts", by = as.factor(isPlantation), k = 9, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1))
-  thplDiameterFromHeightPreferred$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)^b2) - 1), thpl2016, start = list(a1 = 100, a9 = 2.3, b1 = 0.01, b2 = 0.8), control = gsl_nls_control(maxiter = 500), folds = 1, repetitions = 1)
+  thplDiameterFromHeightPreferred$chapmanReplaceRelHt = fit_gsl_nls("Chapman-Richards replace RelHt", DBH ~ (a1 + a9 * pmin(relativeHeight, 1.5))*(exp(b1*(TotalHt - 1.37)) - 1)^b2, thpl2016, start = list(a1 = 100, a9 = 2.3, b1 = 0.01, b2 = 0.8), control = gsl_nls_control(maxiter = 500), folds = 1, repetitions = 1)
   thplDiameterFromHeightPreferred$parabolic = fit_lm("parabolic", DBH ~ 0 + I(TotalHt - 1.37) + I(isPlantation*(TotalHt - 1.37)) + I(isPlantation*(TotalHt - 1.37)^2), thpl2016, folds = 1, repetitions = 1)
   thplDiameterFromHeightPreferred$power = fit_gsl_nls("power", DBH ~ a1*(TotalHt - 1.37)^b1, thpl2016, start = list(a1 = 1.93, b1 = 1.08), folds = 1, repetitions = 1)
   #thplDiameterFromHeightPreferred$gamAbat = fit_gam("REML GAM ABA+T", DBH ~ s(TotalHt, tallerApproxBasalArea, standBasalAreaApprox, bs = "ts", by = as.factor(isPlantation), k = 16, pc = gamConstraint), data = thpl2016, constraint = thpl2016gamConstraint, folds = 1, repetitions = 1)
