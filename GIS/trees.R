@@ -35,14 +35,14 @@ if (treeOptions$rebuildTreeList)
   Sys.time() - mergedTreeReadStart # 2.6 minutes, 9950X
   
   #st_write(elliottTrees, file.path(treeOptions$dataPath, "treetops/treetops merged rf v2 6556 (transitory).gpkg"))
-  iLandTreeIntersectStart = Sys.time() # >50 minutes since runs single threaded, apparently without spatial indexing, 9900X (crop() in terra 1.7-55 appears computationally intractable)
+  iLandTreeIntersectStart = Sys.time() # >50 minutes 9900X, 37 minutes 9950X since runs single threaded, apparently without spatial indexing, crop() in terra 1.7-55 appears computationally intractable
   elliottTrees = st_intersection(elliottTrees, elliottILandResourceUnitBoundary)
   Sys.time() - iLandTreeIntersectStart
   st_write(elliottTrees, "treetops 400 m rf v2 (transitory).gpkg", layer = "treetops merged 400 m")
   
   # requires 72 GB DDR @ 11.8 M trees
   elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 (transitory).gpkg"), layer = "treetops merged 400 m", quiet = TRUE) # ~35 s to load with terra::vect() but z is dropped, so 2.7 min with st_read()
-  elliottTrees$elevation = 0.3048 * elliottTrees$elevation # CRS is metric from QGIS export but field values need conversion
+  elliottTrees$elevation = 0.3048 * st_coordinates(elliottTrees)[, "Z"] # CRS is metric from QGIS export but field values need conversion
   elliottTrees$height = 0.3048 * elliottTrees$height
   elliottTrees$radius = 0.3048 * elliottTrees$radius
 
@@ -89,16 +89,11 @@ if (treeOptions$rebuildTreeList)
   
   # 2.3 GB on disk @ 11.8 M trees
   writeVector(elliottTrees, file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", overwrite = TRUE)
+} else {
+  elliottTreeReadStart = Sys.time() # 61 s, ~8 GB in memory
+  elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", quiet = TRUE)
+  Sys.time() - elliottTreeReadStart
 }
-
-# read trees even if treeOptions$rebuildTreeList == TRUE to switch from terra to sf
-elliottTreeReadStart = Sys.time() # 61 s, ~8 GB in memory
-elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", quiet = TRUE)
-Sys.time() - elliottTreeReadStart
-
-#elliottTreeReadStart = Sys.time() # 36 s, ~32 GB in memory
-#elliottTrees = vect(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops")
-#Sys.time() - elliottTreeReadStart
 
 
 ## assign species and predict DBH

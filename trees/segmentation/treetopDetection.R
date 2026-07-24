@@ -1,3 +1,8 @@
+# treetop setup
+# In this file
+# - functions for loading local maxima tiles and treetop training data (used here and in treetopDetectionJob.R)
+# - random forest training (treetopOptionS$fitRandomForest = TRUE)
+#
 # some investigatory code here assumes segmentation/setup.R
 library(dplyr)
 library(FNN)
@@ -31,10 +36,10 @@ treetopOptions = tibble(fitRandomForest = FALSE,
                         includeSetup = FALSE,
                         folds = 2,
                         repetitions = 25,
-                        neighborhoodBufferWidth = 25, # in CRS units, so feet
+                        neighborhoodBufferWidthInFeet = 25, # in CRS units, so feet
                         rangerThreads = 0.5 * future::availableCores(),
                         dsmCellSize = 1.5, # feet
-                        tileSize = 3000) # ft
+                        tileSizeInFeet = 3000) # ft
 
 acceptedTreetopsDsmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops accepted"
 acceptedTreetopsChmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops accepted chm"
@@ -176,7 +181,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
   # neighbors in a merge cluster are based on separate consideration of points' xyz positions relative to the cluster's centroid. Since
   # merge point clustering is presumed needed to seed crown segmentation, only the candidate cluster points and geometric information
   # passed through from the digital surface model and point clouds is available for decision making.
-  
+
   # find cluster convertable treetop pairs (triplets, ...)
   # neighborhoodMaxima = tileNeighborhood
   treetopTileIndices = which(treetopClassification == "yes")
@@ -237,8 +242,10 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
                            neighbor2uniqueID = neighborhoodMaxima$uniqueID[neighbor2neighborhoodIndex],
                            neighbor3uniqueID = neighborhoodMaxima$uniqueID[neighbor3neighborhoodIndex],
                            neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex])
-    #table(mergePointKnn$neighbors)
-    #mergePointKnn %>% filter(id %in% c(59103, 59104, 59494)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000, neighbor2uniqueID = neighbor2uniqueID - 423006840000000) %>% select(tile, id, neighbors, mergeDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
+    # debugging diagnostics
+    #table(mergePointKnn$neighbors) # number of clusters by size
+    #mergePointKnn %>% filter(id %in% c(67529)) %>% select(neighbors, uniqueID, neighbor1uniqueID, neighbor2uniqueID, neighbor1distance, neighbor2distance, mergeDistanceThreshold, neighbor1neighborhoodIndex, neighbor2neighborhoodIndex) %>%
+    #  mutate(across(uniqueID:neighbor2uniqueID, ~tibble::num(.x, notation = "dec")))
   } else {
     mergePointKnn = tibble(uniqueID = numeric(), neighbors = integer())
   }
@@ -252,12 +259,12 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
   # clusters post hoc as it's unclear whether connectivity through noise points during cluster formation is more of a feature or more of a bug.
   mergeClusterInitiatingPoints = bind_rows(mergePointKnn %>% filter(neighbors > 0),
                                            treetopMergeKnn %>% filter(neighbors > 0))
-  mergePointUniqueIDs = unique(c(mergeClusterInitiatingPoints$uniqueID,
-                                 na.omit(mergeClusterInitiatingPoints$neighbor1uniqueID),
-                                 na.omit(mergeClusterInitiatingPoints$neighbor2uniqueID),
-                                 na.omit(mergeClusterInitiatingPoints$neighbor3uniqueID),
-                                 na.omit(mergeClusterInitiatingPoints$neighbor4uniqueID)))
-  addedMergePointUniqueIDs = setdiff(mergePointUniqueIDs, mergeClusterInitiatingPoints$uniqueID)
+  initialMergePointUniqueIDs = unique(c(mergeClusterInitiatingPoints$uniqueID,
+                                        na.omit(mergeClusterInitiatingPoints$neighbor1uniqueID),
+                                        na.omit(mergeClusterInitiatingPoints$neighbor2uniqueID),
+                                        na.omit(mergeClusterInitiatingPoints$neighbor3uniqueID),
+                                        na.omit(mergeClusterInitiatingPoints$neighbor4uniqueID)))
+  addedMergePointUniqueIDs = setdiff(initialMergePointUniqueIDs, mergeClusterInitiatingPoints$uniqueID)
 
   mergePoints = bind_rows(mergeClusterInitiatingPoints %>% mutate(isInitiating = TRUE), 
                           neighborhoodMaxima %>% filter(uniqueID %in% addedMergePointUniqueIDs) %>% mutate(isInitiating = FALSE)) %>%
@@ -289,7 +296,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
              clusterMaxDsmZ = max(dsmZ),
              clusterMaxOriginatingDsmZ = max(if_else(isInitiating, dsmZ, -Inf)),
              # ±14 cm vegetation accuracy in feet + height based wind motion tolerance, manual height coefficient tune from tile inspection
-             clusterThickness = 2 * 0.46 + 0.008 * max(height),
+             clusterThickness = pmax(2 * 0.14, 0.008 * max(height)), # 2 * 0.46 if height in feet (0.008 doesn't change as thickness shares units with height)
              # enable rejection of non-initiating points significantly above the initiating points
              # Makes clusters less likely to climb branches of adjacent trees.
              clusterMaxDsmZ = if_else((clusterMaxDsmZ - clusterThickness) > clusterMaxOriginatingDsmZ, clusterMaxOriginatingDsmZ, clusterMaxDsmZ),
@@ -297,7 +304,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
       # TODO: refine outlier removal?
       # If a noise point's included in a cluster it is typically due it to not being classified as such.
       filter((dsmZ >= (clusterMaxDsmZ - clusterThickness)) & (dsmZ <= clusterMaxDsmZ), # within height range
-             clusterDistance < 2 * clusterMeanDistance + 1E-6) %>% # within distance of centroid, epsilon keeps single points from excluding themselves (clusterDistance = clusterMeanDistance = 0)
+             clusterDistance < 2 * clusterMeanDistance + 1E-6) %>% # within distance of centroid, epsilon keeps single points from excluding themselves (clusterDistance = clusterMeanDistance = 0 case)
       # recalculate merge cluster geometry after outlier removal
       mutate(clusterCentroidX = mean(x),
              clusterCentroidY = mean(y), 
@@ -307,7 +314,13 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
              clusterPoints = n())
       # leave grouped
       # likely contains some clusters with one point due to all neighbors being rejected as cluster suitable
+    # debugging diagnostics
     #table(mergePoints$clusterPoints)
+    mergePoints %>% filter(mergeClusterNumber %in% c(527)) %>% 
+      mutate(inClusterXY = clusterDistance < 2 * clusterMeanDistance + 1E-6,
+             inClusterZ = (dsmZ >= (clusterMaxDsmZ - clusterThickness)) & (dsmZ <= clusterMaxDsmZ)) %>%
+      select(mergeClusterNumber, id, inClusterXY, inClusterZ, clusterDistance, clusterMeanDistance, clusterThickness, clusterMaxDsmZ, dsmZ, neighbors)
+    
     #mergePoints %>% filter(clusterPoints == 1) %>% select(id, treetop, isInitiating, neighbors, neighbor1distance, neighbor2distance, neighbor3distance)
     #mergePoints %>% ungroup() %>% summarize(mergePoints = n(), clusterlessPoints = sum(is.na(mergeClusterNumber))) # likely fewer points than the initial set due to outlier removal
     #mergePoints %>% filter(id %in% c(24704, 25078)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000) %>% select(mergeClusterNumber, clusterCentroidX, clusterCentroidY, tile, id, x, y, neighborDistanceThreshold, neighbor1uniqueID, neighbor1distance, neighbor2uniqueID, neighbor2distance)
@@ -321,12 +334,12 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
     tileGridIndices = get_tile_grid_indices(tileNames)
     mergePointsInOnTileClusters = left_join(mergePoints %>% # still grouped by mergeClusterNumber
                                               filter(clusterPoints > 1) %>% # exclude singletons
-                                              mutate(tileGridIndexX = floor(clusterCentroidX / treetopOptions$tileSize),
-                                                     tileGridIndexY = floor(clusterCentroidY / treetopOptions$tileSize)),
+                                              mutate(tileGridIndexX = floor(clusterCentroidX / (0.3048 * treetopOptions$tileSizeInFeet)),
+                                                     tileGridIndexY = floor(clusterCentroidY / (0.3048 * treetopOptions$tileSizeInFeet))),
                                             tileGridIndices %>% rename(centroidTile = tile),
                                             by = join_by(tileGridIndexX, tileGridIndexY)) %>%
       filter(is.na(tile) == FALSE)
-    
+
     treetopsFromMergePoints = mergePointsInOnTileClusters %>% # still grouped by mergeClusterNumber
       filter(clusterPoints > 1) %>% # exclude singletons
       summarize(treeID = min(if_else(tile == centroidTile[1], id, NA_integer_), na.rm = TRUE), # all clusters should have at least one merge point in tileMaxima
@@ -337,6 +350,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
                 x = clusterCentroidX[1],
                 y = clusterCentroidY[1],
                 radius = max(radius), dsmZ = clusterCentroidDsmZ[1], cmmZ = mean(cmmZ), height = mean(height),
+                elevation = dsmZ - height, # DTM elevation, other approaches or definitions might produce different values but this calculation at least ensures dsmZ, height, and elevation are consistent
                 # leave ring statistics unpopulated as they're currently used only from local maxima and are not well defined for treetops obtained from merge clusters
                 # sourceID = if_else(length(unique(sourceID)) == 1, sourceID[1], as.integer(0)), # source ID variety in merge clusters not currently used
                 # sourceIDs = length(unique(sourceID)), 
@@ -344,7 +358,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
       select(-mergeClusterNumber) # potentially useful to flow for investigation and debugging but not functionally needed by any caller
   } else {
     mergePointsInOnTileClusters = mergePoints %>% filter(FALSE) # should be an empty tibble
-    treetopsFromMergePoints = tibble(tile = character(), treeID = integer(), x = numeric(), y = numeric(), 
+    treetopsFromMergePoints = tibble(tile = character(), treeID = integer(), x = numeric(), y = numeric(), elevation = numeric(),
                                      radius = numeric(), dsmZ = numeric(), cmmZ = numeric(), height = numeric(), 
                                      mergePoints = integer(), mergePointsOnTile = integer())
   }
@@ -364,55 +378,71 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
   # identify on tile local maxima which are merge points so that classifying callers update non-merge points that were clustered in and set cluster IDs
   # Contains NAs for merge points which are in neighborhoodMaxima but not in tileMaxima.
   mergePointsInMultipointClusters = mergePoints %>% filter(uniqueID %in% uniqueIDsInMultipointClusters) %>%
-    mutate(tileIndex = match(uniqueID, tileMaxima$uniqueID)) %>%
-    select(tile, id, x, y, mergeClusterNumber, tileIndex, treetop) # , clusterPoints) # if additional classes besides noise are excluded from final cluster definitions a few merge clusters will contain fewer points that clusterPoints
+    mutate(tileIndex = match(uniqueID, tileMaxima$uniqueID))
 
+  # identify local maxima which initiated merge clusters but were then dropped from the clusters without conversion to single treetops
+  # Data flow between tibbles and base set functions is fiddly here since tibble[indicies, ]$column returns a vector but tibble[indices, "column"] .
+  ejectedFromTreetopStatusByClustering = tibble(uniqueID = setdiff(tileMaxima[mergePointTileIndices, ]$uniqueID, c(mergePointsInMultipointClusters$uniqueID, singleTreetops$uniqueID)),
+                                                tileIndex = match(uniqueID, tileMaxima$uniqueID))
+  #tibble(initiatingMergePointsFromInitialClassification = length(mergePointTileIndices), initiatingMergePointsAfterKnnExpansion = nrow(mergeClusterInitiatingPoints), 
+  #       reclusteredMergePoints = nrow(mergePointsInMultipointClusters), 
+  #       retainedMergePointsFromInitialClassification = length(intersect(tileMaxima[mergePointTileIndices, ]$uniqueID, mergePointsInMultipointClusters$uniqueID)),
+  #       deflectedToSingleTop = nrow(singleTreetops),
+  #       leakedPoints = initiatingMergePointsFromInitialClassification - retainedMergePointsFromInitialClassification - deflectedToSingleTop)
+
+  # data integrity checks
   singleTopAndMergePointTileIndices = intersect(singleTreetops$tileIndex, mergePointsInMultipointClusters$tileIndex)
   if (length(singleTopAndMergePointTileIndices) > 0)
   {
     stop(paste0("Internal consistency failure on tile ", tileMaxima$tile[1], ". ", length(singleTopAndMergePointTileIndices), " local maxima are both in merge clusters and identified as single tops."))
   }
   
-  return(list(mergeTreetops = treetopsFromMergePoints, mergePoints = mergePointsInMultipointClusters, singleTreetops = singleTreetops))
+  #tibble(mergeRows = nrow(mergePoints), uniqueMergePointIndices = length(unique(mergePoints$tileIndex))) # counts should be identical
+  return(list(mergeTreetops = treetopsFromMergePoints, 
+              mergePoints = mergePointsInMultipointClusters %>%
+                select(tile, id, x, y, mergeClusterNumber, tileIndex, treetop), # clusterPoints) # if additional classes besides noise are excluded from final cluster definitions a few merge clusters will contain fewer points than clusterPoints
+              singleTreetops = singleTreetops,
+              ejectedTreetops = ejectedFromTreetopStatusByClustering))
 }
 
 get_merge_distance = function(tileMaxima, treetopMerge = FALSE)
 {
+  # TODO: should break be above 45 m since merge point probability increases mainly above 55 m?
   # TODO: include radius penalty for same source ID?
-  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 125, 0, 1/40 * (tileMaxima$height - 125))))
+  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 45, 0, 1/40 * (tileMaxima$height - 45)))) # break at ~150 feet if in English units
   #if (treetopMerge)
   #{
-  #  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 125, 0, 1/40 * (tileMaxima$height - 125))))
+  #  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 45, 0, 1/40 * (tileMaxima$height - 45))))
   #} else {
   #  verticalExaggeration = 25 # DSM multiplier
-  #  return(treetopOptions$dsmCellSize + 0.1 * treetopOptions$verticalExaggeration + tileMaxima$height^0.45)
+  #  return(treetopOptions$dsmCellSize + 0.1 * treetopOptions$verticalExaggeration + tileMaxima$height^0.45) # update for metric height if brough back into use
   #}
   
-  #inclusionRadius = tibble(height = seq(0, 250), 
-  #                         linear = treetopOptions$dsmCellSize * (1 + 1/60 * height + if_else(height < 125, 0, 1/40 * (height - 125))),
-  #                         power = height^0.5)
-  #ggplot() +
-  #  geom_line(aes(x = linear, y = height, color = "linear"), inclusionRadius) +
-  #  geom_line(aes(x = power, y = height, color = "power"), inclusionRadius) +
-  #  labs(x = "radius, feet", y = "height, feet", color = NULL) +
-  #  scale_x_continuous(breaks = seq(0, 20, by = 3.28084), labels = scales::number_format(accuracy = 0.01))
+  inclusionRadius = tibble(height = seq(0, 100), 
+                           linear = treetopOptions$dsmCellSize * (1 + 1/60 * height + if_else(height < 45, 0, 1/40 * (height - 45))),
+                           power = height^0.5)
+  ggplot() +
+    geom_line(aes(x = linear, y = height, color = "linear"), inclusionRadius) +
+    #geom_line(aes(x = power, y = height, color = "power"), inclusionRadius) +
+    labs(x = "radius, m", y = "height, m", color = NULL) +
+    scale_x_continuous(breaks = seq(0, 20), labels = scales::number_format(accuracy = 0.01))
 }
 
-get_tile_extent = function(tileName, bufferWidth = 0)
+get_tile_extent = function(tileName, bufferWidthInFeet = 0)
 {
-  xTileMin = 100 * as.integer(str_sub(tileName, 2, 6))
-  yTileMin = 100 * as.integer(str_sub(tileName, 8, 12))
-  return(list(xMin = xTileMin - bufferWidth,
-              xMax = xTileMin + treetopOptions$tileSize + bufferWidth,
-              yMin = yTileMin - bufferWidth,
-              yMax = yTileMin + treetopOptions$tileSize + bufferWidth))
+  xTileMinInFeet = 100 * as.integer(str_sub(tileName, 2, 6))
+  yTileMinInFeet = 100 * as.integer(str_sub(tileName, 8, 12))
+  return(list(xMin = 0.3048 * (xTileMinInFeet - bufferWidthInFeet),
+              xMax = 0.3048 * (xTileMinInFeet + treetopOptions$tileSizeInFeet + bufferWidthInFeet),
+              yMin = 0.3048 * (yTileMinInFeet - bufferWidthInFeet),
+              yMax = 0.3048 * (yTileMinInFeet + treetopOptions$tileSizeInFeet + bufferWidthInFeet)))
 }
 
 get_tile_grid_indices = function(tileNames)
 {
   return(tibble(tile = tileNames,
-                tileGridIndexX = 100 * as.integer(str_sub(tileNames, 2, 6)) / treetopOptions$tileSize,
-                tileGridIndexY = 100 * as.integer(str_sub(tileNames, 8, 12)) / treetopOptions$tileSize))
+                tileGridIndexX = 100 * as.integer(str_sub(tileNames, 2, 6)) / treetopOptions$tileSizeInFeet,
+                tileGridIndexY = 100 * as.integer(str_sub(tileNames, 8, 12)) / treetopOptions$tileSizeInFeet))
 }
 
 get_treetop_accuracy = function(predicted, validationData)
@@ -479,22 +509,31 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
   }
   localMaxima = st_read(localMaximaFilePath, layer = localMaximaLayer, quiet = TRUE)
   
-  # use minimumHeight to exclude groundcover maxima and maxima from sensor noise or error
-  # Height is still in English units at this point so convert minimumHeight from metric.
-  # For now, also exclude treetop candidates with so few adjacent points ring 1 or ring 2 has no data since it's 1) it's difficult to tell if these are maxima, 2) it's unlikely they're actually maxima, and 3) these likely comprise < 0.01% of maximas.
-  localMaximaCrsParameters = st_crs(localMaxima, parameters = TRUE)
-  minimumHeightInCrsUnits = minimumHeightInM
-  if (localMaximaCrsParameters$units_gdal == "foot")
-  {
-    minimumHeightInCrsUnits = 3.28084 * minimumHeightInM
-  }
+  # default every local maxima as a singleton, overridden below if an accepted tile with merge information is available
+  localMaxima$mergeClusterID = localMaxima$id
   
-  localMaximaExcluded = localMaxima %>% filter((height < minimumHeightInCrsUnits) | is.na(localMaxima$ring1mean) | is.na(localMaxima$ring2mean))
-  localMaxima %<>% filter((height >= minimumHeightInCrsUnits) & (is.na(ring1mean) == FALSE) & (is.na(ring2mean) == FALSE))
+  slopeAspect = rast(file.path(localMaximaPath, "../slopeAspect", paste0(tileName, ".tif")))
+  localMaximaSlopeAspect = terra::extract(slopeAspect, localMaxima, method = "simple") # nearest neighbor
+  localMaxima$dsmSlope = localMaximaSlopeAspect$dsmSlope
+  localMaxima$cmmSlope3 = localMaximaSlopeAspect$cmmSlope3
   
-  # convert to metric
-  if (localMaximaCrsParameters$units_gdal == "foot")
+  localMaximaCrs = crs(localMaxima) # capture WKT for callers needing to rebuild sf geometry later
+  localMaximaCrsWithParameters = st_crs(localMaxima, parameters = TRUE) # needed to get units_gdal below
+  localMaximaCoordinates = st_coordinates(localMaxima)
+  localMaxima = as_tibble(localMaxima) %>% 
+    mutate(x = localMaximaCoordinates[, "X"], 
+           y = localMaximaCoordinates[, "Y"], 
+           elevation = localMaximaCoordinates[, "Z"],
+           uniqueID = 1000000 * as.integer(str_c(str_sub(tileName, 2, 6), str_sub(tileName, 8, 12))) + localMaxima$id,
+           uniqueMergeClusterID = 1000000 * as.integer(str_c(str_sub(tileName, 2, 6), str_sub(tileName, 8, 12))) + localMaxima$mergeClusterID)
+  attributes(localMaxima)$crs = localMaximaCrs
+
+  # convert to metric, if needed
+  if (localMaximaCrsWithParameters$units_gdal == "foot")
   {
+    localMaxima$x = 0.3048 * localMaxima$x
+    localMaxima$y = 0.3048 * localMaxima$y
+    localMaxima$elevation = 0.3048 * localMaxima$elevation
     localMaxima$radius = 0.3048 * localMaxima$radius
     localMaxima$dsmZ = 0.3048 * localMaxima$dsmZ
     localMaxima$cmmZ = 0.3048 * localMaxima$cmmZ
@@ -521,22 +560,10 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
     localMaxima$ring5variance = 0.3048^2 * localMaxima$ring5variance
   }
   
-  # default every local maxima as a singleton, overridden below if an accepted tile with merge information is available
-  localMaxima$mergeClusterID = localMaxima$id
-  
-  slopeAspect = rast(file.path(localMaximaPath, "../slopeAspect", paste0(tileName, ".tif")))
-  localMaximaSlopeAspect = terra::extract(slopeAspect, localMaxima, method = "simple") # nearest neighbor
-  localMaxima$dsmSlope = localMaximaSlopeAspect$dsmSlope
-  localMaxima$cmmSlope3 = localMaximaSlopeAspect$cmmSlope3
-  
-  localMaximaCrs = crs(localMaxima) # capture CRS for callers needing to rebuild sf geometry later
-  localMaximaXY = st_coordinates(localMaxima)[, c("X", "Y")]
-  localMaxima = as_tibble(localMaxima) %>% 
-    mutate(x = localMaximaXY[, "X"], 
-           y = localMaximaXY[, "Y"], 
-           uniqueID = 1000000 * as.integer(str_c(str_sub(tileName, 2, 6), str_sub(tileName, 8, 12))) + localMaxima$id,
-           uniqueMergeClusterID = 1000000 * as.integer(str_c(str_sub(tileName, 2, 6), str_sub(tileName, 8, 12))) + localMaxima$mergeClusterID)
-  attributes(localMaxima)$crs = localMaximaCrs
+  # use minimumHeight to exclude groundcover maxima and maxima from sensor noise or error
+  # Height is still in English units at this point so convert minimumHeight from metric.
+  # For now, also exclude treetop candidates with so few adjacent points ring 1 or ring 2 has no data since it's 1) it's difficult to tell if these are maxima, 2) it's unlikely they're actually maxima, and 3) these likely comprise < 0.01% of maximas.
+  localMaxima %<>% filter((height >= minimumHeightInM) & (is.na(ring1mean) == FALSE) & (is.na(ring2mean) == FALSE))
   
   if (is.null(acceptedTileName))
   {
@@ -552,6 +579,7 @@ get_treetop_eligible_maxima = function(tileName, localMaximaLayer = "localMaxima
   localMaxima$treetop = factor("no", levels = c("no", "yes", "merge", "noise", "maybe noise"))
   
   availableTruthLayers = st_layers(acceptedTreetopsFilePath)
+  localMaximaXY = localMaximaCoordinates[, c("X", "Y")]
   if ("treetops" %in% availableTruthLayers$name)
   {
     acceptedTreetops = st_read(acceptedTreetopsFilePath, layer = "treetops", quiet = TRUE)
@@ -646,7 +674,7 @@ get_treetop_eligible_neighborhood = function(tileName, tileMaxima, localMaximaPa
 {
   xTile = as.integer(str_sub(tileName, 2, 6))
   yTile = as.integer(str_sub(tileName, 8, 12))
-  tileExtentBuffered = get_tile_extent(tileName, treetopOptions$neighborhoodBufferWidth)
+  tileExtentBuffered = get_tile_extent(tileName, treetopOptions$neighborhoodBufferWidthInFeet)
   
   northwestMaxima = NULL
   northMaxima = NULL
@@ -657,57 +685,70 @@ get_treetop_eligible_neighborhood = function(tileName, tileMaxima, localMaximaPa
   southMaxima = NULL
   southeastMaxima = NULL
   
-  tileNameNorthwest = sprintf("s%05dw%05d", xTile - 0.01 * treetopOptions$tileSize, yTile + 0.01 * treetopOptions$tileSize)
+  tileNameNorthwest = sprintf("s%05dw%05d", xTile - 0.01 * treetopOptions$tileSizeInFeet, yTile + 0.01 * treetopOptions$tileSizeInFeet)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameNorthwest, ".gpkg"))))
   {
     northwestMaxima = get_treetop_eligible_maxima(tileNameNorthwest, localMaximaPath = localMaximaPath) %>% 
       filter(x >= tileExtentBuffered$xMin, y <= tileExtentBuffered$yMax)
   }
-  tileNameNorth = sprintf("s%05dw%05d", xTile, yTile + 0.01 * treetopOptions$tileSize)
+  tileNameNorth = sprintf("s%05dw%05d", xTile, yTile + 0.01 * treetopOptions$tileSizeInFeet)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameNorth, ".gpkg"))))
   {
     northMaxima = get_treetop_eligible_maxima(tileNameNorth, localMaximaPath = localMaximaPath) %>% 
       filter(y <= tileExtentBuffered$yMax)
   }
-  tileNameNortheast = sprintf("s%05dw%05d", xTile + 0.01 * treetopOptions$tileSize, yTile + 0.01 * treetopOptions$tileSize)
+  tileNameNortheast = sprintf("s%05dw%05d", xTile + 0.01 * treetopOptions$tileSizeInFeet, yTile + 0.01 * treetopOptions$tileSizeInFeet)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameNortheast, ".gpkg"))))
   {
     northeastMaxima = get_treetop_eligible_maxima(tileNameNortheast, localMaximaPath = localMaximaPath) %>% 
       filter(x <= tileExtentBuffered$xMax, y <= tileExtentBuffered$yMax)
   }
   
-  tileNameWest = sprintf("s%05dw%05d", xTile - 0.01 * treetopOptions$tileSize, yTile)
+  tileNameWest = sprintf("s%05dw%05d", xTile - 0.01 * treetopOptions$tileSizeInFeet, yTile)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameWest, ".gpkg"))))
   {
     westMaxima = get_treetop_eligible_maxima(tileNameWest, localMaximaPath = localMaximaPath) %>% 
       filter(x >= tileExtentBuffered$xMin)
   }
-  tileNameEast = sprintf("s%05dw%05d", xTile + 0.01 * treetopOptions$tileSize, yTile)
+  tileNameEast = sprintf("s%05dw%05d", xTile + 0.01 * treetopOptions$tileSizeInFeet, yTile)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameEast, ".gpkg"))))
   {
     eastMaxima = get_treetop_eligible_maxima(tileNameEast, localMaximaPath = localMaximaPath) %>% 
       filter(x <= tileExtentBuffered$xMax)
   }
   
-  tileNameSouthwest = sprintf("s%05dw%05d", xTile - 0.01 * treetopOptions$tileSize, yTile - 0.01 * treetopOptions$tileSize)
+  tileNameSouthwest = sprintf("s%05dw%05d", xTile - 0.01 * treetopOptions$tileSizeInFeet, yTile - 0.01 * treetopOptions$tileSizeInFeet)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameSouthwest, ".gpkg"))))
   {
     southwestMaxima = get_treetop_eligible_maxima(tileNameSouthwest, localMaximaPath = localMaximaPath) %>% 
       filter(x >= tileExtentBuffered$xMin, y >= tileExtentBuffered$yMin)
   }
-  tileNameSouth = sprintf("s%05dw%05d", xTile, yTile - 0.01 * treetopOptions$tileSize)
+  tileNameSouth = sprintf("s%05dw%05d", xTile, yTile - 0.01 * treetopOptions$tileSizeInFeet)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameSouth, ".gpkg"))))
   {
     southMaxima = get_treetop_eligible_maxima(tileNameSouth, localMaximaPath = localMaximaPath) %>% 
       filter(y >= tileExtentBuffered$yMin)
   }
-  tileNameSoutheast = sprintf("s%05dw%05d", xTile + 0.01 * treetopOptions$tileSize, yTile - 0.01 * treetopOptions$tileSize)
+  tileNameSoutheast = sprintf("s%05dw%05d", xTile + 0.01 * treetopOptions$tileSizeInFeet, yTile - 0.01 * treetopOptions$tileSizeInFeet)
   if (file.exists(file.path(localMaximaPath, paste0(tileNameSoutheast, ".gpkg"))))
   {
     southeastMaxima = get_treetop_eligible_maxima(tileNameSoutheast, localMaximaPath = localMaximaPath) %>% 
       filter(x <= tileExtentBuffered$xMax, y >= tileExtentBuffered$yMin)
   }
   
+  # audit neighbor positions (debugging sanity check)
+  #tribble(~position, ~n, ~minX, ~maxX, ~minY, ~maxY,
+  #        "NW", nrow(northwestMaxima), min(northwestMaxima$x), max(northwestMaxima$x), min(northwestMaxima$y), max(northwestMaxima$y),
+  #        "N",  nrow(northMaxima), min(northMaxima$x), max(northMaxima$x), min(northMaxima$y), max(northMaxima$y),
+  #        "NE", nrow(northeastMaxima), min(northeastMaxima$x), max(northeastMaxima$x), min(northeastMaxima$y), max(northeastMaxima$y),
+  #        "W",  nrow(westMaxima), min(westMaxima$x), max(westMaxima$x), min(westMaxima$y), max(westMaxima$y),
+  #        "center", nrow(tileMaxima), min(tileMaxima$x), max(tileMaxima$x), min(tileMaxima$y), max(tileMaxima$y),
+  #        "E",  nrow(eastMaxima), min(eastMaxima$x), max(eastMaxima$x), min(eastMaxima$y), max(eastMaxima$y),
+  #        "SW", nrow(southwestMaxima), min(southwestMaxima$x), max(southwestMaxima$x), min(southwestMaxima$y), max(southwestMaxima$y),
+  #        "S",  nrow(southMaxima), min(southMaxima$x), max(southMaxima$x), min(southMaxima$y), max(southMaxima$y),
+  #       "SE", nrow(southeastMaxima), min(southeastMaxima$x), max(southeastMaxima$x), min(southeastMaxima$y), max(southeastMaxima$y)) %>%
+  #  mutate(minXdelta = minX - min(tileMaxima$x), maxXdelta = maxX - max(tileMaxima$x), minYdelta = minY - min(tileMaxima$y), maxYdelta = maxY - max(tileMaxima$y))
+          
   return(bind_rows(northwestMaxima, northMaxima, northeastMaxima, eastMaxima, tileMaxima, westMaxima, southwestMaxima, southMaxima, southeastMaxima))
 }
 
@@ -890,7 +931,7 @@ if (treetopOptions$includeSetup)
                                                     get_treetop_eligible_maxima("s04230w06780", localMaximaPath = localMaximaPathV3, localMaximaLayer = "localMaximaDsm"),
                                                     get_treetop_eligible_maxima("s04200w06780", localMaximaPath = localMaximaPathV3, localMaximaLayer = "localMaximaDsm"))) %>% 
     filter(is.na(dsmSlope) == FALSE, 
-           ((420000 - treetopOptions$neighborhoodBufferWidth) < x) & (x < (426000 + treetopOptions$neighborhoodBufferWidth)), ((681000 - treetopOptions$neighborhoodBufferWidth) < y) & (y < (687000 + treetopOptions$neighborhoodBufferWidth))) %>% # window neighboring tiles, all of s04230w06840 is still included
+           (0.3048 * (420000 - treetopOptions$neighborhoodBufferWidthInFeet) < x) & (x < 0.3048 * (426000 + treetopOptions$neighborhoodBufferWidthInFeet)), (0.3048 * (681000 - treetopOptions$neighborhoodBufferWidthInFeet) < y) & (y < 0.3048 * (687000 + treetopOptions$neighborhoodBufferWidthInFeet))) %>% # window neighboring tiles, all of s04230w06840 is still included
     select(-neighbor1sourceID, -neighbor2sourceID, -neighbor3sourceID, -neighbor4sourceID, -neighbor5sourceID, # drop most non-portable values (id, sourceID, x, y, dsmZ, and cmmZ are excluded from training by predictor variable selection)
            -ring1max, -ring2max, -ring3max, -ring4max, -ring5max, -ring1mean, -ring2mean, -ring3mean, -ring4mean, -ring5mean, -ring1min, -ring2min, -ring3min, -ring4min, -ring5min, # drop elevations
            -neighbor1dsmZ, -neighbor2dsmZ, -neighbor3dsmZ, -neighbor4dsmZ, -neighbor5dsmZ) 
@@ -1633,7 +1674,7 @@ if (treetopOptions$includeInvestigatory)
     return(tibble(treeID = treetops1$treeID != treetops2$treeID,
                   x = treetops1$x != treetops2$x,
                   y = treetops1$y != treetops2$y,
-                  z = treetops1$z != treetops2$z,
+                  elevation = treetops1$elevation != treetops2$elevation,
                   height = treetops1$height != treetops2$height))
   }
   
@@ -1641,17 +1682,17 @@ if (treetopOptions$includeInvestigatory)
   {
     geoPackage = read_sf(geoPackagePath) # terra::vect() doesn't support z
     coordinates = st_coordinates(geoPackage$geom) 
-    return(tibble(treeID = geoPackage$treeID, x = coordinates[, "X"], y = coordinates[, "Y"], z = coordinates[, "Z"], height = geoPackage$height))
+    return(tibble(treeID = geoPackage$treeID, x = coordinates[, "X"], y = coordinates[, "Y"], elevation = coordinates[, "Z"], height = geoPackage$height))
   }
   
   referenceTreetops = read_treetops("GIS/DOGAMI/2021 OLC Coos County/treetops DSM/s04020w06690.gpkg")
   newTreetops = read_treetops("GIS/DOGAMI/2021 OLC Coos County/treetops DSM/s04020w06690 new.gpkg")
   
   diff = diff_treetops(referenceTreetops, newTreetops)
-  diff %>% filter((treeID == TRUE) | (x == TRUE) | (y == TRUE) | (z == TRUE) | (height == TRUE))
+  diff %>% filter((treeID == TRUE) | (x == TRUE) | (y == TRUE) | (elevation == TRUE) | (height == TRUE))
   
-  referenceTreetops %>% arrange(desc(y), x, z)
-  newTreetops %>% arrange(desc(y), x, z)
+  referenceTreetops %>% arrange(desc(y), x, elevation)
+  newTreetops %>% arrange(desc(y), x, elevation)
 }
 
 

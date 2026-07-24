@@ -1,4 +1,4 @@
-source("trees/segmentation/treetops.R")
+source("trees/segmentation/treetopDetection.R")
 
 handlers(global = TRUE)
 handlers("cli")
@@ -33,7 +33,7 @@ get_tile_by_height_class = function(tileName, tileTreetops, tileMergePoints, til
 localMaximaFileNames = list.files(localMaximaPathV3, "\\.gpkg$")
 
 stands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", quiet = TRUE, layer = "unified stands 2016"),
-                          make_compound_crs(6557, 8228)) %>% # for DSM v3, keep in sync with same code in treetopJob.R
+                          make_compound_crs(6557, 8228)) %>% # for DSM v3, keep in sync with same code in treetopDetection.R
                           # st_crs(6557)) %>% # for runs against DSM v3
   select(standID2016)
 treetopRandomForest = readRDS("trees/segmentation/treetops/random forest s4268 617k VSURF Pde m9n4.Rds") 
@@ -45,6 +45,7 @@ with_progress({
   
   forestTreetops = bind_rows(future_map(localMaximaFileNames, function(localMaximaFileName) # 46.04m with 12 workers, 9900X
   {
+    require(igraph) # dynamically loaded when merge points are obtained
     require(ranger) # ranger apparently doesn't flow to workers for some reason, so predict() fails to resolve without this
     
     tileName = tools::file_path_sans_ext(localMaximaFileName)
@@ -65,13 +66,33 @@ with_progress({
     tileNeighborhood$treetop = factor(NA, levels = levels(tileMaxima$treetop)) # needed by get_merge_points()
     tileNeighborhood$treetop[tileIndices] = tileMaxima$treetop
   
-    # cluster treetops and update local maxima classifications
+    # cluster treetops and update local maxima classifications with revised cluster membership
+    # number of output merge points = initial number of merge points - single treetops + number of merge cluster members added
     tileMergePoints = get_merge_points(tileMaxima, tileNeighborhood)
     tileMaxima$treetop[tileMergePoints$singleTreetops$tileIndex] = "yes"
     tileMaxima$treetop[tileMergePoints$mergePoints$tileIndex] = "merge"
+    tileMaxima$treetop[tileMergePoints$ejectedTreetops$tileIndex] = "no"
     tileMaxima$mergeClusterNumber = NA_integer_
     tileMaxima$mergeClusterNumber[tileMergePoints$mergePoints$tileIndex] = tileMergePoints$mergePoints$mergeClusterNumber
-
+    
+    # debugging fork
+    #if (FALSE)
+    #{
+    #  tileMaxima2 = tileMaxima # comment out updates to tileMaxima$treetop above
+    #  tileMaxima2$treetop[tileMergePoints$singleTreetops$tileIndex] = "yes"
+    #  tileMaxima2$treetop[tileMergePoints$mergePoints$tileIndex] = "merge"
+    #  tileMaxima2$treetop[tileMergePoints$ejectedTreetops$tileIndex] = "no"
+    #  tileMaxima2$mergeClusterNumber = NA_integer_
+    #  tileMaxima2$mergeClusterNumber[tileMergePoints$mergePoints$tileIndex] = tileMergePoints$mergePoints$mergeClusterNumber
+    #
+    #  tibble(expectedMergePointsOut = nrow(tileMergePoints$mergePoints), uniqueMergeIndices = length(unique(tileMergePoints$mergePoints$tileIndex)), actualMergePointsOut = sum(tileMaxima2$treetop == "merge"), # should all be identical
+    #         mergePointsIn = sum(tileMaxima$treetop == "merge"), singleTops = nrow(tileMergePoints$singleTreetops), ejectedTops = nrow(tileMergePoints$ejectedTreetops)) %>% 
+    #    mutate(actualMergePointsAdded = actualMergePointsOut - mergePointsIn + singleTops)
+    #
+    #  st_write(tileMaxima, file.path("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/debug", paste0(tileName, ".gpkg")), layer = "initial maxima classification", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    #  st_write(tileMaxima2, file.path("D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/debug", paste0(tileName, ".gpkg")), layer = "merge cluster reformed classification", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
+    #}
+    
     if (sum(tileMaxima$treetop == "merge") != nrow(tileMergePoints$mergePoints))
     {
       stop("Internal consistency failure. Expected merge point clustering and single treetop revisions to result in ", nrow(tileMergePoints$mergePoints), " merge points on tile ", tileName, " but ", sum(tileMaxima$treetop == "merge"), " merge points are defined after clustering.")
@@ -79,39 +100,39 @@ with_progress({
     }
     
     # write tile's treetop GeoPackage
+    # get_treetop_eligible_maxima() standardizes to metric, need to convert back to English units for correct coordinates and attributes on English CRSes.
+    # Could also change CRSes to metric but the implementation preference here is is to flow input CRS.
     tileCrs = st_crs(attributes(tileMaxima)$crs)
-    tileTreetopPoints = st_join(st_as_sf(bind_rows(tileMaxima %>% filter(treetop != "no") %>% rename(treeID = id) %>% select(-sourceID, -uniqueID, -uniqueMergeClusterID, -starts_with("ring"), -dsmSlope, -cmmSlope3),
-                                                   tileMergePoints$mergeTreetops),
-                                         coords = c("x", "y"), crs = tileCrs, sf_column_name = "geom"), # crs attribute set by get_treetop_eligible_maxima()
-                                stands2016, left = TRUE)
-    tileTreetopsToWrite = tileTreetopPoints %>% filter(treetop %in% c("yes", "merge treetop")) %>% 
+    tileSingleAndMergeTreetopsPlusNoise = st_join(st_as_sf(bind_rows(tileMaxima %>% filter(treetop != "no") %>% rename(treeID = id) %>% select(-sourceID, -uniqueID, -uniqueMergeClusterID, -starts_with("ring"), -dsmSlope, -cmmSlope3),
+                                                                     tileMergePoints$mergeTreetops) %>%
+                                                             mutate(x = if(tileCrs$units_gdal == "foot") { 3.28084 * x } else { x },
+                                                                    y = if(tileCrs$units_gdal == "foot") { 3.28084 * y } else { y },
+                                                                    elevation = if(tileCrs$units_gdal == "foot") { 3.28084 * elevation } else { elevation }, # DTM elevation
+                                                                    height = if(tileCrs$units_gdal == "foot") { 3.28084 * height } else { height },
+                                                                    radius = if(tileCrs$units_gdal == "foot") { round(3.28084 * radius, 3) } else { radius }, # debatable but, for now, assume whole number preference in surface model cell size
+                                                                    dsmZ = if(tileCrs$units_gdal == "foot") { 3.28084 * dsmZ } else { dsmZ }, # debatable if DSM and CMM elevations need to flow, but they're flown for now
+                                                                    cmmZ = if(tileCrs$units_gdal == "foot") { 3.28084 * cmmZ } else { cmmZ }),
+                                                           coords = c("x", "y", "elevation"), crs = tileCrs, sf_column_name = "geom"), # crs attribute set by get_treetop_eligible_maxima()
+                                                  stands2016, left = TRUE)
+    tileTreetopsToWrite = tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop %in% c("yes", "merge treetop")) %>% 
       select(-treetop, -mergeClusterID, -mergeClusterNumber) %>% # no merge cluster ID update needed as it's the same as treeID
       mutate(mergePoints = replace_na(mergePoints, as.integer(1)), mergePointsOnTile = replace_na(mergePointsOnTile, as.integer(1))) %>%
       relocate(tile, treeID, height, radius, cmmZ, dsmZ, mergePoints, mergePointsOnTile, standID2016)
     
     tileByHeightClass = get_tile_by_height_class(tileName,
                                                  tileTreetopsToWrite, # 1 m height classes are metric, so get summary before English unit conversion (if applicable)
-                                                 tileTreetopPoints %>% filter(treetop == "merge"), # merge, noise, and maybe noise layers aren't written with heights
-                                                 tileTreetopPoints %>% filter(treetop == "noise"), 
-                                                 tileTreetopPoints %>% filter(treetop == "maybe noise"))
+                                                 tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop == "merge"), # merge, noise, and maybe noise layers aren't written with heights
+                                                 tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop == "noise"), 
+                                                 tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop == "maybe noise"))
     #tileByHeightClass %>% summarize(treetops = sum(treetops), mergePoints = sum(mergePoints), noisePoints = sum(noisePoints), maybeNoisePoints = sum(maybeNoisePoints))
-    if (tileCrs$units_gdal == "foot")
-    {
-      # get_treetop_eligible_maxima() converts to metric, needs to converted back for correct write on English CRSes
-      # Could also change CRSes to metric but convention is to flow input CRS.
-      tileTreetopsToWrite$height = 3.28084 * tileTreetopsToWrite$height
-      tileTreetopsToWrite$radius = round(3.28084 * tileTreetopsToWrite$radius, 3) # debatable but, for now, assume whole number preference in surface model cell size
-      tileTreetopsToWrite$dsmZ = 3.28084 * tileTreetopsToWrite$dsmZ # debatable if DSM and CMM elevations need to flow, but they're flown for now
-      tileTreetopsToWrite$cmmZ = 3.28084 * tileTreetopsToWrite$cmmZ
-    }
     
-    tileMergePointsToWrite = tileTreetopPoints %>% filter(treetop == "merge") %>% rename(id = treeID, clusterID = mergeClusterID) %>%
+    tileMergePointsToWrite = tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop == "merge") %>% rename(id = treeID, clusterID = mergeClusterID) %>%
       group_by(mergeClusterNumber) %>%
       mutate(clusterID = min(id)) %>%
       ungroup() %>%
       select(id, clusterID) #, mergeClusterNumber)
-    tileNoisePointsToWrite = tileTreetopPoints %>% filter(treetop == "noise") %>% rename(id = treeID) %>% select(id)
-    tileMaybeNoisePointsToWrite = tileTreetopPoints %>% filter(treetop == "maybe noise") %>% select(treeID) %>% rename(id = treeID)
+    tileNoisePointsToWrite = tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop == "noise") %>% rename(id = treeID) %>% select(id)
+    tileMaybeNoisePointsToWrite = tileSingleAndMergeTreetopsPlusNoise %>% filter(treetop == "maybe noise") %>% select(treeID) %>% rename(id = treeID)
     
     st_write(tileTreetopsToWrite, tileForestTreetopsPath, layer = "treetops", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
     st_write(tileMergePointsToWrite, tileForestTreetopsPath, layer = "merge points", delete_dsn = FALSE, delete_layer = TRUE, quiet = TRUE)
