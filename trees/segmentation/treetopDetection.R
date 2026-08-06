@@ -31,7 +31,8 @@ plotLetters = c("(a)", "(b)", "(c)", "(d)", "(e)", "(f)", "(g)", "(h)", "(i)", "
 # ranger performance maxima
 # Zen 3 + DDR4-3200: one thread per core (default of two threads per core is slower and bogs the UX)
 # Zen 5 + DDR5-5600: one thread per core
-treetopOptions = tibble(fitRandomForest = FALSE,
+treetopOptions = tibble(dataPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County",
+                        fitRandomForest = FALSE,
                         includeInvestigatory = FALSE,
                         includeSetup = FALSE,
                         folds = 2,
@@ -41,12 +42,13 @@ treetopOptions = tibble(fitRandomForest = FALSE,
                         dsmCellSize = 1.5, # feet
                         tileSizeInFeet = 3000) # ft
 
-acceptedTreetopsDsmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops accepted"
-acceptedTreetopsChmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops accepted chm"
-acceptedTreetopsCmmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops accepted cmm"
-dsmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/DSM v3"
-localMaximaPathV3 = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/DSM v3/local maxima"
-candidateTreetopsDsmPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops"
+acceptedTreetopsDsmPath = file.path(treetopOptions$dataPath, "treetops accepted")
+acceptedTreetopsChmPath = file.path(treetopOptions$dataPath, "treetops accepted chm")
+acceptedTreetopsCmmPath = file.path(treetopOptions$dataPath, "treetops accepted cmm")
+dtmPath = file.path(treetopOptions$dataPath, "DTM")
+dsmPath = file.path(treetopOptions$dataPath, "DSM v3")
+localMaximaPathV3 = file.path(treetopOptions$dataPath, "DSM v3/local maxima")
+candidateTreetopsDsmPath = file.path(treetopOptions$dataPath, "treetops")
 tileCrs = NULL
 
 extend_confusion_matrix_to_string = function(classCounts)
@@ -191,7 +193,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
   treetopMergeKnn = tibble(tile = treetopPoints$tile, id = treetopPoints$id, uniqueID = treetopPoints$uniqueID, sourceID = treetopPoints$sourceID,
                            treetop = treetopPoints$treetop, x = treetopPoints$x, y = treetopPoints$y,
                            radius = treetopPoints$radius, dsmZ = treetopPoints$dsmZ, cmmZ = treetopPoints$cmmZ, height = treetopPoints$height,
-                           neighborDistanceThreshold = get_merge_distance(treetopPoints, treetopMerge = TRUE),
+                           neighborDistanceThreshold = get_merge_radius_horizontal(treetopPoints, treetopMerge = TRUE),
                            neighborhoodIndex = treetopMergeKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
                            neighbor1distance = treetopMergeKnn$nn.dist[, 2],
                            neighbor2distance = treetopMergeKnn$nn.dist[, 3],
@@ -208,6 +210,9 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
                            neighbor2neighborhoodIndex = match(neighbor2uniqueID, neighborhoodTreetops$uniqueID),
                            neighbor3neighborhoodIndex = match(neighbor3uniqueID, neighborhoodTreetops$uniqueID),
                            neighbor4neighborhoodIndex = match(neighbor4uniqueID, neighborhoodTreetops$uniqueID))
+  #ggplot() +
+  #  geom_point(aes(x = neighborDistanceThreshold, y = height), treetopMergeKnn, alpha = 0.1, shape = 16) +
+  #  labs(x = "neighbor distance threshold, m", y = "local maxima height, m")
   #table(treetopMergeKnn$neighbors) # likely ~99.5% singleton treetops which don't contribute merge points
   #treetopMergeKnn %>% filter(id %in% c(24704, 25078, 24432, 25893, 26179)) %>% mutate(neighbor1uniqueID = neighbor1uniqueID - 423006840000000) %>% select(tile, id, neighbors, neighborDistanceThreshold, neighbor1uniqueID, neighbor1distance)
   
@@ -221,7 +226,7 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
     mergePointKnn = tibble(tile = mergePoints$tile, id = mergePoints$id, uniqueID = mergePoints$uniqueID, sourceID = mergePoints$sourceID,
                            treetop = mergePoints$treetop, x = mergePoints$x, y = mergePoints$y,
                            radius = mergePoints$radius, dsmZ = mergePoints$dsmZ, cmmZ = mergePoints$cmmZ, height = mergePoints$height,
-                           mergeDistanceThreshold = get_merge_distance(mergePoints), # manual tuning from tile review
+                           mergeDistanceThreshold = get_merge_radius_horizontal(mergePoints), # manual tuning from tile review
                            neighborhoodIndex = mergePointKnn$nn.index[, 1], # nn.dist[, 1] is self since get.knnx(neighborhood, tile) is an overlapping query
                            neighbor1distance = mergePointKnn$nn.dist[, 2],
                            neighbor2distance = mergePointKnn$nn.dist[, 3],
@@ -243,6 +248,11 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
                            neighbor3uniqueID = neighborhoodMaxima$uniqueID[neighbor3neighborhoodIndex],
                            neighbor4uniqueID = neighborhoodMaxima$uniqueID[neighbor4neighborhoodIndex])
     # debugging diagnostics
+    #ggplot() +
+    #  geom_point(aes(x = mergeDistanceThreshold, y = height), mergePointKnn, alpha = 0.1, shape = 16) +
+    #  labs(x = "merge distance threshold, m", y = "local maxima height, m")
+    #range(tileMaxima$elevation)
+    #range(tileMaxima$height)
     #table(mergePointKnn$neighbors) # number of clusters by size
     #mergePointKnn %>% filter(id %in% c(67529)) %>% select(neighbors, uniqueID, neighbor1uniqueID, neighbor2uniqueID, neighbor1distance, neighbor2distance, mergeDistanceThreshold, neighbor1neighborhoodIndex, neighbor2neighborhoodIndex) %>%
     #  mutate(across(uniqueID:neighbor2uniqueID, ~tibble::num(.x, notation = "dec")))
@@ -405,11 +415,16 @@ get_merge_points = function(tileMaxima, neighborhoodMaxima, treetopClassificatio
               ejectedTreetops = ejectedFromTreetopStatusByClustering))
 }
 
-get_merge_distance = function(tileMaxima, treetopMerge = FALSE)
+get_merge_radius_horizontal = function(tileMaxima, treetopMerge = FALSE)
 {
   # TODO: should break be above 45 m since merge point probability increases mainly above 55 m?
   # TODO: include radius penalty for same source ID?
-  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 45, 0, 1/40 * (tileMaxima$height - 45)))) # break at ~150 feet if in English units
+  #if (any(tileMaxima$height > 100)) # attr(tileMaxima, "crs") has wkt but has to be parsed to get LENGTHUNIT
+  #{
+  #  stop(paste0("Tree heights extend to ", max(tileMaxima$height), " m, which suggests heights are actually in feet rather than meters."))
+  #}
+  return(treetopOptions$dsmCellSize * (0.3048 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 45, 0, 1/40 * (tileMaxima$height - 45)))) # metric CRS and heights
+  #return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 150, 0, 1/40 * (tileMaxima$height - 150)))) # CRS and heights in feet
   #if (treetopMerge)
   #{
   #  return(treetopOptions$dsmCellSize * (1 + 1/60 * tileMaxima$height + if_else(tileMaxima$height < 45, 0, 1/40 * (tileMaxima$height - 45))))
@@ -428,14 +443,47 @@ get_merge_distance = function(tileMaxima, treetopMerge = FALSE)
     scale_x_continuous(breaks = seq(0, 20), labels = scales::number_format(accuracy = 0.01))
 }
 
-get_tile_extent = function(tileName, bufferWidthInFeet = 0)
+get_projected_crs = function(wkt)
+{
+  if (str_starts(wkt, "PROJCRS"))
+  {
+    return(st_crs(wkt))
+  } else if (str_starts(wkt, "COMPOUNDCRS"))
+  {
+    projectedCrsStart = str_locate(wkt, "PROJCRS")
+    if (is.na(projectedCrsStart[1, "start"]))
+    {
+      stop(paste0("Did not find PROJCRS in compound WKT '", wkt, "'."))
+    }
+    verticalCrsStart = str_locate(wkt, "VERTCRS")
+    if (is.na(verticalCrsStart[1, "start"]))
+    {
+      stop(paste0("Did not find VERTCRS in compound WKT '", wkt, "'."))
+    }
+    return(st_crs(str_sub(wkt, projectedCrsStart[1, "start"], verticalCrsStart[1, "start"] - 1)))
+  } else {
+    stop(paste0("Unhandled WKT format '", wkt, "'."))
+  }
+}
+
+get_tile_extent_6556 = function(tileName, bufferWidthInFeet = 0) # tile extent in meters
+{
+  tileExtent = get_tile_extent_6557(tileName, bufferWidthInFeet)
+  tileExtent$xMin = 0.3048 * tileExtent$xMin
+  tileExtent$xMax = 0.3048 * tileExtent$xMax
+  tileExtent$yMin = 0.3048 * tileExtent$yMin
+  tileExtent$yMax = 0.3048 * tileExtent$yMax
+  return(tileExtent)
+}
+
+get_tile_extent_6557 = function(tileName, bufferWidthInFeet = 0) # tile extent in feet
 {
   xTileMinInFeet = 100 * as.integer(str_sub(tileName, 2, 6))
   yTileMinInFeet = 100 * as.integer(str_sub(tileName, 8, 12))
-  return(list(xMin = 0.3048 * (xTileMinInFeet - bufferWidthInFeet),
-              xMax = 0.3048 * (xTileMinInFeet + treetopOptions$tileSizeInFeet + bufferWidthInFeet),
-              yMin = 0.3048 * (yTileMinInFeet - bufferWidthInFeet),
-              yMax = 0.3048 * (yTileMinInFeet + treetopOptions$tileSizeInFeet + bufferWidthInFeet)))
+  return(list(xMin = (xTileMinInFeet - bufferWidthInFeet),
+              xMax = (xTileMinInFeet + treetopOptions$tileSizeInFeet + bufferWidthInFeet),
+              yMin = (yTileMinInFeet - bufferWidthInFeet),
+              yMax = (yTileMinInFeet + treetopOptions$tileSizeInFeet + bufferWidthInFeet)))
 }
 
 get_tile_grid_indices = function(tileNames)
@@ -674,7 +722,7 @@ get_treetop_eligible_neighborhood = function(tileName, tileMaxima, localMaximaPa
 {
   xTile = as.integer(str_sub(tileName, 2, 6))
   yTile = as.integer(str_sub(tileName, 8, 12))
-  tileExtentBuffered = get_tile_extent(tileName, treetopOptions$neighborhoodBufferWidthInFeet)
+  tileExtentBuffered = get_tile_extent_6556(tileName, treetopOptions$neighborhoodBufferWidthInFeet)
   
   northwestMaxima = NULL
   northMaxima = NULL

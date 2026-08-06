@@ -858,6 +858,10 @@ if (abaOptions$includeSetup)
   crownTilePath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County/treetops/crowns rf v2"
   surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif"))
   moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif")))
+  if (sum(moveResult) != length(surroundingCrownTiles))
+  {
+    stop(paste0("Move succeeded for ", sum(moveResult), " of ", length(surroundingCrownTiles), " surrounding tiles."))
+  }
   #surroundingCrownTiles = file.path(crownTilePath, paste0(surroundingTileNames, ".tif.aux.xml"))
   #moveResult = file.rename(surroundingCrownTiles, file.path(crownTilePath, "surrounding distance 1", paste0(surroundingTileNames, ".tif.aux.xml")))
   

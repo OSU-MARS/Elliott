@@ -13,87 +13,33 @@ treeOptions = tibble(rebuildDbhModels = FALSE,
                      rebuildTreeList = FALSE,
                      recalcDbh = TRUE,
                      dataPath = "D:/Elliott/GIS/DOGAMI/2021 OLC Coos County",
+                     inventoryYear = 2021,
+                     treetopDetection = "random forest v2", # keep in sync with treetopDetectionJob.R
+                     speciesClassification = "PCA10iQ27 3800 1.8m m8n22 cubic subclass", # keep in sync with Merge-Treetops call used
                      includeInvestigatory = FALSE)
 
-theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), panel.border = element_blank(), plot.title = element_text(size = 10)))
+theme_set(theme_bw() + theme(axis.line = element_line(linewidth = 0.3), 
+                             panel.border = element_blank(), 
+                             plot.title = element_text(size = 10)))
 
 # load treetop locations, elevations, and heights, merge other physiological predictor variables
+# The transitory treetop .gpkg is obtained by running Get-Crowns and Merge-Treetops after treetopDetectionJob.R completes. The surrounding crown tile move code in 
+# area based/setup.R needs to be run between Get-Crowns and Merge-Treetops to make .vrt extents match. For physiographic predictors, elevation flows as trees' z 
+# coordinates and treetopDetectionJob.R extracts slope, aspect, and topographic shelter at the tile level. Merge-Treetops flows slope and aspect but not shelter
+# as there's currently no preferred diameter prediction model using topographic shelter.
 # Stand level variables (top height, relative height, ABA, AAT) are calculated below based on trees' stand IDs.
-if (treeOptions$rebuildTreeList)
-{
-  # manual setup in QGIS 3.34 since both sf and terra are both intractibly slow or fail
-  # - sample raster values to attach DTM elevation to treetops
-  # - rename the sampled column to elevation (layer properties -> fields -> edit)
-  # - persist sampled layer to a GeoPackage to create a spatial index (creating a spatial index with the toolbox function either hangs or is very slow)
-  # - select by location within the iLand simulation boundary (11.8 M trees)
-  # - export selected in EPSG:6556 to treetops 400 m rf v2 (transitory).gpkg with layer name treetops merged 400 m
-  
-  # reproject trees and crop
-  elliottILandResourceUnitBoundary = st_read("iLand/gis/Elliott + Hakki 400 m buffer resource unit snapped.gpkg", quiet = TRUE)
-  mergedTreeReadStart = Sys.time() # 1.4 minute load + 1 minute transform, 9900X @ 2 GB (12.3 million trees)
-  elliottTrees = st_transform(st_read(file.path(treeOptions$dataPath, "treetops/treetops merged rf v2 (transitory).gpkg"), quiet = TRUE), crs = st_crs(6556))
-  Sys.time() - mergedTreeReadStart # 2.6 minutes, 9950X
-  
-  #st_write(elliottTrees, file.path(treeOptions$dataPath, "treetops/treetops merged rf v2 6556 (transitory).gpkg"))
-  iLandTreeIntersectStart = Sys.time() # >50 minutes 9900X, 37 minutes 9950X since runs single threaded, apparently without spatial indexing, crop() in terra 1.7-55 appears computationally intractable
-  elliottTrees = st_intersection(elliottTrees, elliottILandResourceUnitBoundary)
-  Sys.time() - iLandTreeIntersectStart
-  st_write(elliottTrees, "treetops 400 m rf v2 (transitory).gpkg", layer = "treetops merged 400 m")
-  
-  # requires 72 GB DDR @ 11.8 M trees
-  elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 (transitory).gpkg"), layer = "treetops merged 400 m", quiet = TRUE) # ~35 s to load with terra::vect() but z is dropped, so 2.7 min with st_read()
-  elliottTrees$elevation = 0.3048 * st_coordinates(elliottTrees)[, "Z"] # CRS is metric from QGIS export but field values need conversion
-  elliottTrees$height = 0.3048 * elliottTrees$height
-  elliottTrees$radius = 0.3048 * elliottTrees$radius
+elliottTreesStart = Sys.time() # 1.2 minutes to read, also 1.2 minutes to transform, 9950X
+elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops merged rf v2 (transitory).gpkg"), layer = "treetops", quiet = TRUE) # EPSG:6557+8228
+elliottTrees = st_transform(elliottTrees, crs = make_compound_crs(6556, 5703)) # from treetopDetection.R
+elliottTrees$height = 0.3048 * elliottTrees$height # also convert attribute table from English to metric
+elliottTrees$radius = 0.3048 * elliottTrees$radius # not necessary but defensive coding, slope and aspect remain in degrees
+Sys.time() - elliottTreesStart
 
-  elliottStands2016 = st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2022 property boundary split", quiet = TRUE)
-  standJoinStart = Sys.time() # 1.5 minutes, 9900X
-  elliottTrees = st_join(elliottTrees, elliottStands2016 %>% select(standID2016, isBuffer, isExternalBoundarySplit))
-  Sys.time() - standJoinStart
-  # vector-vector extract() in terra 1.7-55 is computationally intractable
-  #elliottStands2016 = vect("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2016") # EPSG:6556
-  #elliottStands2016 = terra::extract(elliottStands2016[, "standID2016"], elliottTrees)
-  
-  tibble(elevation = range(elliottTrees$elevation, na.rm = TRUE), elevNA = sum(is.na(elliottTrees$elevation)),
-         height = range(elliottTrees$height), radius = range(elliottTrees$radius))
-  
-  # join physiographic predictors
-  # DTM.vrt for elevation uses 90 GB of memory before failing with long vectors not supported yet: ../include/Rinlinedfuns.h:537 in stars 0.6-8
-  #library(stars)
-  #slopeReadStart = Sys.time() # 50 s, 9900X
-  #slope = st_transform(read_stars(file.path(treeOptions$dataPath, "bare earth slope Gaussian 10 m EPSG6557.tif")), st_crs(6556))
-  #Sys.time() - slopeReadStart
-  #
-  #slopeExtractStart = Sys.time()
-  #elliottTrees = st_extract(slope, elliottTrees) # fails with cannot allocate vector of size 7529715.4 Gb
-  #Sys.time() - slopeExtractStart
-  
-  #elevation = rast(file.path(treeOptions$dataPath, "DTM", "DTM.vrt")) # terra 1-8.29 is intractably slow
-  #names(elevation) = "elevation"
-  slope = project(rast(file.path(treeOptions$dataPath, "bare earth slope Gaussian 10 m EPSG6557.tif")), crs("epsg:6556"), threads = TRUE) # 8.5 s 5950X
-  names(slope) = "slope"
-  aspect = project(180/pi * atan2(rast(file.path(treeOptions$dataPath, "bare earth sin(aspect) Gaussian 10 m EPSG6557.tif")), 
-                                  rast(file.path(treeOptions$dataPath, "bare earth cos(aspect) Gaussian 10 m EPSG6557.tif"))), 
-                   crs("epsg:6556"), 
-                   threads = TRUE) # ~10 s to load and calculate aspect, ~12 s to reproject
-  aspect = ifel(aspect >= 0, aspect, 360 + aspect) # dplyr::if_else() computationally intractable
-  names(aspect) = "aspect"
-  topographicShelter = rast(file.path(treeOptions$dataPath, "topgraphic shelter Gaussian 10 m.tif")) # already EPSG:6556
-  names(topographicShelter) = "topographicShelterIndex"
-    
-  physiographicExtractStart = Sys.time() # 5.2 minutes 9900X, up to ~95 GB of DDR depending what R feels like
-  elliottTrees = terra::extract(slope, elliottTrees, bind = TRUE)
-  elliottTrees = terra::extract(aspect, elliottTrees, bind = TRUE)
-  elliottTrees = terra::extract(topographicShelter, elliottTrees, bind = TRUE)
-  Sys.time() - physiographicExtractStart
-  
-  # 2.3 GB on disk @ 11.8 M trees
-  writeVector(elliottTrees, file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", overwrite = TRUE)
-} else {
-  elliottTreeReadStart = Sys.time() # 61 s, ~8 GB in memory
-  elliottTrees = st_read(file.path(treeOptions$dataPath, "treetops", "treetops 400 m rf v2 predictors (transitory).gpkg"), layer = "treetops", quiet = TRUE)
-  Sys.time() - elliottTreeReadStart
-}
+# TODO; move stand ID join to tile level
+elliottStands2016 = st_transform(st_read("GIS/Planning/Elliott State Forest + Hakki stands 2016.gpkg", layer = "unified stands 2022 property boundary split", quiet = TRUE), crs = st_crs(elliottTrees)) # EPSG:6556 -> 6556+5703
+standJoinStart = Sys.time() # 1.5 minutes, 9900X, 9950X
+elliottTrees = st_join(elliottTrees, elliottStands2016 %>% select(standID2016, isBuffer, isExternalBoundarySplit))
+Sys.time() - standJoinStart
 
 
 ## assign species and predict DBH
@@ -133,7 +79,7 @@ if (treeOptions$recalcDbh)
   
   # predict diameters
   # Dataset limitations mean predictions are either as Douglas-fir or as red alder, see notes below.
-  startTime = Sys.time() # 40 s 9900X @ 11.8 M trees (potentially ~3 minutes if R is slow), 5950X 25 s dplyr + prediction time (~24 seconds for three nonlinear iterations) @ 12.3 M trees
+  startTime = Sys.time() # 40 s 9900X @ 11.8 M trees (potentially ~6 minutes if R is slow), 5950X 25 s dplyr + prediction time (~24 seconds for three nonlinear iterations) @ 12.3 M trees
   elliottTreesMod = left_join(elliottTrees,
                               stands2022 %>% group_by(standID2016) %>% summarize(standArea = sum(standArea), isPlantation = any(isPlantation == 1)), # recombine portions of stands with isExternalBoundarySplit = 1
                               by = join_by("standID2016")) %>% # ~1 s for join
@@ -173,8 +119,8 @@ if (treeOptions$recalcDbh)
            tallerApproxBasalArea = basalAreaAdjustmentFactor * cumsum(lag(basalArea, default = 0)) / standArea) %>%  # basal area of taller trees in m²/ha
     group_by(classification) %>%
     # avoid generalized GAMs due to tendency to out of range predictions
-    mutate(dbh = case_when(cur_group()$classification %in% c("conifer", "snag") ~ predict(psmeDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())),
-                           cur_group()$classification == "hardwood" ~ predict(alruDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())))) %>%
+    mutate(dbh = case_when(cur_group()$classification %in% c("conifer", "snag") ~ predict(psmeDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())), # predictors: height, ABA, ABAT, aspect
+                           cur_group()$classification == "hardwood" ~ predict(alruDiameterFromHeightPreferred$ruarkAbatPhysio, pick(everything())))) %>% # predictors: height, ABA, ABAT, slope
            # basal areas updated below
     group_by(standID2016) %>%
     arrange(desc(TotalHt), .by_group = TRUE) %>% 
@@ -215,42 +161,92 @@ if (treeOptions$recalcDbh)
   # check DBH imputation: all trees taller than breast height should have DBH > 0
   # For now, trees less than breast height are retained as it's unclear if they should be filtered out.
   st_drop_geometry(elliottTreesMod) %>% group_by(classification) %>% summarize(trees = n(), inputNA = sum(is.na(height) | is.na(isPlantation) | is.na(slope) | is.na(aspect)), 
-                                                                               subBreastHt = sum(height < 1.37), bootstrapDbhNA = sum(is.na(dbhBootstrap)), bootstrapBAna = sum(is.na(standBasalAreaBootstrap) | is.na(tallerApproxBasalAreaBootstrap)), dbhNegativeOrZero = sum(dbh <= 0, na.rm = TRUE), dbhNA = sum(is.na(dbh)), isOversize = sum(dbh > 300, na.rm = TRUE), pctValid = 100 * (trees - dbhNegativeOrZero - dbhNA - isOversize) / trees)
-  st_drop_geometry(elliottTreesMod) %>% filter(standID2016 == 0) %>% summarize(treesInDefaultStand = n()) # only 1
+                                                                               subBreastHt = sum(height < 1.37), bootstrapDbhNA = sum(is.na(dbhBootstrap)), bootstrapBAna = sum(is.na(standBasalAreaBootstrap) | is.na(tallerApproxBasalAreaBootstrap)), dbhNegativeOrZero = sum(dbh <= 0, na.rm = TRUE), dbhNA = sum(is.na(dbh)), isOversize = sum(dbh > 300, na.rm = TRUE), pctValid = 100 * (trees - dbhNegativeOrZero - dbhNA - isOversize) / trees) # pctValid should be 100%, trees below breast height are excluded from iLand by filtering when elliottTreesILand is generated
+  st_drop_geometry(elliottTreesMod) %>% filter(standID2016 == 0) %>% summarize(treesInDefaultStand = n())
   # setdiff(unique(elliottTrees$standID2016), unique(stands2022$standID2016)) # missing stand information is a common cause of NAs
 
   #saveRDS(elliottTreesMod, file = file.path(treeOptions$dataPath, "treetops", "trees rf v2.Rds")) # ~2 minutes, writes 1.1 GB
   startTime = Sys.time()
-  st_write(elliottTreesMod %>% select(tile, standID2016, treeID, classification, height, dbh), dsn = file.path(treeOptions$dataPath, "treetops", "trees and snags rf v2.gpkg"), layer = "trees and snags 2021 rf v2") # minutes, writes 1.7 GB
+  st_write(elliottTreesMod %>% select(tile, standID2016, treeID, classification, height, dbh), dsn = file.path(treeOptions$dataPath, "treetops", "trees and snags rf v2.gpkg"), layer = "trees and snags 2021 rf v2", append = FALSE) # minutes, writes 1.7 GB
   Sys.time() - startTime
 } else {
   #elliottTreesMod = readRDS(file.path(treeOptions$dataPath, "treetops", "trees rf v2.Rds"))
-  elliottTreesMod = st_read(file.path(treeOptions$dataPath, "treetops", "trees and snags rf v2+v1.gpkg"), layer = "trees and snags 2021 rf v2", quiet = TRUE)
+  elliottTreesMod = st_read(file.path(treeOptions$dataPath, "treetops", "trees and snags rf v2.gpkg"), layer = "trees and snags 2021 rf v2", quiet = TRUE)
 }
 
 
-## write trees for iLand
-elliottTreesMod %>% summarize(naStand = sum(is.na(standID2016)), naTree = sum(is.na(treeID)), naSpecies = sum(is.na(species)), naHeight = sum(is.na(height)), naDbh = sum((height >= 1.37) & is.na(dbh))) # should all be zero for usable iLand tree list
-elliottTreesMod %>% summarize(ruXbelow = sum(x <= 106000), ruXabove = sum(x >= 131700), ruYbelow = sum(y <= 194100), ryYabove = sum(y >= 222200)) # check against resource unit grid bounds (Elliott.xml <resourceUnitFile>), must be zero for usable iLand tree list
+## write live trees for iLand
+# TODO: sapling translation and snag list generation
+st_drop_geometry(elliottTreesMod) %>% summarize(naStand = sum(is.na(standID2016)), naTree = sum(is.na(treeID)), naClassification = sum(is.na(classification)), naHeight = sum(is.na(height)), naDbh = sum((height >= 1.37) & is.na(dbh))) # should all be zero for usable iLand tree list
+as_tibble(st_coordinates(elliottTreesMod)) %>% summarize(ruXbelow = sum(X <= 106000), ruXabove = sum(X >= 131700), ruYbelow = sum(Y <= 194000), ryYabove = sum(Y >= 222200)) # check against resource unit grid bounds (Elliott.xml <resourceUnitFile>), must all be zero for usable iLand tree list
 
+elliottTreesILandSchema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
+                                 dbh = float32(), height = float32(), x = float32(), y = float32())
+elliottTreesILandSchema$metadata = list(site = "Elliott State Research Forest with 400 m iLand resource unit buffer",
+                                        inventoryYear = treeOptions$inventoryYear,
+                                        treetopDetection = treeOptions$treetopDetection,
+                                        speciesClassification = treeOptions$speciesClassification,
+                                        generatedOn = Sys.Date())
 startTime = Sys.time()
-elliottTreesArrow = arrow_table(st_drop_geometry(elliottTreesMod %>% mutate(x = st_coordinates(elliottTrees)[, "X"], # ~17 s conversion to Arrow
+elliottTreesILand = arrow_table(st_drop_geometry(elliottTreesMod %>% mutate(x = st_coordinates(elliottTrees)[, "X"], # ~17 s conversion to Arrow
                                                                             y = st_coordinates(elliottTrees)[, "Y"])) %>%
                                   # for now, simple live tree-snag separation: iLand trees are only live trees, snags go to carbon and nitrogen pools
                                   # for now, trees less than iLand's shrub layer depth (4 m by default) are not converted to saplings
-                                  # could remove remove ~2 M trees below iLand's definition of tree height as 4.0 m (TODO: translate these rows to iLand saplings)
-                                  filter(height >= 1.37, classification != "snag") %>%
-                                  filter(y > 194100) %>% # temporary workaround for <20 m spillover at southernmost edge of resource unit grid
+                                  # could remove remove ~2 M trees below iLand's definition of tree height as 4.0 m
+                                  filter(height >= 1.37, classification != "snag") %>% # excluding snags means no fiaCode case for them
                                   mutate(fiaCode = case_match(as.character(classification), "conifer" ~ 202, "hardwood" ~ 351), # for lack of a better option, species dub all conifers as Douglas-fir and all hardwoods as red alder ("TSHE" ~ 263)
                                          resourceUnitX = as.integer(x / 100), # dropped in final select
                                          resourceUnitY = as.integer(y / 100)) %>% # case_match() breaks on factors as of dplyr 1.1.4 (2023-12)
                                   arrange(resourceUnitY, resourceUnitX, classification, y, x) %>%
                                   rename(standID = standID2016) %>%
                                   select(standID, treeID, fiaCode, dbh, height, x, y),
-                                schema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
-                                                dbh = float32(), height = float32(), x = float32(), y = float32()))
+                                schema = elliottTreesILandSchema)
 Sys.time() - startTime
-write_feather(elliottTreesArrow, "iLand/init/ESRF trees 2025-05-06.feather", compression = "uncompressed") # 448 MB, leave uncompressed for considerably faster iLand startup
+write_feather(elliottTreesILand, "iLand/init/ESRF trees 2026-08-10.feather", compression = "uncompressed") # 380 MB, leave uncompressed for considerably faster iLand startup
+
+
+## write trees for Organon
+elliott2022 = st_transform(st_read("GIS/Planning/ESRF boundary 2022-04.gpkg", layer = "ESRF boundary with Hakki 2022-04", quiet = TRUE), crs = st_crs(elliottTreesMod))
+startTime = Sys.time()
+elliottOnForestTrees = st_filter(elliottTreesMod, elliott2022) # 8.5 million trees in ~1.3 minutes, 9950X
+Sys.time() - startTime
+
+elliottTreesOrganonSchema = schema(standID = uint32(), treeID = uint32(), fiaCode = uint16(),
+                                   height = float32(), dbh = float32(), isSnag = boolean())
+elliottTreesOrganonSchema$metadata = list(site = "Elliott State Research Forest (2022 stands)",
+                                          inventoryYear = treeOptions$inventoryYear,
+                                          treetopDetection = treeOptions$treetopDetection,
+                                          speciesClassification = treeOptions$speciesClassification,
+                                          generatedOn = Sys.Date())
+startTime = Sys.time()
+elliottTreesOrganon = arrow_table(st_drop_geometry(elliottOnForestTrees) %>% # ~5.5 s conversion to Arrow
+                                    filter(standID2016 < 4000, height >= 1.37) %>% # remove edge case trees intersected in from off forest stands (IDs 4000+)
+                                    mutate(fiaCode = case_match(classification, "conifer" ~ 202, "hardwood" ~ 351, "snag" ~ 202), # absent a better option for now, assume all snags detected in aerial LiDAR are (co)dominant Douglas-firs
+                                           isSnag = if_else(classification == "snag", TRUE, FALSE)) %>%
+                                    rename(standID = standID2016) %>%
+                                    select(standID, treeID, fiaCode, height, dbh, isSnag) %>%
+                                    arrange(standID, treeID),
+                                schema = elliottTreesOrganonSchema)
+Sys.time() - startTime
+write_feather(elliottTreesOrganon, "trees/Organon/ESRF LiDAR trees 2026-08-10.feather", compression = "uncompressed") # 220 MB, leave uncompressed for read speed
+
+
+if (treeOptions$includeInvestigatory)
+{
+  elliottLidarTreeStats = left_join(st_drop_geometry(elliottOnForestTrees) %>% filter(standID2016 < 4000) %>% group_by(standID2016) %>% 
+                                      summarize(conifer = sum(classification == "conifer"), hardwood = sum(classification == "hardwood"), snag = sum(classification == "snag")),
+                                    st_drop_geometry(elliottStands2016) %>% group_by(standID2016) %>%
+                                      summarize(standAreaHa = sum(standArea)),
+                                    by = join_by(standID2016))
+  ggplot() +
+    geom_segment(aes(x = 0, xend = seq(0, 1000, by = 200), y = c(0, 200, 400, 600, 800, 1000), yend = 0), color = "grey90") +
+    geom_point(aes(x = conifer / standAreaHa, y = hardwood / standAreaHa, size = standAreaHa), elliottLidarTreeStats, alpha = 0.1, shape = 16) +
+    coord_equal() +
+    labs(x = bquote("conifers ha"^-1), y = bquote("hardwoods ha"^-1), size = "stand area, ha") +
+    scale_size_continuous(breaks = c(10, 20, 50, 100)) +
+    scale_x_continuous(breaks = seq(0, 1000, by = 200)) +
+    scale_y_continuous(breaks = seq(0, 1000, by = 200))
+}
 
 if (treeOptions$includeInvestiatory)
 {
